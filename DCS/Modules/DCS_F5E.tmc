@@ -1,0 +1,769 @@
+//===========================================================================
+//		DCS World F-5E Tiger II for HOTAS Cougar/Warthog and Cougar MFDs
+//					by Don "Home Fries" Heumphreus
+//						last updated: 27OCT2021
+//
+//	Change Log:
+//	1.63	Initial Release
+//	1.66	Added MapKeyR for ROSB13-14 for compatibilty with Spitfire
+//	1.68	Added PULSE to /I EOxMOTOR commands
+//			Fixed jettison switch positioning with AP switch (WH)
+//	1.69	Updated CommState_Off() call
+//	2.01	Added 0 argument to call DCS_Axis_Init() in lieu of hard call in routine.
+//			F5E_Microstick_Init() moved to DCS_Init.tmc, renamed Digital_Microstick_Init().
+//	2.02	Set FkeyPress=1 on init to prevent Commswitch activation on profile load
+//	2.10	Added VAICOM support
+//	2.11	in F5E_CommState_Init() and main init replaced DX22/23 commands with key macros for VAICOM/SRS compatibility
+//	2.12	Adjusted Shifted RWR controls to TEMPO Long where applicable.
+//			Added AirCart On/Off to S3+LMFD 4/5 Long, and added option to remove shifted comms for VAICOM users.
+//			Set TQS start on LMFD4/5 release to TQS users only.
+//			Updated RMFD right column mappings to TEMPO
+//	2.21	Added NS430 compatibility
+//	2.27	Fixed Cougar assignments with flap up, radar range
+//	2.28	Corrected orientation of radar range/mode WRT T4/T5
+//	2.29	Added MFDisplay module selection
+//			Replaced 4 MFD Led functions with Lights_Four()
+//	2.40	Added F5E_IGN_Map() to allow engine start with EOxIGN switches
+//			Assigned MSR to UHF as well as MSD in F5E_Mic_Set()
+//			Added LLED1 Airbrake state for cold start
+//	2.46	Moved ROSB20 to MFD_Init()
+//	2.48	Removed DX24 from S3+T6 Short, set to Countermeasures for Pitch Damper in shifted mode
+//	2.50b	Removed duplicate MapKeyR(0) mappings to free stack space.
+//	2.63	Added WHIdle_Enabled parameter to WH Idle commands
+//
+//
+//============================================================================
+
+
+//Free DX16, DX18, DX24
+//Todo: DX16/18 for flap switch (df/boat)
+
+// Digital TDC; set DCS_Axis_Init() 0 argument to 1 when analog axis enabled.
+int	F5E_Analog_TDC = 1;
+
+
+int DCS_F5E(int led, int sp)
+{
+
+
+printf("DCS F-5E Tiger II\xa");
+
+
+if (WarthogStick > 0)
+	{
+	MapKeyR(&Joystick,	S2,	EXEC("DCS_F5E_Init();"));
+	}
+else
+	{
+	MapKeyR(&HCougar,	S2,	EXEC("DCS_F5E_Init();"));
+	}
+if (sp > 0)	PlayWav("f5e.wav");
+if (led > 0)
+	{
+	//should see 0 * * 0 to indicate that P-51D has been selected.
+	Lights_Four(0,1,1,0,	ProfileSwapDelay+LED_Delay);
+//	DeferCall(ProfileSwapDelay+LED_Delay,&Lights_RLED1,0);	//Changed to Binary 6 in 1.28
+//	DeferCall(ProfileSwapDelay+2*LED_Delay,&Lights_RLED2,1);
+//	DeferCall(ProfileSwapDelay+4*LED_Delay,&Lights_LLED2,1);
+//	DeferCall(ProfileSwapDelay+3*LED_Delay,&Lights_LLED1,0);
+	//Lights_LMFD(1);
+	}
+}
+
+int F5E_Flare_Array;
+int F5E_Flare_Cur;
+int F5E_Chaff_Array;
+int F5E_Chaff_Cur;
+
+//int	F86_Nav_Light_Sw_Curr;	//added in 1.32 for discrete switch logic
+//int F86_Engine_Ice_Sw_Curr;
+//int F86_Land_Light_Sw_Curr;
+//int	F86_Starter_State;	//added in 1.40 for LDGH assignment
+//int	F86_Battery_Switch_Cur;	//added in 1.40 for EOR switch logic
+//int	F86_Weapon_Cur;			//added in 1.40
+//int	F86_Sight_Funct_Array;	//added in 1.40
+//int	F86_Sight_Funct_Cur;	//added in 1.40
+
+
+int	SetMenu_F5E()
+{
+Set_Acft_Array_Cur(2505);
+}
+
+
+int DCS_F5E_Init()
+{
+Determine_Differential_Braking(DiffBraking_Enabled,CougarToeBrakes);
+
+//Declare Values
+FkeyPress			=	1;	//added in 2.02 to prevent Commswitch key activation on profile load.
+GraceFlag			=	0;
+Eng_Start_x			=	IdleDetentLow;
+Eng_Stop_x			=	Eng_Stop_F5E;
+Starter_Ind_x		=	Starter_Ind_F5E;
+ProfID				=	2505;
+FixedGear			=	0;
+Helicopter			=	0;
+T6WheelBrake		=	0;
+BrakeOnCycleTime	=	Airbrake_Out_F5E;
+BrakeOffCycleTime	=	Airbrake_In_F5E;
+GearCycleTimeUp		=	Gear_Retract_F5E;
+GearCycleTimeDn		=	Gear_Deploy_F5E;
+TriggerZoomEnabled	=	1;
+S4AnalogBrake		=	JoyAsAnalogBrake;		//added in 1.33
+AnalogParkingBrake	=	JoyYParkingBrake;	//added in 1.33
+S4asNWS				=	NWSwithBrake;			//added in 1.33 for analog braking with NWS engaged
+S3holdNWS 			= 	1;	//added in 2.05
+XYAxisTrim			=	0;	//added in 1.34
+DMS_SnapView		=	0;	//added in 1.34
+WheelBrakeFull		=	1;	//added in 1.35
+ToeBrakesAvailable	=	1;	//added in 1.40
+NVG_Capable			=	0;	//added in 1.40;
+AB_Capable			=	1;	//added in 1.61
+//BrakeOffCycleTime 	= 	1500;
+Adjust_Backlighting	=	Adjust_Backlight_F5E;	//added in 1.62
+NS430_Enabled		=	NS430_Installed*NS430_Enabled_F5E;	//added in 2.21
+CrewCount			=	1;
+StationChangeModifier	=	0;
+WH_Use_TQS				=	0;	//added in 2.43
+Analog_TDC			=	F5E_Analog_TDC;	//made global in 2.43
+EngineCount			=	2;	//added in 2.43
+Airbrake_Type_Cur	=	1;	//added in 2.43
+CommInitType		=	0;	//0 for none/custom, 1 for single channel (P-51), 2 for simple (dual channel), 3 for complex (3 channel).  added in 2.43
+StnCheckDisabled	=	2;	//added in 2.43.  Forced for single seat
+CurrentStation 		=	1;	//moved here in 2.43
+
+
+if ((WarthogThrottle > 0) | (TQS_Idle_Delay_F5E < 1))	MFD_Eng_Start		=	0;
+else													MFD_Eng_Start		=	1;
+
+F5E_Flare_Array		=	SEQ(F5E_Flare_Prog,		//off high settings to allow logic cycling with a lower index
+							F5E_Flare_Single,
+							F5E_Flare_Off
+							);
+
+F5E_Chaff_Array		=	SEQ(F5E_Chaff_Mult,
+							F5E_Chaff_Prog,
+							F5E_Chaff_Single,
+							F5E_Chaff_Off
+							);
+
+
+printf("Done\xa Execute DCS F-5E Tiger II Config (Profile v%i.%i):\xa",MajorVersion,MinorVersion);
+PlayWavSel(ProfID,abs(Init_Run - 1),DCSFP_Enabled,MFDisplayEnabled);	//added in 1.61, DCSFP added in 2.05, MFDisplay added in 2.29
+Pause_TrackIR(0);
+AnalogBrakePoll(0);	//added in 1.23
+AirBrake_Init(AirBrkFlash);	//moved to individual modules in 1.22
+MFD_Init(ProfID);
+	printf("   Map HOTAS Cougar for DCS F-5E Tiger II Config:\xa");
+	DCS_Axis_Init(ProfID,EngineCount,Analog_TDC);	// Set 0 argument to 1 when analog axis enabled.
+
+
+			printf("         Shift Commands: S3 momentary...");
+			if (WarthogStick > 0)
+				{
+				if (WarthogThrottle > 0) 	SetShiftButton(&Joystick, S3, &Throttle, 0, 0);
+				else						SetShiftButton(&Joystick, S3, &HCougar, 0, 0);
+				//MapKey	(&Joystick, S3, BTN_S3P);		
+				MapKeyR	(&Joystick, S3, BTN_S3R);	
+				}				
+			else
+				{
+				SetShiftButton(&HCougar, S3, &HCougar, 0, 0);
+				//MapKey	(&HCougar, S3, BTN_S3P);	//dynamic mapping with NWS	
+				MapKeyR	(&HCougar, S3, BTN_S3R);		
+				}				
+			printf("Done!\xa");
+			if (WarthogStick > 0)
+				{
+				printf("         Warthog Stick Buttons...");	
+				MapKeyIO(&Joystick, TG1, BTN_TG1PI_TGZ, BTN_TG1PO_TGZ);
+				MapKeyRIO(&Joystick,TG1, BTN_TG1RI_TGZ, BTN_TG1RO_TGZ);
+
+				MapKey	(&Joystick, TG2,BTN_TG2);
+//				MapKeyR	(&Joystick, TG2,0);
+				MapKeyIO(&Joystick, S1, DOWN+DX5,DX5);
+				MapKey	(&Joystick,	S2,	DX2);
+				MapKeyR	(&Joystick,	S2, 0);
+				MapKeyIO(&Joystick, S4, BTN_S4PI,	BTN_S4PO);
+				MapKeyR	(&Joystick, S4, BTN_S4R);
+				}
+			else
+				{
+				printf("         Cougar Stick Buttons...");	
+				MapKeyIO(&HCougar, TG1, BTN_TG1PI_TGZ, BTN_TG1PO_TGZ);
+				MapKeyRIO(&HCougar,TG1, BTN_TG1RI_TGZ, BTN_TG1RO_TGZ);
+
+				MapKey	(&HCougar, TG2,BTN_TG2);
+//				MapKeyR	(&HCougar, TG2,0);
+				MapKeyIO(&HCougar, S1, DOWN+DX5,DX5);
+				MapKey	(&HCougar,	S2,	DX2);
+				MapKeyR	(&HCougar,	S2, 0);
+				MapKeyIO(&HCougar, S4, BTN_S4PI,	BTN_S4PO);
+				MapKeyR	(&HCougar, S4, BTN_S4R);
+				}
+			printf("Done!\xa");	
+						
+			H1_Init(TrackIR, PadlockEnabled, ProfID);	//moved to individual routines in 1.27 for trim reset removal on helos
+			CommState_Off(1,ProfID,1,0,1);	//sets hats 2-4 to DX functions	
+			
+			//P51D_CommState_Init(ProfID,1,0);									//Set Comms routine (DX21 plus whatever options selected)
+			if (WarthogThrottle > 0)
+				{
+				printf("         Warthog Throttle Buttons\xa");	
+//				MapKeyIO(&Throttle, MSL,	0,TEMPO(	EXEC("if (!MSPCheck) ActKey(KEYON+PULSE+F86_UHF_Freq_Decr_DX);"),
+//														REXEC(6,Switch_Delay,"if (!MSPCheck) ActKey(KEYON+PULSE+F86_UHF_Freq_Decr_DX);"),
+//														DefTempo)	);	//Frequency change (long for repeat)
+//				MapKeyRIO(&Throttle,MSL,	0,EXEC("StopAutoRepeat(6);"));	
+//				MapKeyIO(&Throttle, MSR,	0,TEMPO(	EXEC("if (!MSPCheck) ActKey(KEYON+PULSE+F86_UHF_Freq_Incr_DX);"),
+//														REXEC(6,Switch_Delay,"if (!MSPCheck) ActKey(KEYON+PULSE+F86_UHF_Freq_Incr_DX);"),
+//														DefTempo)	);	//Frequency change
+//				MapKeyRIO(&Throttle,MSR,	0,EXEC("StopAutoRepeat(6);"));	
+				
+				MapKey	(&Throttle,	CSU,	F5E_RdrScanUp);	//Tgt Range adjust
+				MapKey	(&Throttle,	CSD,	F5E_RdrScanDown);
+				MapKeyIO(&Throttle,	CSL,	F5E_RdrModeCCW,	F5E_RdrRngDecr);
+				MapKeyIO(&Throttle,	CSR,	F5E_RdrModeCW,	F5E_RdrRngIncr);
+				
+				MapKey	(&Throttle,	SC,		F5E_SeekerUncage_DX); //DX7 is ACQ
+//				MapKeyR	(&Throttle,	SC,		0);
+				
+				MapKeyIO(&Throttle,	PSF,	0,CHAIN(PULSE+F5E_Flare_Off,D(Switch_Delay),EXEC("F5E_Chaff_Set(F5E_Chaff_Cur);"))	);	
+				MapKeyIO(&Throttle,	PSM,	0,TEMPO(0,EXEC("F5E_Flare_Set(F5E_Flare_Cur);DeferCall(Switch_Delay,&F5E_Chaff_Set, F5E_Chaff_Cur);"),DoubleTap));	//flare and chaff
+				MapKeyIO(&Throttle,	PSB,	0,CHAIN(PULSE+F5E_Chaff_Off,D(Switch_Delay),EXEC("F5E_Flare_Set(F5E_Flare_Cur);"))	);	//Flare Only	
+
+				MapKeyIO(&Throttle,	CHB,	TEMPO(0,Gear_Up,GearUpTempo),	F5E_Countermeasures	);	// /O Rocket Depression Angle /I Throttle Idle back 1 incr
+//				MapKeyR	(&Throttle,	CHF,	0);	//Added for F-86 in 1.69
+//				MapKeyR	(&Throttle,	CHB,	0);	//Added for F-86 in 1.69				
+
+
+				
+				MapKey	(&Throttle,	LTB,	F5E_Countermeasures);	// /I short for Pitch Dampener toggle
+//				MapKeyR	(&Throttle,	LTB, 	0);			
+			if (WHIdle_Enabled > 0)
+				{			
+				MapKeyIO(&Throttle,	IDLERON,	0,	CHAIN(PULSE+Engine_Right_Stop, EXEC("Engine_Shutdown_Ind(2, Engine_Shutdown_Ind_Time, 1);")));
+				MapKeyIO(&Throttle,	IDLEROFF,	0,	CHAIN(PULSE+Engine_Right_Start, EXEC("Engine_Start_Ind(2, Starter_Ind_x, 1); GraceFlag = 0;")));
+				MapKeyIO(&Throttle,	IDLELON,	0,	CHAIN(PULSE+Engine_Left_Stop, EXEC("Engine_Shutdown_Ind(1, Engine_Shutdown_Ind_Time, 1);")));
+				MapKeyIO(&Throttle,	IDLELOFF,	0,	CHAIN(PULSE+Engine_Left_Start, EXEC("Engine_Start_Ind(1, Starter_Ind_x, 1); GraceFlag = 0;")));
+				}
+
+				printf("...Base Switches\xa");				
+				TriggerZoom_MapGearDn(TriggerZoom_state, ProfID);	//MapKeyIO(&HCougar, T8, PULSE+DX26, );			//done in TriggerZoom_MapGearDn()
+				
+				MapKeyIO(&Throttle,	FLAPU,	0,	PULSE+F5E_FlapLever_EmerUp);
+				MapKeyIO(&Throttle,	FLAPD,	0,	PULSE+F5E_FlapLever_Full);
+				MapKeyIO(&Throttle, FLAPM,	0,	TEMPO(0,PULSE+F5E_FlapLever_ThumbSw, DoubleTap));	
+
+				MapKeyIO(&Throttle,	LDGH,	TEMPO(0,EXEC("EjectCheckLDGH(ProfID);"), DefTempo),	TEMPO(F5E_HornSilencer,F5E_MasterCaution,DefTempo)	);
+				MapKeyIO(&Throttle,	APENG,	TEMPO(F5E_EmerJettCover,F5E_EmerJettBtn,DefTempo),	F5E_SelJettBtn);	// /O Sel Jett, /I Emer Jett
+				
+				MapKeyIO(&Throttle,	APPAT,	0,PULSE+F5E_SelJettSw_Sel);	
+				MapKeyIO(&Throttle,	APAH,	0,TEMPO(0,	PULSE+F5E_SelJettSw_Off, DoubleTap));
+				MapKeyIO(&Throttle,	APALT,	0,PULSE+F5E_SelJettSw_All);
+				
+				MapKeyIO(&Throttle,	EFLNORM,	0,PULSE+F5E_PitotHeat_On);
+				MapKeyR	(&Throttle,	EFLNORM,	0);
+				MapKeyIO(&Throttle,	EFLOVER,	0,PULSE+F5E_PitotHeat_Off);	
+				MapKeyIO(&Throttle,	EFRNORM,	0,PULSE+F5E_EngineHeat_On);
+				MapKeyIO(&Throttle,	EFROVER,	0,PULSE+F5E_EngineHeat_Off);
+				MapKeyR	(&Throttle,	EFROVER,	0);
+
+				F5E_IGN_Map(WHT_IGN_Start_F5E,GearDn_Ind_Default);
+				//MapKeyIO(&Throttle,	EOLIGN,		F5E_Fuse_Safe,	CHAIN(F5E_Fuse_Nose,EXEC("if (!IgnLState){ Grace_Flag(1); IgnLState = 1;}"))	);
+				//MapKeyIO(&Throttle,	EOLNORM,	0,						EXEC("if (!IgnLState) ActKey(KEYON+PULSE+F5E_Fuse_NoseTail);"));
+				//MapKey	(&Throttle,	EOLMOTOR,	CHAIN(PULSE+F5E_Fuse_Tail,EXEC("IgnLState = 0;"))	);
+				//MapKeyIO(&Throttle,	EORIGN,		F5E_Arm_Cover,	CHAIN(F5E_Arm_Gun,EXEC("if (!IgnRState){ Grace_Flag(1); IgnRState = 1;}"))	);
+				//MapKeyIO(&Throttle,	EORNORM,	0,						EXEC("if (!IgnRState) ActKey(KEYON+PULSE+F5E_Arm_Off);"));
+				//MapKey	(&Throttle,	EORMOTOR,	CHAIN(PULSE+F5E_Arm_Cam,	EXEC("IgnRState = 0;"))	);
+				//MapKeyRIO(&Throttle,EOLIGN,		EXEC("IgnLState = 1;"),	EXEC("if ((IgnLState) & (!GraceFlag)) IgnLState = 0; else Grace_Flag(0);")	);
+				//MapKeyRIO(&Throttle,EORIGN,		0,	EXEC("if ((IgnRState) & (!GraceFlag)) IgnRState = 0; else Grace_Flag(0);")	);		// removed EXEC("IgnRState = 0;") from /I because cover independent of switch posit
+
+				MapKeyIO(&Throttle,	APUON,	EXEC("if (Adjust_Backlighting > 0) MFD_WHT_Power(2); else LMFD_Pwr_State = 2;"),	CHAIN(PULSE+F5E_Batt_On, EXEC("if (Adjust_Backlighting > 0) MFD_WHT_Power(2); else LMFD_Pwr_State = 2;"))	);
+				MapKeyIO(&Throttle,	APUOFF,	EXEC("if (Adjust_Backlighting > 0) MFD_WHT_Power(0); else LMFD_Pwr_State = 0;"),	CHAIN(PULSE+F5E_Batt_Off,EXEC("if (Adjust_Backlighting > 0) MFD_WHT_Power(0); else LMFD_Pwr_State = 0;"))	);
+				
+				MapKeyIO(&Throttle,	RDRNRM,	0,PULSE+F5E_LandingLt_On);
+				MapKeyIO(&Throttle,	RDRDIS,	0,PULSE+F5E_LandingLt_Off);
+				MapKeyIO(&Throttle,	EACON,	0,PULSE+F5E_Strut_Extend);
+				MapKeyIO(&Throttle,	EACOFF,	0,PULSE+F5E_Strut_Retract);
+				}
+			else
+				{
+				printf("         TQS Buttons\xa");	
+				MapKey	(&HCougar,	T1,	F5E_SeekerUncage_DX);
+//				MapKeyR	(&HCougar,	T1,	0);
+					
+				MapKeyIO(&HCougar, T6, TEMPO(F5E_Countermeasures, EXEC("EjectCheckT6(ProfID);"), DefTempo),	F5E_Countermeasures);	// /I short for Pitch Dampener toggle
+//				MapKeyR	(&HCougar, T6, 0);
+				}
+			F5E_CommState_Init();
+			Airbrake_Map_Set(Airbrake_Type_Cur,0,1);
+			F5E_DF_Init(WarthogThrottle);	
+				
+			printf("...Done!\xa");
+	printf("   HOTAS Cougar Mapping Complete.\xa\xa");	
+
+F5E_MFD_Init();
+F5E_Switch_Init(GearDn_Ind_Default,100);	//100 multiplier should apply a 5000ms delay assuming LED_Delay is 50
+
+TriggerZoom_state  = 0;		//reset TriggerZoom
+//FlapState=0;				//future implementation
+//Lights_ALL(0);				//Says Init complete
+	DeferCall(LED_Delay,&Lights_RLED2,0);
+	//DeferCall(2*LED_Delay,&Lights_LLED2,0);
+	if (Adjust_Backlighting > 0) 
+		{
+		if (WarthogThrottle > 0) DeferCall(3*LED_Delay,&D_MFDWHT_Pwr,2*Throttle[APUON]);
+		else DeferCall(3*LED_Delay,&D_MFDWHT_Pwr,MFD_Default_Setting);
+		}
+	else Backlight_Max_Init(0);
+	if (WarthogThrottle > 0) DeferCall(6*LED_Delay,&WHT_Lights_Dn_D,0);
+	
+ActKey(DX1);				//just in case DX1 lingers from trigger activation
+if (Init_Run == 0) Gear_Ind_Init(GearDn_Ind_Default,FixedGear,Helicopter,AirBrkFlash);
+
+
+	S3_NWS(GearDn_Ind_Default,ProfID); 							//covered in Gear_Ind_Init();
+
+if (GearDn_Ind_Default > 0) Map_Cougar_ToeBrakes(ToeBrakesAvailable);//added in 1.40;
+else	Map_Cougar_ToeBrakes(0);
+
+
+printf("\xa DCS F-5E Tiger II Init Complete!\xa");	
+Set_Acft_Array_Cur(ProfID);
+}
+
+int	F5E_IGN_Map(int enabled = 0, int gear = 0)
+{
+if (WarthogThrottle > 0)
+	{
+	if (Script_Debug) printf("F-5E Ignition Mapping (%i,%i): ",enabled,gear);
+	if ((gear) & (enabled > 0))
+		{
+		if (Script_Debug) printf("Starter.\xa");
+		MapKeyIO(&Throttle,	EOLIGN,		TEMPO(	CHAIN(PULSE+CommMenu,D(KBDelay),F5E_Comm_SupplyAir), CHAIN(PULSE+CommMenu,D(KBDelay),F5E_Comm_AirCartOn),  DefTempo),	//conditions: gear up or no comm compensation or battery off (no radio)
+												CHAIN(DX31,D(ModDelay),DX4));
+		MapKeyIO(&Throttle,	EORIGN,		TEMPO(	CHAIN(PULSE+CommMenu,D(KBDelay),F5E_Comm_SupplyAir), CHAIN(PULSE+CommMenu,D(KBDelay),F5E_Comm_AirCartOff), DefTempo),
+												CHAIN(DX31,D(ModDelay),DX5));
+		MapKey	(&Throttle,	EOLNORM,	0);
+		MapKey	(&Throttle,	EORNORM,	0);
+		MapKey	(&Throttle,	EOLMOTOR,	0);
+		MapKey	(&Throttle,	EORMOTOR,	0);
+		MapKeyR	(&Throttle,	EOLIGN,		0);
+		MapKeyR	(&Throttle,	EORIGN,		0);
+		}
+	else
+		{
+		if (Script_Debug) printf("Armament.\xa");
+		MapKeyIO(&Throttle,	EOLIGN,		F5E_Fuse_Safe,	CHAIN(F5E_Fuse_Nose,EXEC("if (!IgnLState){ Grace_Flag(1); IgnLState = 1;}"))	);
+		MapKeyIO(&Throttle,	EORIGN,		F5E_Arm_Cover,	CHAIN(F5E_Arm_Gun,	EXEC("if (!IgnRState){ Grace_Flag(1); IgnRState = 1;}"))	);
+		MapKeyIO(&Throttle,	EOLNORM,	0,						EXEC("if (!IgnLState) ActKey(KEYON+PULSE+F5E_Fuse_NoseTail);"));
+		MapKeyIO(&Throttle,	EORNORM,	0,						EXEC("if (!IgnRState) ActKey(KEYON+PULSE+F5E_Arm_Off);"));
+		MapKey	(&Throttle,	EOLMOTOR,	CHAIN(PULSE+F5E_Fuse_Tail,EXEC("IgnLState = 0;"))	);
+		MapKey	(&Throttle,	EORMOTOR,	CHAIN(PULSE+F5E_Arm_Cam,	EXEC("IgnRState = 0;"))	);
+		MapKeyRIO(&Throttle,EOLIGN,		EXEC("IgnLState = 1;"),	EXEC("if ((IgnLState) & (!GraceFlag)) IgnLState = 0; else Grace_Flag(0);")	);
+		MapKeyRIO(&Throttle,EORIGN,		0,	EXEC("if ((IgnRState) & (!GraceFlag)) IgnRState = 0; else Grace_Flag(0);")	);		// removed EXEC("IgnRState = 0;") from /I because cover independent of switch posit
+		}
+	}
+}
+int F5E_Switch_Init(int gear = 1, int mult = 12)	//gear is logical gearstate, mult is multiplier for LED Delay
+{
+if (gear > 1)		gear = 1;				//error trap adde in 2.40
+else if (gear < 0)	gear = 0;
+
+F5E_Flare_Cur = -1;	//Flare_Default_F5E;	//negative so it is virgin out of bounds
+F5E_Chaff_Cur = -1;	//Chaff_Default_F5E;
+if ((NWS_ClearComms_F5E > 0) & (!Adjust_Backlight_F5E))	//added in 1.73 to remove ClearComms dependency from Adjust Backlighting
+	{
+	if (GearDn_Ind_Default > 0) LMFD_Pwr_State = 0;	 
+	else LMFD_Pwr_State = 2;
+	}
+if (AirBrkFlash > -1) DeferCall(mult*LED_Delay,&Lights_LLED1,gear);	//airbrake state on LED (added in 2.40)
+}
+int	F5E_DF_Init(int wh)
+{
+if (wh > 0)
+	{
+	MapKey	(&Throttle,	BSF,	PULSE+F5E_FlapSwitch_Up	);
+	MapKeyR	(&Throttle,	BSF,	0);	
+	MapKey	(&Throttle,	BSB,	PULSE+F5E_FlapSwitch_Auto);
+	MapKeyR	(&Throttle,	BSB,	0);	
+	MapKey	(&Throttle,	BSM,	TEMPO(0,PULSE+F5E_FlapSwitch_Fixed,DoubleTap));	
+	}
+else
+	{
+	MapKeyIO(&HCougar, T7,	0,PULSE+F5E_FlapSwitch_Auto);			//IO with /I 0 to allow for engine start select	
+	MapKeyIO(&HCougar, T8, 	0,PULSE+F5E_FlapSwitch_Up);			
+	MapKeyR	(&HCougar, T7, 0);
+	MapKeyR	(&HCougar, T8, 0);
+	MapKeyIO(&HCougar, DFM, 0, TEMPO(0,PULSE+F5E_FlapSwitch_Fixed,DoubleTap));	
+	}
+}
+
+int F5E_MFD_Init()
+{
+//===================================
+//		Standard MFD Buttons
+//===================================
+
+	printf("   Map Cougar Left  MFD (DX31)...");	
+//LOSB 1 in Init
+					MapKeyIO(&LMFD, OSB02,	CHAIN(DX31,D(ModDelay),DX2),	TEMPO(CHAIN(DX31,D(ModDelay),DX2), CHAIN(DX30,DX31,D(ModDelay),DX2), DefTempo)	);
+					MapKeyIO(&LMFD, OSB03,	CHAIN(DX31,D(ModDelay),DX3),	TEMPO(CHAIN(DX31,D(ModDelay),DX3), CHAIN(DX30,DX31,D(ModDelay),DX3), DefTempo)	);
+				if ((VAC > 0) & (!VAC_DisableCommSuppAir_F5E))
+					{
+					MapKey	(&LMFD,	OSB04,	CHAIN(DX31,D(ModDelay),DX4));				
+					MapKey	(&LMFD, OSB05,	CHAIN(DX31,D(ModDelay),DX5));
+					}
+				else
+					{				
+					MapKeyIO(&LMFD,	OSB04,	//CHAIN(EXEC("if ((!GearState) | (NWS_ClearComms_F5E == 0) | ((LMFD_Pwr_State == 1) & (Adjust_Backlight_F5E > 0))	) ActKey(KEYON+PULSE+CommMenu); else GraceFlag = 1;"),D(KBDelay),F5E_Comm_SupplyAir),	//conditions: gear up or no comm compensation or battery off (no radio)
+											TEMPO(CHAIN(PULSE+CommMenu,D(KBDelay),F5E_Comm_SupplyAir), CHAIN(PULSE+CommMenu,D(KBDelay),F5E_Comm_AirCartOn),  DefTempo),	//conditions: gear up or no comm compensation or battery off (no radio)
+											CHAIN(DX31,D(ModDelay),DX4));				
+					MapKeyIO(&LMFD, OSB05,	TEMPO(CHAIN(PULSE+CommMenu,D(KBDelay),F5E_Comm_SupplyAir), CHAIN(PULSE+CommMenu,D(KBDelay),F5E_Comm_AirCartOff), DefTempo),
+											CHAIN(DX31,D(ModDelay),DX5));
+					}
+				if ((MFD_Eng_Start > 0) & (!WarthogThrottle))
+					{
+					MapKeyRIO(&LMFD,OSB04,	//CHAIN(D(DefTempo),EXEC("GraceFlag = 0;"))
+											0,	CHAIN(D(TQS_Idle_Delay_F5E),EXEC("F5E_TQS_EngineStart(1);"))	);		//automatees engine start for separate engines for TQS users
+					MapKeyRIO(&LMFD,OSB05,	0,	CHAIN(D(TQS_Idle_Delay_F5E),EXEC("F5E_TQS_EngineStart(2);"))	);	
+					}
+				else					
+					{
+					MapKeyR	(&LMFD,OSB04,	0);
+					MapKeyR	(&LMFD,OSB05,	0);	
+					}
+
+
+//LOSB 6-9 (Master Arm)
+					MapKeyIO(&LMFD,	OSB06,	CHAIN(DX31,D(ModDelay),DX6),	TEMPO(CHAIN(DX31,D(ModDelay),DX6), CHAIN(DX30,DX31,D(ModDelay),DX6), DefTempo)	);
+					MapKeyIO(&LMFD,	OSB07,	CHAIN(DX31,D(ModDelay),DX7),	TEMPO(CHAIN(DX31,D(ModDelay),DX7), CHAIN(DX30,DX31,D(ModDelay),DX7), DefTempo)	);
+//					MapKeyR	(&LMFD,	OSB07,	0);	//for Bf109
+					MapKeyIO(&LMFD,	OSB08,	CHAIN(DX31,D(ModDelay),DX8),	TEMPO(CHAIN(DX31,D(ModDelay),DX8), CHAIN(DX30,DX31,D(ModDelay),DX8), DefTempo)	);
+					MapKeyIO(&LMFD,	OSB09,	CHAIN(DX31,D(ModDelay),DX9),	TEMPO(CHAIN(DX31,D(ModDelay),DX9), CHAIN(DX30,DX31,D(ModDelay),DX9), DefTempo)	);
+//LOSB 10-16 (Station Select)					
+					MapKeyIO(&LMFD,	OSB10,	CHAIN(DX31,D(ModDelay),DX10),	TEMPO(CHAIN(DX31,D(ModDelay),DX10), CHAIN(DX30,DX31,D(ModDelay),DX10), DefTempo)	);
+					MapKeyIO(&LMFD,	OSB11,	CHAIN(DX31,D(ModDelay),DX11),	TEMPO(CHAIN(DX31,D(ModDelay),DX11), CHAIN(DX30,DX31,D(ModDelay),DX11), DefTempo)	);	
+					MapKeyIO(&LMFD,	OSB12,	CHAIN(DX31,D(ModDelay),DX12),	TEMPO(CHAIN(DX31,D(ModDelay),DX12), CHAIN(DX30,DX31,D(ModDelay),DX12), DefTempo)	);
+					MapKeyIO(&LMFD,	OSB13,	CHAIN(DX31,D(ModDelay),DX13),	TEMPO(CHAIN(DX31,D(ModDelay),DX13), CHAIN(DX30,DX31,D(ModDelay),DX13), DefTempo)	);
+					MapKeyIO(&LMFD,	OSB14,	CHAIN(DX31,D(ModDelay),DX14),	TEMPO(CHAIN(DX31,D(ModDelay),DX14), CHAIN(DX30,DX31,D(ModDelay),DX14), DefTempo)	);
+					MapKeyIO(&LMFD,	OSB15,	CHAIN(DX31,D(ModDelay),DX15),	TEMPO(CHAIN(DX31,D(ModDelay),DX15), CHAIN(DX30,DX31,D(ModDelay),DX15), DefTempo)	);					
+					MapKeyIO(&LMFD,	OSB16,	CHAIN(DX31,D(ModDelay),DX16),	TEMPO(CHAIN(DX31,D(ModDelay),DX16), CHAIN(DX30,DX31,D(ModDelay),DX16), DefTempo)	);
+//LOSB 17-19 (Bomb Fusing)
+					MapKey	(&LMFD,	OSB17,	CHAIN(DX31,D(ModDelay),DX17));
+					MapKeyIO(&LMFD,	OSB18,	CHAIN(DX31,D(ModDelay),DX18),	TEMPO(CHAIN(DX31,D(ModDelay),DX18), CHAIN(DX30,DX31,D(ModDelay),DX18), DefTempo)	);
+					MapKey	(&LMFD,	OSB19,	CHAIN(DX31,D(ModDelay),DX19));
+
+//LMFD 20 in Init
+
+//Left Rocker Switches
+//SYM
+		MapKey(&LMFD,	SYMU,	KB_LSYMU);
+		MapKey(&LMFD,	SYMD,	KB_LSYMD);
+
+//CON
+		MapKey	(&LMFD,	CONU,	KB_LCONU);
+		MapKey	(&LMFD,	COND,	KB_LCOND);
+
+//BRT  (Intervalometer)
+		MapKeyIO(&LMFD,	BRTU,	KB_LBRTU,	TEMPO(KB_LBRTU, CHAIN(DX30,KB_LBRTU), DefTempo)	);
+		MapKeyIO(&LMFD,	BRTD,	KB_LBRTD,	TEMPO(KB_LBRTD, CHAIN(DX30,KB_LBRTD), DefTempo)	);
+
+//GAIN in Init
+
+	printf("Done!\xa");
+
+	printf("   Map Cougar Right MFD (DX32)...");
+
+//ROSB 1-10 at first part of routine
+		MapKeyIO(&RMFD,	OSB01,	CHAIN(DX32,D(ModDelay),DX1),	TEMPO(	CHAIN(DOWN+DX32,D(ModDelay),DOWN+DX1,D(Switch_Delay),UP+DX1,D(ModDelay),UP+DX32),
+																		CHAIN(DX30,DX32,D(ModDelay),DX1),	DefTempo));
+		MapKeyIO(&RMFD,	OSB02,	CHAIN(DX32,D(ModDelay),DX2),	TEMPO(	CHAIN(DOWN+DX32,D(ModDelay),DOWN+DX2,D(Switch_Delay),UP+DX2,D(ModDelay),UP+DX32),
+																		CHAIN(DX30,DX32,D(ModDelay),DX2),	DefTempo));
+		MapKeyIO(&RMFD,	OSB03,	CHAIN(DX32,D(ModDelay),DX3),	TEMPO(	CHAIN(DOWN+DX32,D(ModDelay),DOWN+DX3,D(Switch_Delay),UP+DX3,D(ModDelay),UP+DX32),
+																		CHAIN(DX30,DX32,D(ModDelay),DX3),	DefTempo));
+		MapKeyIO(&RMFD,	OSB04,	CHAIN(DX32,D(ModDelay),DX4),	TEMPO(	CHAIN(DOWN+DX32,D(ModDelay),DOWN+DX4,D(Switch_Delay),UP+DX4,D(ModDelay),UP+DX32),
+																		CHAIN(DX30,DX32,D(ModDelay),DX4),	DefTempo));
+		MapKeyIO(&RMFD,	OSB05,	CHAIN(DX32,D(ModDelay),DX5),	TEMPO(	CHAIN(DOWN+DX32,D(ModDelay),DOWN+DX5,D(Switch_Delay),UP+DX5,D(ModDelay),UP+DX32),
+																		CHAIN(DX30,DX32,D(ModDelay),DX5),	DefTempo));
+//		MapKeyR	(&RMFD,	OSB05,	0);
+		MapKeyIO(&RMFD,	OSB06,	CHAIN(DX32,D(ModDelay),DX6),	TEMPO(CHAIN(DX32,D(ModDelay),DX6),	CHAIN(DX30,DX32,D(ModDelay),DX6),	DefTempo));	
+		MapKeyIO(&RMFD,	OSB07,	CHAIN(DX32,D(ModDelay),DX7),	TEMPO(CHAIN(DX32,D(ModDelay),DX7),	CHAIN(DX30,DX32,D(ModDelay),DX7),	DefTempo));
+//		MapKeyR	(&RMFD, OSB07,	0); 
+		MapKeyIO(&RMFD,	OSB08,	CHAIN(DX32,D(ModDelay),DX8),	TEMPO(CHAIN(DX32,D(ModDelay),DX8),	CHAIN(DX30,DX32,D(ModDelay),DX8),	DefTempo)); 
+		MapKeyIO(&RMFD,	OSB09,	CHAIN(DX32,D(ModDelay),DX9),	TEMPO(CHAIN(DX32,D(ModDelay),DX9),	CHAIN(DX30,DX32,D(ModDelay),DX9),	DefTempo)); 
+		MapKeyIO(&RMFD,	OSB10,	CHAIN(DX32,D(ModDelay),DX10),	TEMPO(CHAIN(DX32,D(ModDelay),DX10),	CHAIN(DX30,DX32,D(ModDelay),DX10),	DefTempo)); 	
+//ROSB 11-15
+		MapKeyIO(&RMFD,	OSB11,	CHAIN(DX32,D(ModDelay),DX11),	TEMPO(CHAIN(DX32,D(ModDelay),DX11), CHAIN(DX30,DX32,D(ModDelay),DX11), 	DefTempo)	);	
+		MapKeyIO(&RMFD,	OSB12,	CHAIN(DX32,D(ModDelay),DX12),	TEMPO(CHAIN(DX32,D(ModDelay),DX12), CHAIN(DX30,DX32,D(ModDelay),DX12), 	DefTempo)	);
+		MapKeyIO(&RMFD,	OSB13,	CHAIN(DX32,D(ModDelay),DX13),	TEMPO(CHAIN(DX32,D(ModDelay),DX13), CHAIN(DX30,DX32,D(ModDelay),DX13), 	DefTempo)	);	
+		MapKeyIO(&RMFD,	OSB14,	CHAIN(DX32,D(ModDelay),DX14),	TEMPO(CHAIN(DX32,D(ModDelay),DX14), CHAIN(DX30,DX32,D(ModDelay),DX14), 	DefTempo)	);
+		MapKeyIO(&RMFD,	OSB15,	CHAIN(DX32,D(ModDelay),DX15),	TEMPO(CHAIN(DX32,D(ModDelay),DX15), CHAIN(DX30,DX32,D(ModDelay),DX15), 	DefTempo)	);	
+//		MapKeyR	(&RMFD,	OSB13,	0);	//for Spitfire Engine Start	
+//		MapKeyR	(&RMFD,	OSB14,	0);	//for Spitfire Engine Start			
+//ROSB 16-20
+		MapKeyIO(&RMFD,	OSB16,	CHAIN(DX32,D(ModDelay),DX16,EXEC("if (Adjust_Backlighting > 0) MFD_WHT_Power(2); else LMFD_Pwr_State = 2;")),
+								TEMPO(	CHAIN(DX32,D(ModDelay),DX16,EXEC("if (Adjust_Backlighting > 0) MFD_WHT_Power(0); else LMFD_Pwr_State = 0;")),
+										CHAIN(DX30,DX32,D(ModDelay),DX16,EXEC("if (Adjust_Backlighting > 0) MFD_WHT_Power(2); else LMFD_Pwr_State = 2;")), DefTempo)	);	
+		MapKeyIO(&RMFD,	OSB17,	CHAIN(DX32,D(ModDelay),DX17),	TEMPO(CHAIN(DX32,D(ModDelay),DX17), CHAIN(DX30,DX32,D(ModDelay),DX17), DefTempo)	);
+		MapKeyIO(&RMFD,	OSB18,	CHAIN(DX32,D(ModDelay),DX18),	TEMPO(CHAIN(DX32,D(ModDelay),DX18), CHAIN(DX30,DX32,D(ModDelay),DX18), DefTempo)	);	
+		MapKey	(&RMFD,	OSB19,	CHAIN(DX32,D(ModDelay),DX19));	
+//		MapKeyIO(&RMFD,	OSB20,	CHAIN(DX32,D(ModDelay),DX24),	TEMPO(CHAIN(DX32,D(ModDelay),DX24), CHAIN(DX30,DX32,D(ModDelay),DX24), DefTempo)	);	
+
+
+//Right Rocker Switches
+
+//SYM done in F86_Map_Triple_Switches_MFD()
+	MapKeyIO(&RMFD,	SYMU,	KB_RSYMU,	TEMPO(KB_RSYMU, CHAIN(DX30,KB_RSYMU), DefTempo)	);	//fuel balance, tempo/shift for seat height
+	MapKeyIO(&RMFD,	SYMD,	KB_RSYMD,	TEMPO(KB_RSYMD, CHAIN(DX30,KB_RSYMD), DefTempo)	);
+
+//CON done in F86_Map_Triple_Switches_MFD()
+	MapKey	(&RMFD,	CONU,	KB_RCONU);
+	MapKeyIO(&RMFD,	COND,	KB_RCOND,	TEMPO(KB_RCOND, CHAIN(DX30,KB_RCOND), DefTempo)	);	//generator	
+	
+//BRT
+	MapKey	(&RMFD,	BRTU,	KB_RBRTU);
+	MapKeyIO(&RMFD,	BRTD,	KB_RBRTD,	TEMPO(KB_RBRTD, CHAIN(DX30,KB_RBRTD), DefTempo)	);	//generator
+
+//GAIN
+	MapKey	(&RMFD,	GAINU,	KB_RGAINU);	//Man depression/reticle intensity
+	MapKey	(&RMFD,	GAIND,	KB_RGAIND);
+
+	printf("Done!\xa");	
+}
+
+
+
+int F5E_TQS_EngineStart(int eng)
+{
+if ((ThrAbsPosit > 0) | (IdleDetentLow < 1))	//either idledetent enabled and throttle at idle, or idledetent disabled
+	{
+	if (eng > 1)	ActKey(KEYON+PULSE+Engine_Right_Start);
+	else			ActKey(KEYON+PULSE+Engine_Left_Start);
+	Engine_Start_Ind(eng, Starter_Ind_x, MFD_Eng_Start);
+	}
+}
+
+int	F5E_ClearComms(int gear, int cc, int batt, int gf, int delay)	//cc is clearcomms, batt is whether battery is up (or tested), gf is GraceFlag
+{
+if ((gear) & (cc > 0) & (batt == 0))	DeferCall(delay,&ActKey,KEYON+PULSE+Mic_Sw_DX);	//gear down, comm clear allowed, battery powered up or no check, graceflag to prevent double clear with engine air.  Changed from DX in 1.73
+//else printf("no dice\xa Gearstate = %i\xa ClearComms = %i\xa PwrState = %i\xa Backlight = %i\xa GraceFlag = %i\xa",gear,cc,batt,Adjust_Backlight_F5E,gf);	
+else GraceFlag = 0;
+}
+
+//Countermeasures
+int F5E_Flare_Set(int posit, int key = 1, int loop = 0, int index = 3)
+{
+if ((F5E_Flare_Cur >= index) | (F5E_Flare_Cur < 0))	//sets value in bounds for first use
+	{
+	if (posit < 0)	//decreasing cycle (not discrete)
+		{
+		if (Flare_Default_F5E < 1) F5E_Flare_Cur = 1;	//set to 1 for a 0 if 0 is the default setting
+		else F5E_Flare_Cur = Flare_Default_F5E+1;		//set to default+1 for reduction to default setting
+		}
+	else if (posit > index-1)	//increasing cycle
+		{
+		if (Flare_Default_F5E < 1) F5E_Flare_Cur = 0;	//set to 0 for a 1 if 0 is the default setting
+		else F5E_Flare_Cur = Flare_Default_F5E-1;		//set to default-1 for increase to default setting		
+		}
+	}
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)	F5E_Flare_Cur = (F5E_Flare_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)	F5E_Flare_Cur = (F5E_Flare_Cur+index-1)%index;		//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (F5E_Flare_Cur < index-1))	F5E_Flare_Cur = (F5E_Flare_Cur+1)%index;			//posit > index will cycle by +1
+	else if ((posit < 0) & (F5E_Flare_Cur > 0))			F5E_Flare_Cur = (F5E_Flare_Cur+index-1)%index;		//posit < 0 will cycle by -1 
+	}
+else				F5E_Flare_Cur = posit;										//posit in bounds will be discrete function call
+if (key) ActKey(KEYON+PULSE+X(F5E_Flare_Array,F5E_Flare_Cur));
+}
+
+int F5E_Chaff_Set(int posit, int key = 1, int loop = 0, int index = 4)
+{
+if ((F5E_Chaff_Cur >= index) | (F5E_Chaff_Cur < 0))	//sets value in bounds for first use
+	{
+	if (posit < 0)	//decreasing cycle (not discrete)
+		{
+		if (Chaff_Default_F5E < 1) F5E_Chaff_Cur = 1;	//set to 1 for a 0 if 0 is the default setting
+		else F5E_Chaff_Cur = Chaff_Default_F5E+1;		//set to default+1 for reduction to default setting
+		}
+	else if (posit > index-1)	//increasing cycle
+		{
+		if (Chaff_Default_F5E < 1) F5E_Chaff_Cur = 0;	//set to 0 for a 1 if 0 is the default setting
+		else F5E_Chaff_Cur = Chaff_Default_F5E-1;		//set to default-1 for increase to default setting		
+		}
+	}
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)	F5E_Chaff_Cur = (F5E_Chaff_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)	F5E_Chaff_Cur = (F5E_Chaff_Cur+index-1)%index;		//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (F5E_Chaff_Cur < index-1))	F5E_Chaff_Cur = (F5E_Chaff_Cur+1)%index;			//posit > index will cycle by +1
+	else if ((posit < 0) & (F5E_Chaff_Cur > 0))			F5E_Chaff_Cur = (F5E_Chaff_Cur+index-1)%index;		//posit < 0 will cycle by -1 
+	}
+else				F5E_Chaff_Cur = posit;										//posit in bounds will be discrete function call
+if (key) ActKey(KEYON+PULSE+X(F5E_Chaff_Array,F5E_Chaff_Cur));
+}
+
+int F5E_CommState_Init()	//the program used for init (Mic_Set used for gear state)
+{
+printf("F-5E CommState Initialization\xa");
+
+if (WarthogThrottle > 0)
+	{
+	if (Script_Debug) printf("F5E Warthog Throttle\xa");
+	if ((TARS > 0) | (VAC > 0))
+		{
+		T1_PO	=	CHAIN(PTT_Common,X(Mic_Sw_Fwd,1), EXEC("MSPCheck = 1;if (AirBrkFlash > -1) Lights_RLED1(1);"));
+//		T3_PO	=	CHAIN(PTT_Common,X(Mic_Sw_Fwd,1), EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));	
+//		T4_PO	=	CHAIN(X(Mic_Sw_Fwd,1), EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));
+		}
+	else
+		{
+		T1_PO	=	CHAIN(PTT_Common, EXEC("MSPCheck = 1;if (AirBrkFlash > -1) Lights_RLED1(1);"));
+		}
+		
+	T3_PO	=	CHAIN(PTT_Common, EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));		
+	T4_PO	=	T3_PO;
+//		}
+	T1_RO	=	EXEC("DeferCall(500,&MSPCheck_Set,0);if (AirBrkFlash > -1) Lights_RLED1(0);");
+	T3_RO	=	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);");		
+	T4_RO	=	T3_RO;
+	T1_RI	=	T1_RO;
+	
+//	MSD/R factored in F5E_Mic_Set()
+//	if (VAC > 0) MapKey (&Throttle, MSD,	CHAIN(Mic_Sw_DX,EXEC("CommState_On(CommStateVAC);"))	);	
+//	else		 MapKey (&Throttle, MSD,	CHAIN(Mic_Sw_DX,EXEC("CommState_On(CommStateVAC);"))	);	//CHAIN(PULSE+X(AI_PTT_Array,micsw),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);"))	);
+	//MapKeyR	(&Throttle, MSD,	EXEC("if (!MSPCheck) CommState_Off(CommStateVAC,ProfID,CurrentStation,DMS_SnapView);")); //moved to F5E_Mic_Set()
+
+	MapKey 	(&Throttle,	MSU,	T3_PO);
+	MapKeyR	(&Throttle,	MSU,	T3_RO);
+		
+	MapKey	(&Throttle, MSL,	T4_PO);	//DX22);	//DX removed for VAICOM/SRS compatibility
+	//MapKey	(&Throttle, MSR,	T4_PO);	//DX23);	//moved to F5E_Mic_Set() to remap to Radio for consistency with 3 radio set (MSR/D will also do radio)
+	//MapKeyR	(&Throttle,	MSR,	T4_RO);
+	MapKeyR	(&Throttle,	MSL,	T4_RO);	
+	
+	if ((VAC > 0) & (VACChatter > 0))	// VAICOM with chatter pack
+		{
+		MapKeyIO(&Throttle,	MSP,	TEMPO(0,CHAIN(VAICOM_Chatter,EXEC("MSPCheck = 1;")),DefTempo), T1_PO);
+		MapKeyRIO(&Throttle,MSP,	0, T1_RO);			//release states can release comm menu (Aries Radio) or MMB (VAC)
+		}
+	else
+		{
+		MapKey	(&Throttle,	MSP,	T1_PO);
+		MapKeyR	(&Throttle,	MSP,	T1_RO);
+		}
+
+	
+	}
+else
+	{
+	if (Script_Debug) printf("F5E TQS\xa");
+//	T2_PO	=	CHAIN(Mic_Sw_DX,D(KBDelay+ModDelay),	EXEC("CommState_On(CommStateVAC);")); //Forces Mic_Sw_Fwd (either DX or key based on selection)			
+	if (VAC > 0)	//VAC Removed in 2.10 for VAICOM
+			{
+			if (Script_Debug) printf("  VAICOM Enabled\xa");	
+//			T2_PI	=	CHAIN(EXEC("GraceFlag = 1;"),Mic_Sw_DX,D(KBDelay),MOUSE_CENTER,D(DoubleTap), EXEC("CommState_On(CommStateAllow);GraceFlag = 0;"));	//AI_PTT_Array,micsw used because shifted
+			T2_PI	=	CHAIN(PULSE+CommMenu,D(KBDelay+ModDelay),EXEC("CommState_On(CommStateAllow);")	);
+			}
+	else	T2_PI	=	CHAIN(Mic_Sw_DX,D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);")	);	//added keyboard comm pulse in 1.40
+	
+	if ((VAC > 0) | (TARS > 0))
+		{
+		T2_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0))  ActKey(KEYON+PULSE+X(Mic_Sw_Fwd,1)); CommState_Off(CommStateVAC, ProfID);");
+		T3_PO	=	CHAIN(PTT_Common,X(Mic_Sw_Fwd,1),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));
+		}
+	else
+		{
+		T2_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0))  ActKey(KEYON+PULSE+X(Mic_Sw_Fwd,TS3_DX)); CommState_Off(CommStateVAC, ProfID);");
+		T3_PO	=	CHAIN(PTT_Common,EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));
+		}
+	T2_RI	=	EXEC("if (!GraceFlag) CommState_Off(CommStateVAC, ProfID); else {DeferCall(4*KBDelay+DoubleTap,&CommState_Off_ProfID,CommStateVAC);GraceFlag = 0;}");	//Commstate off only	
+	T3_RO 	=	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);");	
+
+	MapKey	(&HCougar,	T3,	T3_PO);
+	MapKeyR	(&HCougar,	T3,	T3_RO);
+
+	MapKeyIO(&HCougar,	T5,	F5E_RdrModeCCW,	F5E_RdrRngDecr);
+	MapKeyIO(&HCougar,	T4,	F5E_RdrModeCW,	F5E_RdrRngIncr);
+	MapKeyR	(&HCougar,	T4, 0);	//entering argument (modified for SA342)
+	MapKeyR	(&HCougar,	T5, 0);
+	}
+F5E_Mic_Set(1);	//GearDn_Ind_Default);
+}
+int F5E_Mic_Set(int gear)		//adjusts only gear-specific commands
+{
+int micpi;
+int micpo;
+int micri;
+int micro	= 	EXEC("if (!MSPCheck) CommState_Off(CommStateVAC,ProfID,CurrentStation,DMS_SnapView);");
+
+if (WarthogThrottle > 0)
+	{
+	if ((TARS > 0) | (VAC > 0))
+		{
+		micpi	=	CHAIN(PULSE+CommMenu,	D(KBDelay+ModDelay),EXEC("CommState_On(CommStateAllow);"));
+		micpo	=	CHAIN(X(Mic_Sw_Fwd,1),	D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);"));
+		micri	=	EXEC("if (!MSPCheck) CommState_Off(CommStateAllow,ProfID,CurrentStation,DMS_SnapView);");
+		
+		MapKeyIO(&Throttle, MSD,	micpi,micpo);	 
+		MapKeyIO(&Throttle, MSR,	micpi,micpo);
+		MapKeyIO(&Throttle, MSL,	micpi,micpo);
+
+		MapKeyRIO(&Throttle,MSD,	micri,micro);
+		MapKeyRIO(&Throttle,MSR,	micri,micro);
+		MapKeyRIO(&Throttle,MSL,	micri,micro);
+		}
+	else
+		{
+		if (TS3_DX)	micpo	=	CHAIN(X(Mic_Sw_Fwd,1),	D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);"));
+		else		micpo	=	CHAIN(X(AI_PTT_Array,1),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);"));
+
+		MapKey  (&Throttle, MSD,	micpo);
+		MapKey  (&Throttle, MSR,	micpo);
+		MapKey  (&Throttle, MSL,	micpo);
+		
+		MapKeyR	(&Throttle,	MSD,	micro);
+		MapKeyR	(&Throttle,	MSR,	micro);
+		MapKeyR	(&Throttle,	MSR,	micro);
+		}
+	}
+else	//TQS
+	{
+	if (Script_Debug) printf("TQS\xa");
+		if ((TARS > 0) | (VAC > 0))
+			{
+			T2_PO	=	CHAIN(X(Mic_Sw_Fwd,1),D(KBDelay+ModDelay),	EXEC("CommState_On(CommStateVAC);"));	//Forces Mic_Sw_Fwd 		
+			if (Script_Debug) printf("  SRS/VAICOM (unshifted)\xa");	//set to 1.27 array
+			}
+		else
+			{
+//				if (gear == 0)
+//					{
+//					T2_PO	=	CHAIN(PULSE+X(AI_PTT_Array,1),D(KBDelay+ModDelay),	EXEC("CommState_On(CommStateVAC);"),D(5*KBDelay),UP+X(AI_PTT_Array,1)); //Forces Mic_Sw_Fwd (either DX or key based on selection)
+				//	T2_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(AI_PTT_Array,0)); CommState_Off(CommStateVAC, ProfID);");
+//					}
+//				else
+			
+			if (TS3_DX)	T2_PO	=	CHAIN(X(Mic_Sw_Fwd,1),D(KBDelay+ModDelay),	EXEC("CommState_On(CommStateVAC);"));	//Forces Mic_Sw_Fwd (either DX or key based on selection)			
+			else		T2_PO	=	CHAIN(X(AI_PTT_Array,1),	D(KBDelay+ModDelay),	EXEC("CommState_On(CommStateVAC);")); 										//forces RALT+\		
+			}
+		T2_PI	=	CHAIN(PULSE+X(AI_PTT_Array,1),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateAllow);"),D(5*KBDelay),UP+X(AI_PTT_Array,1)	);	//added keyboard comm pulse in 1.40
+		//End T2 Declarations
+		
+	if (Script_Debug) printf("(T2\xa)");
+	MapKeyIO(&HCougar,	T2,	T2_PI, T2_PO);
+	MapKeyRIO(&HCougar,	T2,	T2_RI, T2_RO);			
+
+	}
+
+if (Script_Debug) printf("...Done!\xa");	
+
+}

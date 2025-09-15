@@ -1,0 +1,1701 @@
+//================================================================================
+//		DCS World Communications Subroutines for HOTAS Cougar and Cougar MFDs
+//						by Don "Home Fries" Heumphreus
+//							last updated: 27JUL2023
+//
+//	Change Log:
+//	0.1		Initial Beta Release
+//	0.2		Added flashing RMFD LED1 when both CommState and PTT are active
+//	0.21	Added toggle check in case F key wasn't pressed during CommState
+//	0.24	Added option between DX21 and Scroll Lock for TS3 PTT
+//	0.25	Removed all U/D references; all CommStates now use dynamic Mapkey
+//	0.30	Added generic CommState_On to go with A-10C specific routine
+//	0.33	Replaced use/toggle comm keypress from Mic key to backslash (std. comm menu) 
+//			Restored A10C_CommState_Off() to A-10C specific profile (bug fix)
+//	0.40	Added BS2_CommState_Off() for Ka-50
+//	0.41	Added CommState_Toggle_Active to allow toggle for Ka-50
+//			Moved profile-specific routines to the individual profiles
+//	0.71	Added KBPress and Delay variables to D() and Chains
+//	1.00	Initial Release/Rebaseline
+//	1.02	Incorporated all module-specific CommState_Off routines into CommState_Off(ProfID)
+//	1.10	Added TEMPO for FC3 H2D to map TWS target deselect for F-15C
+//			Removed Cockpit Electrical from H3L long (FC3)
+//			Added FC3_NWS_Toggle(0) to H3U/D (FC3)
+//	1.13	Replaced all TEMPO() and TEMPO(500) with TEMPO(DefTempo)
+//	1.16	Added Flaps to H3U/D long while in dogfight U/D modes
+//	1.17	Removed FC3_NWS_Toggle(0) from H3U/D (obsolete)
+//	1.19	Updated UH1_XM60_Cycle() arguments on H2 and H4
+//	1.22	Modified UH1 snapviews to shift H4L/R only (deconflict inadvertent press with H4U trim)
+//	1.26	Modified Helo CommState_Off mappings for CPTM (also allows CPTM in DX if helicopter selected)
+//			Added TEMPO to Ka-50 H3LR for VHF-1 control.
+//	1.27	Made Mic Switch (AI and PTT variables) arrays and rebuilt A-10C/Complex AI Commstate routines
+//			Enhanced customizability for A-10C/FC3 comm switch layout.  Enhanced Aries Radio functionality.
+//			Ka-50: Added CommMenu to H4L Short (CommState Off)
+//	1.28	Updated TriggerZoom_MapGearDn() T2 mapping for P-51 and F-86.
+//	1.29	Tied Fw190 LMFD Gear Down to TriggerZoom_MapGearDn() function
+//			Added MiG-21 to CommState_Off() and TriggerZoom_MapGearDn() functions
+//	1.30	Moved FC3 CommMenu toggles from CommState_Off() to FC3_CommState_Init()
+//	1.31	Updated for Bf-109 (prof 10)
+//	1.32	MiG-21: Added Weapons Select and AA/MM switches to H2L/R
+//			Added F-86 discrete state option to landing light H3U/D mapping
+//	1.33	Commstate_Off: Assigned /MO H2D to Previous Waypoint in FC3 (new mapping in DCSW)
+//			Added Aries Radio Array for future implementation
+//	1.36	FC3: Added flap array routine for Su-25 models so that cycling up/down will cycle through maneuvering flaps.
+//			Ka-50: Added optional CommState to SnapView4 (released with other SnapViews); remapped H4L from CommSw to SPU9_PTT.
+//			All Helos: Fixed issue with unresponsive H4D in CommState after pushing H4U.
+//	1.40	Added A-10C Specific comm switch toggles to CommState_On() and added ch argument.
+//			DX8 added to H3D /DO again in TriggerZoom_MapGearDn().
+//	1.40a3	Replaced discrete maps with FC3_H3Dxxx mapping calls in TriggerZoom_MapGearDn().
+//			Added RSBN/PMRG functionality to MiG-21
+//	1.40a4	Added M2000C
+//			Simple_Comm_Init updated, now borrows from P51_CommState_Init()
+//	1.50	Added Magic/Cannon to Simple_Comm_Init for M2000C
+//	1.51	Added SA342 Gazelle to CommState_Off()
+//			Added SnapViews to SA342 H3
+//	1.54	L-39 Added to TriggerZoom_MapGearDn()
+//	1.56	Increased button press time for Aries/UniversRadio
+//	1.62	M2000C: Fixed issue with Radio Selection (Simple_Comms)
+//	1.64	M2000C: Forced Commstate Release to CommMenu instead of DX for U/VHF select compatibility
+//	1.65	Fixed initialization bugs in Simple_Comm_Init()
+//	1.66	Moved CommState_Off routines to own TMC files
+//			M2000C: Added PCA Select to Simple_Comm_Init()
+//			Added Spitfire to TriggerZoom_MapGearDn()
+//			Fixed bugs in TriggerZoom_MapGearDn() for F-5 and M-2000C
+//	1.67	Added AJS-37 to Simple_Comm_Init() and CommState_Off()
+//	1.68	Updated AJS-37 Simple Comms Routine (added keystrokes for VigWalkman)
+//	1.69	Fixed F-5E bug in Simple Comms Routine (no longer mapped to VigWalkman)
+//			Added Hawk to Simple_Comm_Init() and CommState_Off()
+//			Added discrete Hawk and C-101 to TriggerZoom_MapGearDn()
+//			Added force arguments to CommState_Off() and TriggerZoom_MapGearDn()
+//	1.70	Updated Simple_Comm_Init()
+//	1.17	M2000C: Updated TriggerZoom_MapGearDn() to replace DX13 with M2k_Hide_Throttle
+//	1.71	M2000C: Fixed argument in CommState_Off() for M2000C_HCS_Init()
+//			Improved SRS support in Simple_Comms_Init()
+//	1.72	Added Su-33 Standalone profile to arguments
+//	1.73	SA342: Updated Simple_Comm_Init() to add CommState to all radios.
+//	2.00	Added AV8B to Simple_Comm_Init()
+//	2.01	Updated AV8B H3D in TriggerZoom_MapGearDn()
+//	2.01b	AV-8B: disabled LED in PTT/CommState if ACP switch other than ARMT
+//	2.04	AV-8B: set H3U/D from DX to keystroke in TriggerZoom_MapGearDn()
+//	2.05	AV-8B: Removed H3U/D TEMPO for SSw Push (allows in-game TEMPO for TPOD)
+//	2.10	Replaced VAC with VAICOM support, removed TARS and Aries (WIP)
+//	2.11	Enhanced VAICOM/SRS support for AV-8B and SA342.
+//	2.13	Forced Mic_Sw_Up to PTT_Common in all cases
+//	2.20	Added J-11A and F/A-18C to CommState_Off() and TriggerZoom_MapGearDn()
+//			Added F/A-18C to  Simple_Comm_Init()
+//	2.23	Updated Simple_Comm_Init() to forward micsw for Warthog
+//			Swapped T4/T5 and added shifted knob pull in Simple_Comm_Init() for AV-8B and F/A-18C
+//	2.26	Added A-4E-C to CommState_Off() and TriggerZoom_MapGearDn(placeholder)
+//	2.27	A-4E: Added Nav functionality to H3U/D
+//			Added CA to CommState_Off() and TriggerZoom_MapGearDn()
+//	2.28	Added C-101 to CommState_Off() and TriggerZoom_MapGearDn()
+//	2.31	Added F-14
+//	2.33	Added discrete F-14 ICS as option to S3+T2
+//	2.34	Added VAICOM AIRIO support for F-14
+//			Set P-51 to discrete landing gear in TriggerZoom_MapGearDn()
+//	2.35	Added F-18 stick routines for AV-8B and F/A-18C
+//	2.40	Added Fw190A8
+//			Added IL-2 to TriggerZoom_MapGearDn()
+//	2.41	Added F-16C to Simple_Comm_Init() and TriggerZoom_MapGearDn()
+//	2.42	Added MiG-19 and I-16 to CommState_Off() and TriggerZoom_MapGearDn()
+//	2.43	Removed SnapViews for VR, added seat height for C101 and Radar for M2000C
+//			Removed reverse comms polarity for M2000C
+//			Added MB339 and JF17 to TriggerZoom_MapGearDn() and CommState_Off()
+//			F-16: Corrected UHF/VHF orientation and reversed PTT/CommState
+//	2.45	Forced PTT_Common to DX if VAICOM enabled
+//			Removed Hawk references
+//			Added F/A-18C MIDS Support (moved PTT to T2 from T3 and put MIDS A on T3)
+//			Reversed F-14 radios for consistency with F-18/AV8B
+//	2.46	Added DCS_AWACS_Init() to Commstate_Off()
+//	2.47	A-4EC: moved H3L to TriggerZoom_MapGearDn()
+//	2.47b	Updated for DCS 2.5.6.52196. Added discrete gear for C101.  Fixed C101 H3D mapping.
+//	2.55	Added IFF In/Out to F-16C in Simple_Comm_Init()
+//	2.57	Added T-45 to Simple Comms routines
+//	2.60	Removed IL2 References
+//			Added Mi-24 to Mi8_HCS_Init()
+//	2.64	Added AH-64 to Commstate_Off() and Simple_Comm_Init()
+//	2.66a	Added gearflapui local variable to TriggerZooom_MapGearDn() to fix crash w/ Cougar.
+//	2.68	Added F-15E to Commstate_Off(), TriggerZooom_MapGearDn() and Simple_Comm_Init()
+//	2.69	Set F-15E Intercom to F15E_Intercom_DX (either F14_PTT_ICS or Rdo_ICS)
+//	2.70	Fixed F-15E Intercom/TS3/Discord in Simple_Comm_Init()
+//
+//================================================================================
+
+//CommState CONOPS for 3.0: see MicSw_Map() at end of this file
+
+//1) integrated init routine for cougar/wh with msu/d/l/r/p local variables
+//2) get rid of complex and baseline simple routine
+//3) commstate force does F keys on SRS actuation
+//4) commstate enable does F keys on shifted commsw actuation with no \ (can be toggled with h4l short/h4p
+//5) no \ on shifted commsw actuation even with commstate force or srs disabled (keep it simple)
+//6) keep CommStateAllow/CommStateVAC as it is.
+//7) dynamic selection for ics/discord/srs/vaicom tbi
+
+
+//Initializes analog axes and Cougar MFD buttons, then calls the default HOTAS Cougar button configuration
+//Free UH-1 DX16, DX18
+
+
+//Comm Switch Declarations
+	//T1
+	
+		//IO
+		int T1_PO;
+		int T1_PI;
+		int T1_RO;
+		int T1_RI;
+
+		//O only
+		int T1_P;
+		int T1_R;
+		
+	//T2
+		//IO
+		int T2_PO;
+		int T2_PI;
+		int T2_RO;
+		int T2_RI;
+
+		//O only
+		int T2_P;
+		int T2_R;
+		
+	//T3
+		//IO
+		int T3_PO;
+		int T3_PI;
+		int T3_RO;
+		int T3_RI;
+
+		//O only
+		int T3_P;
+		int T3_R;
+
+	//T4
+		//IO
+		int T4_PO;
+		int T4_PI;
+		int T4_RO;
+		int T4_RI;
+
+		//O only
+		int T4_P;
+		int T4_R;
+		
+	//T5
+		//IO
+		int T5_PO;
+		int T5_PI;
+		int T5_RO;
+		int T5_RI;
+
+		//O only
+		int T5_P;
+		int T5_R;
+		
+//End Comm Switch Declarations
+
+
+int FkeyPress;					//determines whether a Function key has been pressed while in CommState.  0 with release will toggle selected comm menu.
+int CommState_Toggle_Active=0;	//boolean 0/1 whether commstate is toggled on or off (for BS2)
+int	DMS_SnapView;				//added in 1.34 to allow Hat3 as Snapview (currently for MiG-15 and DX profile)
+
+
+//added 1.27 for new comms
+int Mic_Sw_Up;
+int Mic_Sw_Fwd;
+int	Mic_Sw_Dn;
+int Mic_Sw_Aft;
+int	PTT_Common;
+int	AI_PTT_Array;
+
+int CommInitType;	//added in 2.43 for future use
+//int AIRIO;	//added in 2.34 for VAICOM AIRIO
+
+int SetMicSw(int ptt)	//Sets default PTT for all routines, and assigns radios to Warthog switches.
+						//Mic_Sw_xxx mapped to Comm_Sw_xx in DCS World.tmc to allow for custom configuration
+						//A10C_Mic_Sw_xx = keyboard, Rdo_xxx = DX
+{
+if((ptt) | (VAC > 0))
+		PTT_Common = TS3PTT_DX;
+else	PTT_Common = TS3PTT;
+
+//Mic_Sw_Up	=	SEQ(A10C_Mic_Sw_Up,		PTT_Common);	//PTT_Common can be either key or DX, so should be forced to 1 unless 4 radios
+Mic_Sw_Up	=	SEQ(PTT_Common,			PTT_Common);	//PTT_Common can be either key or DX, either way depending on Cougar Comm_Sw_x setting
+Mic_Sw_Fwd	=	SEQ(A10C_Mic_Sw_Fwd,	Rdo1_VHF_AM);
+Mic_Sw_Dn	= 	SEQ(A10C_Mic_Sw_Dn,		Rdo2_UHF);
+Mic_Sw_Aft	=	SEQ(A10C_Mic_Sw_Aft,	Rdo3_VHF_FM);
+
+AI_PTT_Array = 	SEQ(CommMenu,Mic_Sw);	//added in 1.40
+}
+
+//************************
+//***Aries Radio Toggle***
+//************************
+int TARS_Array;
+int TARS_Cur;
+
+int TARS_Init()
+{
+TARS_Array = SEQ(	Rdo1_VHF_AM,
+					Rdo2_UHF,
+					Rdo3_VHF_FM);
+}
+
+int TARS_Cycle(int posit, int index = 3)		//posit is array position, index is max array size (starting with 1)
+{
+if ((posit > index-1) | (posit < 0))
+	{
+	if (posit > index-1)	TARS_Cur = (TARS_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)		TARS_Cur = (TARS_Cur+index-1)%index;	//posit < 0 will cycle by -1 
+	}
+else				TARS_Cur = posit;							//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(TARS_Array,TARS_Cur));
+}
+
+//*************************
+//**Simple Comms Routine***
+//*************************
+
+int Simple_Comm_Init(int prof = 3551, int pttled = 1, int micsw = 0, int f14ics = 0)	//only maps T1 as of 1.27, but adds Aries Radio 2 for F-86 in 1.28, pttled added in 1.40 to determine whether PTT uses RLED1 (1) or shares 2 with CommState (0) (for WH MSU only).  micsw added in 1.40 (0 for CommMenu, 1 for ralt+\).  f14ics added in 2.33 for discrete ics button
+{
+if (WarthogThrottle > 0) Simple_Comm_Init_WH(prof,pttled,micsw,f14ics);
+else
+{
+if (Script_Debug) printf("Simple_Comm_Init:\xa prof = %i\xa pttled = %i\xa micsw = %i\xa f14ics = %i\xa",prof,pttled,micsw,f14ics);
+
+if ((VAC > 0) & (prof != 2545))		//all this necessary with the T2 routines?  perhaps, time to revisit (2.43)
+	{
+	if (Script_Debug) printf("VAICOM Enabled, ");
+	if (CommStateVAC > 0)
+		{
+		if (Script_Debug) printf("CommState Forced\xa");
+		T5_PO	=	CHAIN(Rdo1_VHF_AM,D(KBDelay+ModDelay),		EXEC("GraceFlag = 1;CommState_On(CommStateVAC);"));
+		T4_PO	=	CHAIN(Rdo2_UHF,D(KBDelay+ModDelay),			EXEC("GraceFlag = 1;CommState_On(CommStateVAC);"));
+		T4_PI	=	CHAIN(PULSE+CommMenu,D(KBDelay+ModDelay),	EXEC("GraceFlag = 1;CommState_On(CommStateVAC);"));			//pulse MIC Sw.  Enter CommState							-Toggle	-TARS
+		T4_R	=	EXEC("CommState_Off(CommStateVAC, ProfID, 1, DMS_SnapView);");
+		}
+	else
+		{
+		if (Script_Debug) printf("CommState Unforced\xa");
+		T5_PO	=	CHAIN(Rdo1_VHF_AM,	EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));
+		T4_PO	=	CHAIN(Rdo2_UHF,		EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));
+		T4_PI	=	CHAIN(PULSE+CommMenu,D(KBDelay+ModDelay),EXEC("GraceFlag = 1;CommState_On(CommStateVAC);"));			//pulse MIC Sw.  Enter CommState							-Toggle	-TARS
+		T4_R	=	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);");
+		}	
+	}
+else if ((CommStateVAC > 0) & (prof != 2545))
+	{
+	if (Script_Debug) printf("VAICOM Disabled, CommState Enabled\xa");
+	T4_PI	=	EXEC("GraceFlag = 1; CommState_On(CommStateVAC);");
+	T4_R	=	EXEC("CommState_Off(CommStateVAC, ProfID, 1, DMS_SnapView);");
+	if ((TARS > 0))	// & (!TARS_PTT_Common))
+		{
+		if (Script_Debug) printf("SRS Enabled without PTT Common\xa");
+		T5_PO	=	CHAIN(Rdo1_VHF_AM,D(KBDelay+ModDelay),	EXEC("GraceFlag = 1;CommState_On(CommStateVAC);"));
+		T4_PO	=	CHAIN(Rdo2_UHF,D(KBDelay+ModDelay),		EXEC("GraceFlag = 1;CommState_On(CommStateVAC);"));
+		}
+	else if (	(prof == 2520)	)	//M2kC or any 2 radio plane that uses keyboard for Radio Menu/CommState
+		{
+		T5_PO	=	CHAIN(PULSE+A10C_Mic_Sw_Up,D(KBDelay+ModDelay),EXEC("GraceFlag = 1;CommState_On(CommStateVAC);"));
+		T4_PO	=	CHAIN(PULSE+A10C_Mic_Sw_Dn,D(KBDelay+ModDelay),	EXEC("GraceFlag = 1;CommState_On(CommStateVAC);"));
+		}
+	else
+		{
+		T5_PO	=	CHAIN(PULSE+Rdo1_VHF_AM,D(KBDelay+ModDelay),EXEC("GraceFlag = 1;CommState_On(CommStateVAC);"));
+		T4_PO	=	CHAIN(PULSE+Rdo2_UHF,	D(KBDelay+ModDelay),EXEC("GraceFlag = 1;CommState_On(CommStateVAC);"));
+		}
+	}
+else 
+	{
+	if (Script_Debug) printf("VAICOM Disabled, CommState Disabled\xa");
+	T4_PI	=	0;
+	if ((TARS > 0) | (prof == 2545))	// & (!TARS_PTT_Common))
+		{
+		if (Script_Debug) printf("SRS Enabled without PTT Common\xa");
+		T5_PO	=	CHAIN(Rdo1_VHF_AM,	EXEC("if (AirBrkFlash > -1) Lights_RLED2(1);"));
+		T4_PO	=	CHAIN(Rdo2_UHF,		EXEC("if (AirBrkFlash > -1) Lights_RLED2(1);"));
+		T4_R	=	EXEC("if (AirBrkFlash > -1) Lights_RLED2(0);");
+		}
+	else
+		{
+		T5_PO	=	PULSE+Rdo1_VHF_AM;
+		T4_PO	=	PULSE+Rdo2_UHF;
+		T4_R	=	0;
+		}
+	}
+T5_PI	=	T4_PI;
+T5_R	=	T4_R;
+
+if ((WarthogThrottle == 1) |  ((WarthogThrottle > 1) & (!WH_Use_TQS))	)	//TQS check added in 2.43 for F-16 and JF-17
+	{
+	if	(	(prof == 0) | (prof == 1541) | (prof == 1542) | (prof == 2520) | (prof == 2537) | (prof == 2508) | (prof == 2518) | (prof == 2615) | (prof == 2514) | (prof == 2516) | (prof == 2117) | (prof == 2545)		)	
+			Simple_Comm_Init_WH(prof,pttled,micsw,f14ics);	//gazelle, mirage, viggen, av8, f18, DX
+	else if (prof == 2505)
+			F5E_CommState_Init();	//added in 1.73
+	else	P51D_CommState_Init(prof,pttled,micsw);
+	}
+else	//TQS
+	{
+	MapKeyR	(&HCougar, T2, 0);	//entering argument added in 2.43 for F-16/JF-17
+	MapKeyR	(&HCougar, T3, 0);
+	MapKeyR	(&HCougar, T4, 0);	//entering argument (modified for SA342)
+	MapKeyR	(&HCougar, T5, 0);
+	
+	if (Script_Debug) printf("T2 AI Comms, T3 MIC (DX21)");	
+		//T1 declarations
+		//Aries Radio (DX20 for VHF AM with P-51 or DX22 for UHF with F-86) functionality for P-51, T1.
+	if ((TARS > 0) | (VAC > 0))	//SRS or VAICOM
+		{
+		if (Script_Debug) printf("...SRS/VAICOM\xa");		//set to 1.27 array
+			if ((prof == 2514) | (prof == 1564) | (prof == 2615))	//F-14 with Jester, AH-64 added in 2.64, F-15E added in 2.70
+				{
+				if (f14ics > 1)		//AIRIO (index check in F14_Discrete_ICS_Cycle() so not necessary here) added in 2.34
+					{
+					T2_PO	=	VAICOM_ICS;	
+					T2_RO	=	0;		
+					}
+				else if (prof == 2615)
+					{
+					T2_PO	=	F15E_Intercom_DX;	//F14_PTT_ICS or Rdo_ICS
+					T2_RO	=	0;		
+					}				
+				else if ((f14ics == 1) | (prof != 2514))	//discrete ics, also forced for non-jester birds
+					{
+					T2_PO	=	F14_PTT_ICS;	
+					T2_RO	=	0;		
+					}
+				else				//jester
+					{
+					T2_PO	=	CHAIN(DOWN+R_SHIFT,D(ModDelay),PULSE+F14_Jester_Menu);	
+					T2_RO	=	UP+R_SHIFT;
+					}
+				}
+			else if ((micsw == 1) | (prof == 2537) | (prof == 2508))	//(micsw < 2) for entry when entire routine reviewed
+				{
+				T2_PO	=	CHAIN(PULSE+X(AI_PTT_Array,micsw),D(KBDelay+ModDelay),	EXEC("CommState_On(CommStateAllow);"),D(5*KBDelay),UP+X(AI_PTT_Array,micsw)); //Forces Mic_Sw_Fwd (either DX or key based on selection)
+				T2_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateAllow > 0) & (ProfID == 2508)) ActKey(KEYON+PULSE+X(AI_PTT_Array,1)); CommState_Off(CommStateAllow, ProfID);");
+				}			
+			else 
+				{
+				T2_PO	=	CHAIN(DOWN+X(Mic_Sw_Fwd,1),D(KBDelay+ModDelay),	EXEC("CommState_On(CommStateVAC);"),D(5*KBDelay),UP+X(Mic_Sw_Fwd,1)); //Forces Mic_Sw_Fwd (either DX or key based on selection)
+				T2_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0) & (ProfID == 2508))  ActKey(KEYON+PULSE+X(Mic_Sw_Fwd,1)); CommState_Off(CommStateVAC, ProfID);");
+				}
+			if (prof == 2508)	//AV8
+				{
+				T3_PO	=	CHAIN(PTT_Common,EXEC("if ((AirBrkFlash > -1) & (AV8_ACP_Sw_Cur > 6) & (ProfID == 2508)) Lights_RLED1(1);"));
+				}
+			//else if (prof == 2514)	//F-14 with Jester
+			//	{
+			//	T3_PO	=	CHAIN(DOWN+R_SHIFT,D(ModDelay),PULSE+F14_Jester_Menu);	
+			//	}
+			else if ((prof == 2514) | (prof == 1564) | (prof == 2615)) //F-14, AH64 added in 2.64, F-15E added in 2.70
+				{
+				if ((f14ics > 0) | (prof != 2514))
+						T3_PO	=	CHAIN(PTT_Common,EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));
+				else	T3_PO	=	CHAIN(DX30,D(ModDelay),DX21,EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));
+				}
+			else
+				{
+//				if (TARS_PTT_Common)		//if/else removed in 2.33 (shouldnt matter for 2 radio)
+//					{	
+					T1_PO	=	PTT_Common;
+					if (prof == 2545)
+							T3_PO	=	CHAIN(DX30,D(ModDelay),PTT_Common,EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));
+					else	T3_PO	=	CHAIN(PTT_Common,EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));
+//					}
+//				else
+//					{
+//					T1_PO	=	CHAIN(X(Mic_Sw_Fwd,1),					D(KBDelay+ModDelay),	EXEC("CommState_On(CommStateVAC);")); //Forces Mic_Sw_Fwd (either DX or key based on selection)
+//					T3_PO	=	CHAIN(X(Mic_Sw_Fwd,1),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);")); //Forces Mic_Sw_Fwd (either DX or key based on selection)
+//					}
+				T1_PI	=	CHAIN(PULSE+X(AI_PTT_Array,micsw),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);")	);	//added keyboard comm pulse in 1.40	
+				T1_RI	=	EXEC("CommState_Off(CommStateVAC, ProfID);");	//Commstate off only
+				}
+			if (prof == 2514)
+				{
+//				if (f14ics > 0)
+//					{
+					T2_PI	=	CHAIN(F14_Mic_Btn_ICS,D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);")	);	//added keyboard comm pulse in 1.40	
+					T2_RI	=	EXEC("CommState_Off(CommStateVAC, ProfID);");	//Commstate off only	
+//					}
+//				else
+//					{
+//					T2_PI	=	F14_PTT_ICS;	
+//					T2_RI	=	0;	
+//					}
+				}
+			else if (prof == 1564)
+				{
+				T2_PI	=	0;	
+				T2_RI	=	0;	
+				}
+			else
+				{
+				if (prof == 2516)	//F-16C
+					{
+	//				if (CommStateVAC > 0)
+	//					{
+	//					T2_PI	=	TEMPO(	CHAIN(F16C_IFF_Out,EXEC("FkeyPress = 1;")),	CHAIN(PULSE+X(AI_PTT_Array,micsw),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);"),	DefTempo)	);	//was CommStateAllow in 2.54.  FkeyPress = 1; to prevent \ cycling after releasing iff
+	//					T2_RI	=	EXEC("CommState_Off(CommStateVAC, ProfID);");	//Commstate off only		
+	//					}
+	//				else
+	//					{
+						T2_PI	=			F16C_IFF_Out;
+						T2_RI	=			0;
+	//					}
+					}
+				else
+					{
+					T2_PI	=	CHAIN(PULSE+X(AI_PTT_Array,micsw),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);")	);	//added keyboard comm pulse in 1.40	
+					T2_RI	=	EXEC("CommState_Off(CommStateVAC, ProfID);");	//Commstate off only		
+					}
+				}	
+		}
+	else
+		{
+		if (prof == 2514)	//F-14
+			{		
+//			if (f14ics > 1)			//Commstate
+//				{
+//				T2_PO	=	CHAIN(F14_PTT_ICS,D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);")	);	//added keyboard comm pulse in 1.40	
+//				T2_RO	=	EXEC("CommState_Off(CommStateVAC, ProfID);");	//Commstate off only				
+//				}
+//			else
+			if  (f14ics > 0)	//ICS Only
+				{
+				T2_PO	=	F14_PTT_ICS;	
+				T2_RO	=	0;			
+
+				T3_PO	=	CHAIN(PTT_Common,EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));	//PTT not ICS				
+				}
+			else			//Jester
+				{
+				T2_PO	=	CHAIN(DOWN+R_SHIFT,D(ModDelay),PULSE+F14_Jester_Menu);	
+				T2_RO	=	UP+R_SHIFT;
+				
+				T3_PO	=	CHAIN(DX30,D(ModDelay),PTT_Common,EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));	//PTT + ICS
+				}
+			}
+		else if (prof == 1564)
+			{
+			T2_PO	=	CHAIN(KEYON+PULSE+Mic_Sw,D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);")	);	//added keyboard comm pulse in 1.40	
+			T2_RO	=	EXEC("CommState_Off(CommStateVAC, ProfID);");	//if (FkeyPress < 1) ActKey(KEYON+PULSE+Mic_Sw);");	//Commstate off only
+
+			T3_PO	=	CHAIN(PTT_Common,EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));	//PTT not ICS				
+			}
+		
+		else if (micsw)
+			{
+			T1_PO	=	CHAIN(DOWN+X(Mic_Sw_Fwd,TS3_DX),PTT_Common,D(KBDelay+ModDelay),	EXEC("CommState_On(CommStateVAC, 2);"),D(5*KBDelay),UP+X(Mic_Sw_Fwd,TS3_DX));	//Commstate(1,2) to cycle VHF_AM instead of \ with H4L/P	//T1_PO	=	CHAIN(PULSE+X(AI_PTT_Array,micsw),PTT_Common,D(KBDelay+ModDelay),			EXEC("CommState_On(CommStateVAC);DeferCall(KBDelay,&MSPCheck_Set,1);"));
+			T2_PO	=	CHAIN(DOWN+X(Mic_Sw_Fwd,TS3_DX),D(KBDelay+ModDelay),				EXEC("CommState_On(CommStateVAC, 2);"),D(5*KBDelay),UP+X(Mic_Sw_Fwd,TS3_DX) );	//Commstate(1,2) to cycle VHF_AM instead of \ with H4L/P	//T1_PO	=	CHAIN(PULSE+X(AI_PTT_Array,micsw),PTT_Common,D(KBDelay+ModDelay),			EXEC("CommState_On(CommStateVAC);DeferCall(KBDelay,&MSPCheck_Set,1);"));
+			T2_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(Mic_Sw_Fwd,TS3_DX)); CommState_Off(CommStateVAC, ProfID);");
+			}
+		else
+			{
+			T1_PO	=	CHAIN(DOWN+X(AI_PTT_Array,0),PTT_Common,D(KBDelay+ModDelay),		EXEC("CommState_On(CommStateVAC);"),D(5*KBDelay),UP+X(AI_PTT_Array,0));
+			T2_PO	=	CHAIN(DOWN+X(AI_PTT_Array,0),	 D(KBDelay+ModDelay),				EXEC("CommState_On(CommStateVAC);"),D(5*KBDelay),UP+X(AI_PTT_Array,0));
+			T2_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(AI_PTT_Array,0)); CommState_Off(CommStateVAC, ProfID);");
+			}
+		
+		T1_RI	=	EXEC("CommState_Off(CommStateVAC, ProfID);");	//Commstate off only
+		T1_PI	=	CHAIN(PULSE+X(AI_PTT_Array,0),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);")	);	//added keyboard comm pulse in 1.40
+
+		if ((prof == 2514) | (prof == 1564))
+			{
+			T2_PI	=	CHAIN(PTT_Common,D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);")	);	//added keyboard comm pulse in 1.40.  PTT with S3 = ICS CommState
+			T2_RI	=	EXEC("CommState_Off(CommStateVAC, ProfID);");	//Commstate off only
+			}	
+		else
+			{
+			
+			T2_RI	=	EXEC("CommState_Off(CommStateVAC, ProfID);");	//Commstate off only
+
+	//		if ((prof == 1541) | (prof == 1542))	T2_PI	=	CHAIN(PULSE+CommMenu, EXEC("CommState_On(CommStateVAC);")	);										//toggles comm menu and enters CommState.  Be sure to release shift before using hat switch commands.
+	//		else
+													T2_PI	=	CHAIN(PULSE+X(AI_PTT_Array,0),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);")	);	//added keyboard comm pulse in 1.40
+			}
+		}
+	
+	
+	T1_RO	=	T1_RI;
+	if (prof == 2508)
+			T3_RO 	=	EXEC("if ((AirBrkFlash > -1) & (AV8_ACP_Sw_Cur > 6)) Lights_RLED1(0);");
+	//else if (prof == 2514)
+	//		T3_RO	=	UP+R_SHIFT;	//CHAIN(PULSE+F14_Jester_Menu,D(ModDelay),UP+R_SHIFT);
+	else	T3_RO 	=	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);");
+
+	//End T1/2/3 Declarations
+		
+//	Note: No T1 MapKey commands.  Oversight or T1 obsolete in routine?
+
+	if ((prof == 2516) | (prof == 2117))	//F-16C has comms "on its side"
+		{
+		if (Script_Debug) printf("(F-16C/JF-17 T4/T5)\xa)");
+		if ((prof == 2117) & (MSP_IFF_JF17 > 0))
+			{
+			MapKey	(&HCougar,	T5,	JF17_IFF);
+			MapKeyR	(&HCougar,	T5,	0);			//release states can release comm menu (Aries Radio)
+			
+			MapKey	(&HCougar,	T4,	T3_PO);
+			MapKeyR	(&HCougar,	T4,	T3_RO);
+			}	
+		else	
+			{
+			MapKeyIO(&HCougar,	T5,	T2_PI, T2_PO);
+			MapKeyRIO(&HCougar,	T5,	T2_RI, T2_RO);
+			
+			MapKeyIO(&HCougar,	T4,	F16C_IFF_In,	T3_PO);
+			MapKeyRIO(&HCougar,	T4,	0,				T3_RO);
+			}
+		}
+	else
+		{
+		if (Script_Debug) printf("	(T2/T3");
+		
+		if (	(TARS > 0) & ((prof == 2518))	)	//reverse PTT/Rdo3 for MIDS B/PTT shared channel (now T3 for MIDS A/Rdo3 and shift for AI Comms)
+			{
+			if (Script_Debug) printf("...F/A-18C");
+			MapKeyIO(&HCougar, 	T2, T2_PI,	CHAIN(Rdo3_VHF_FM,	D(ModDelay+KBDelay),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"))	);	//DX20
+			MapKeyRIO(&HCougar,	T2,	T2_RI,	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);"));
+			}
+		else if (prof == 2545)	//T-45 and anything with no shifted radio function
+			{
+			MapKey	(&HCougar,	T2,	T2_PO);
+			MapKeyR	(&HCougar,	T2,	T2_RO);			//release states can release comm menu (Aries Radio)		
+			}
+		else
+			{	
+			MapKeyIO(&HCougar,	T2,	T2_PI, T2_PO);
+			MapKeyRIO(&HCougar,	T2,	T2_RI, T2_RO);			//release states can release comm menu (Aries Radio)
+			}
+		if (Script_Debug) printf(")\xa");
+		MapKey	(&HCougar,	T3,	T3_PO);	//will use MIDS if set to DX, otherwise TS3/Discord
+		MapKeyR	(&HCougar,	T3,	T3_RO);
+		}
+	
+//	if (Script_Debug) printf("checkpoint\xa");		
+	
+	if (prof == 2508)	//AV8 VHF/UHF Selectable with Armament Panel conditions; AV-8B and F/A-18 T4/T5 reversed for UFC
+		{
+		MapKeyIO(&HCougar, T5, Rdo1_VHF_AM,	CHAIN(Rdo1_VHF_AM,	D(ModDelay+KBDelay),EXEC("if ((AirBrkFlash > -1) & (AV8_ACP_Sw_Cur > 6)) Lights_RLED1(1);"))	);	//DX20
+		MapKeyIO(&HCougar, T4, Rdo2_UHF,	CHAIN(Rdo2_UHF,		D(ModDelay+KBDelay),EXEC("if ((AirBrkFlash > -1) & (AV8_ACP_Sw_Cur > 6)) Lights_RLED1(1);"))	);	//DX22
+		
+		MapKeyRIO(&HCougar, T4, 0,	EXEC("if ((AirBrkFlash > -1) & (AV8_ACP_Sw_Cur > 6)) Lights_RLED1(0);"));
+		MapKeyRIO(&HCougar, T5, 0,	EXEC("if ((AirBrkFlash > -1) & (AV8_ACP_Sw_Cur > 6)) Lights_RLED1(0);"));
+		}	
+	
+	else if (	(prof == 2518) | (prof == 2615)	)	//VHF/UHF Selectable; AV-8B and F/A-18 T4/T5 reversed for UFC
+		{
+//		if (prof == 2615)	MapKey	(&HCougar,	T3,	F15E_Intercom_DX);	//F14_PTT_ICS or Rdo_ICS removed in 2.70 (moved elsewhere)
+		if ((prof == 2518) | (prof == 2615)	)	//hornet with UFC comm knobs to pull
+			{
+			MapKeyIO(&HCougar, T5, TEMPO(CHAIN(DOWN+Rdo1_VHF_AM, EXEC("FkeyPress = 1;"), D(Switch_Delay),UP+Rdo1_VHF_AM),	T2_PI, ModTempo),	T5_PO);	//CHAIN(Rdo1_VHF_AM,	D(ModDelay+KBDelay),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"))	);	//DX20
+			MapKeyIO(&HCougar, T4, TEMPO(CHAIN(DOWN+Rdo2_UHF,	 EXEC("FkeyPress = 1;"), D(Switch_Delay),UP+Rdo2_UHF),		T2_PI, ModTempo),	T4_PO);	//CHAIN(Rdo2_UHF,		D(ModDelay+KBDelay),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"))	);	//DX22
+			
+			MapKeyR	(&HCougar, T4, T4_R);	//,	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);"));
+			MapKeyR	(&HCougar, T5, T4_R);	//,	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);"));
+			}
+		else 
+			{
+			MapKey	(&HCougar, T4, CHAIN(Rdo1_VHF_AM,	D(ModDelay+KBDelay),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"))	);	//DX20
+			MapKey	(&HCougar, T5, CHAIN(Rdo2_UHF,		D(ModDelay+KBDelay),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"))	);	//DX22
+			
+			MapKeyR	(&HCougar, T4, EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);"));
+			MapKeyR	(&HCougar, T5, EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);"));
+			}
+	
+		}
+	else if ((prof == 2505) | (prof == 2537) | (prof == 2514) | (prof == 1564))	//added 2537 for Viggen in 1.67 and 2514 for Tomcat in 2.31, added AH64 in 2.64
+		{
+		if (prof == 2537)	
+			{
+			MapKeyIO(&HCougar,	T3,	TEMPO(AJS37_VigWalkman_Stop,AJS37_VigWalkman_Play,DefTempo),	T3_PO);		//allows for TEMPO walkman short stop long play
+			MapKeyIO(&HCougar,	T4,	AJS37_VigWalkman_FF,	TEMPO(AJS37_Rdr_Pass,Rdo1_VHF_AM,DefTempo)	);		//Passive Radar short, Rdo1 long
+			MapKeyIO(&HCougar,	T5,	AJS37_VigWalkman_Rew,	TEMPO(AJS37_Rdr_ObstacleMode,Rdo2_UHF,DefTempo)	);	//Terrain Avoidance short, rdo2 long
+			}
+		else if (prof == 2514)	
+			{
+			MapKeyIO(&HCougar,	T3,	TEMPO(F14_Walkman_Stop,F14_Walkman_Play,DefTempo),	T3_PO);		//allows for TEMPO walkman short stop long play
+			MapKeyIO(&HCougar,	T4,	F14_Walkman_FF,		Rdo2_UHF);		
+			MapKeyIO(&HCougar,	T5,	F14_Walkman_Rew,	Rdo1_VHF_AM);	
+			}
+		else if (prof == 1564)	
+			{
+			MapKey	(&HCougar,	T3,	T3_PO);		
+			MapKey	(&HCougar,	T4,	CHAIN(Rdo_ICS,		D(ModDelay+KBDelay),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"))	);	//DX30+DX21	
+			MapKey	(&HCougar,	T5,	CHAIN(Rdo1_VHF_AM,	D(ModDelay+KBDelay),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"))	);	//DX20
+			
+			MapKeyR	(&HCougar, T4, T4_R);
+			MapKeyR	(&HCougar, T5, T5_R);
+			}
+		else
+			{
+			MapKey	(&HCougar,	T4,	DX22);	
+			MapKey	(&HCougar,	T5,	DX23);		
+			}
+			
+		}	
+	else if ((prof == 2516))	//F-16 has comms "on its side" with 2 and 1 reversed (SRS compatibility)
+		{
+		MapKeyIO(&HCougar, T3, T5_PI, T5_PO);	//Rdo1_VHF_AM,	CHAIN(Rdo1_VHF_AM,	D(ModDelay+KBDelay),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"))	);	//DX20
+		MapKeyIO(&HCougar, T2, T4_PI, T4_PO);	//Rdo2_UHF,	CHAIN(Rdo2_UHF,		D(ModDelay+KBDelay),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"))	);	//DX22
+				
+		MapKeyRIO(&HCougar, T3, T2_RI,	T2_RO);	//EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);"));
+		MapKeyRIO(&HCougar, T2, T2_RI,	T2_RO);	//EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);"));
+		
+		}
+	else if ((prof == 2117))	//F-16 has comms "on its side"
+		{
+		MapKeyIO(&HCougar, T2, T5_PI, T5_PO);	//Rdo1_VHF_AM,	CHAIN(Rdo1_VHF_AM,	D(ModDelay+KBDelay),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"))	);	//DX20
+		MapKeyIO(&HCougar, T3, T4_PI, T4_PO);	//Rdo2_UHF,	CHAIN(Rdo2_UHF,		D(ModDelay+KBDelay),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"))	);	//DX22
+				
+		MapKeyRIO(&HCougar, T2, T2_RI,	T2_RO);	//EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);"));
+		MapKeyRIO(&HCougar, T3, T2_RI,	T2_RO);	//EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);"));
+		
+		}		
+	else if (!T4_PI)
+		{
+//		if (Script_Debug) printf("	T4/T5\xa T4_PO = %i\xa T5_PO = %i\xa",T4_PO,T5_PO);
+		MapKey	(&HCougar, T4, T4_PO);			//Rdo2_UHF);	//DX22	no conditions because it may or may not be radio
+		MapKey	(&HCougar, T5, T5_PO);			//Rdo3_VHF_FM);	//DX23
+		
+		MapKeyR	(&HCougar, T4, T4_R);
+		MapKeyR	(&HCougar, T5, T5_R);
+		}
+	else
+		{
+//		if (Script_Debug) printf("	T4/T5 I/O\xa T4_PO = %i\xa T5_PO = %i\xa T4_PI = %i\xa T4_R = %i\xa",T4_PO,T5_PO,T4_PI,T4_R);	
+		MapKeyIO(&HCougar, T4, T4_PI, T4_PO);	//Rdo2_UHF);	//DX22	no conditions because it may or may not be radio
+		MapKeyIO(&HCougar, T5, T5_PI, T5_PO);	//Rdo3_VHF_FM);	//DX23
+		
+		MapKeyR	(&HCougar, T4, T4_R);
+		MapKeyR	(&HCougar, T5, T5_R);
+		}
+	if (Script_Debug) printf("	Done!\xa");	
+	}	
+}
+}
+int CommState_Off_ProfID(int csa)	//csa for commstate allow, used for defercall in above routine
+{
+CommState_Off(csa, ProfID);
+}
+
+
+//***************************
+//**Complex Comms Routines***
+//***************************
+
+//int Complex_DX_Comm_Init()	//removed in 1.27; duplicate of Complex_A10C_Comm_Init()
+
+int Complex_A10C_Comm_Init(int pttdx, int rdodx, int prof = 2510)	//arguments added in 1.35; pttdx is whether DX is used for PTT, rdodx is whether DX is used for selecting radios (AI comms and Aries).  prof added in 2.11 for Gazelle
+{
+if (WarthogThrottle > 0) Complex_A10C_Comm_Init_WH(pttdx,rdodx);
+else
+	{
+	//Default+Global Mapping
+
+	//T2
+		//IO
+		T2_PO	=	CHAIN(PULSE+X(Comm_Sw_Dn,rdodx),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);"),D(5*KBDelay),UP+X(Comm_Sw_Dn,rdodx));			//pulse MIC Sw + Hold DX22 for PTT.  Enter CommState							-Toggle	-TARS
+		T2_PI	=	EXEC("CommState_On(CommStateVAC);");																//Enters Commstate w/o cycling menu.  Good for responding.						-Toggle	+TARS	-VAC
+		T2_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(Comm_Sw_Dn,0)); CommState_Off(CommStateVAC, ProfID, 1, DMS_SnapView);");	//check for use/toggle, otherwise no toggle menu off						-Toggle	+TARS
+		T2_RI	=	EXEC("CommState_Off(CommStateVAC, ProfID);");													//Commstate off only
+
+	//T3
+		//IO	
+		T3_PO	=	CHAIN(PULSE+X(Comm_Sw_Up,rdodx),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);"),D(5*KBDelay),UP+X(Comm_Sw_Up,rdodx));			//pulse MIC Sw + Hold DX21 for PTT  Enter CommState								-Toggle	-TARS
+		T3_PI	=	T2_PI;																								//Enters Commstate w/o cycling menu.  Good for responding.						-Toggle	+TARS	-VAC
+		T3_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(Comm_Sw_Up,0)); CommState_Off(CommStateVAC, ProfID, 1, DMS_SnapView);");	//check for use/toggle, otherwise no toggle menu off						-Toggle	+TARS
+		T3_RI	=	T2_RI;																								//Commstate off only
+
+	//T4
+		//IO	
+		T4_PO	=	CHAIN(PULSE+X(Comm_Sw_Rt,rdodx),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);"),D(5*KBDelay),UP+X(Comm_Sw_Rt,rdodx));			//pulse MIC Sw + Hold DX23 for PTT.  Enter Commstate							-Toggle	-TARS
+		T4_PI	=	T2_PI;																								//Enters Commstate w/o cycling menu.  Good for responding.						-Toggle	+TARS	-VAC
+		T4_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(Comm_Sw_Rt,0)); CommState_Off(CommStateVAC, ProfID, 1, DMS_SnapView);");	//check for use/toggle, otherwise no toggle menu off						-Toggle	+TARS									-Toggle	+TARS
+		T4_RI	=	T2_RI;																								//Commstate off only
+
+	//T5
+		//IO	
+		T5_PO	=	CHAIN(PULSE+X(Comm_Sw_Lt,rdodx),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);"),D(5*KBDelay),UP+X(Comm_Sw_Lt,rdodx));			//pulse MIC Sw + Hold DX20 for PTT.  Enter Commstate							-Toggle	-TARS
+		T5_PI	=	T2_PI;																								//Enters Commstate w/o cycling menu.  Good for responding.						-Toggle	+TARS	-VAC
+		T5_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(Comm_Sw_Lt,0)); CommState_Off(CommStateVAC, ProfID, 1, DMS_SnapView);");	//check for use/toggle, otherwise no toggle menu off						-Toggle	+TARS							-Toggle	+TARS
+		T5_RI	=	T2_RI;																								//Commstate off only
+
+		
+	//End Default Mapping
+
+	if (	(VAC > 0) | ((prof == 1541) | (prof == 1542))	)		//VAC removed in 2.10 for VAICOM, also added Gazelle as criteria for this configuration
+//	Begin VAICOM Mapping
+		{
+		if (Script_Debug) printf("\xa  VAICOM: %i\xa  SRS: %i\xa  PTT Common: %i\xa  prof: %i\xa",VAC,TARS,TARS_PTT_Common,prof);	//for test purposes
+		if ((prof == 1541) | (prof == 1542))
+			{
+			if (Script_Debug) printf("  Gazelle profile...");	//for test purposes
+			if (TARS > 0)	//forces comms with no shift
+				{
+				if (Script_Debug) printf("SRS\xa");
+				T2_PO	=	CHAIN(X(Comm_Sw_Dn,1),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));
+				T3_PO	=	CHAIN(X(Comm_Sw_Up,1),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));
+				T4_PO	=	CHAIN(X(Comm_Sw_Rt,1),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));
+				T5_PO	=	CHAIN(X(Comm_Sw_Lt,1),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));
+				
+				T2_RO	=	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);");
+				}
+			else	//pulse for radio select, long for CommState
+				{
+				if (Script_Debug) printf("CommMenu\xa");
+				T2_PO	=	TEMPO(PULSE+X(Comm_Sw_Dn,1), CHAIN(PULSE+X(Comm_Sw_Dn,1),D(KBDelay+ModDelay),PULSE+CommMenu,D(ModDelay),EXEC("CommState_On(CommStateVAC); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(1);")), DefTempo);
+				T3_PO	=	TEMPO(PULSE+X(Comm_Sw_Up,1), CHAIN(PULSE+X(Comm_Sw_Up,1),D(KBDelay+ModDelay),PULSE+CommMenu,D(ModDelay),EXEC("CommState_On(CommStateVAC); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(1);")), DefTempo);
+				T4_PO	=	TEMPO(PULSE+X(Comm_Sw_Rt,1), CHAIN(PULSE+X(Comm_Sw_Rt,1),D(KBDelay+ModDelay),PULSE+CommMenu,D(ModDelay),EXEC("CommState_On(CommStateVAC); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(1);")), DefTempo);
+				T5_PO	=	TEMPO(PULSE+X(Comm_Sw_Lt,1), CHAIN(PULSE+X(Comm_Sw_Lt,1),D(KBDelay+ModDelay),PULSE+CommMenu,D(ModDelay),EXEC("CommState_On(CommStateVAC); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(1);")), DefTempo);
+				
+				T2_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0)) DeferCall(KBDelay,&ActKey,KEYON+PULSE+CommMenu); CommState_Off(CommStateVAC, ProfID); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(0);");
+				}
+			T3_RO	=	T2_RO;
+			T4_RO	=	T2_RO;	
+			T5_RO	=	T2_RO;
+			
+			T2_PI 	=	CHAIN(PULSE+X(Comm_Sw_Dn,1),D(KBDelay+ModDelay),PULSE+CommMenu, D(KBDelay+ModDelay),EXEC("CommState_On(CommStateAllow);"));		
+			T3_PI 	=	CHAIN(PULSE+X(Comm_Sw_Up,1),D(KBDelay+ModDelay),PULSE+CommMenu, D(KBDelay+ModDelay),EXEC("CommState_On(CommStateAllow);"));	
+			T4_PI	=	CHAIN(PULSE+X(Comm_Sw_Rt,1),D(KBDelay+ModDelay),PULSE+CommMenu, D(KBDelay+ModDelay),EXEC("CommState_On(CommStateAllow);"));	
+			T5_PI	=	CHAIN(PULSE+X(Comm_Sw_Rt,1),D(KBDelay+ModDelay),PULSE+CommMenu, D(KBDelay+ModDelay),EXEC("CommState_On(CommStateAllow);"));	
+			
+			T2_RI	=	EXEC("CommState_Off(CommStateAllow, ProfID);");
+			T3_RI	=	T2_RI;
+			T4_RI	=	T2_RI;
+			T5_RI	=	T2_RI;
+			
+			if (X(Comm_Sw_Dn,1)==PTT_Common)
+				{
+				if (Script_Debug) printf("Comm_Sw_Dn = PTT Common (Gazelle)\xa");
+				T2_PO	=	CHAIN(X(Comm_Sw_Dn,1),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(1);"));	//force DX for comm button
+				T2_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(Comm_Sw_Dn,1)); CommState_Off(CommStateVAC, ProfID); if ((AirBrkFlash > -1) & (CommStateVAC < 1)) Lights_RLED1(0);");
+				if (TARS > 0)
+					{
+					T2_PI	=	T2_PO;	//selects intercom
+					T2_RI	=	T2_RO;
+					}
+				else	T2_PI	=	CHAIN(PULSE+CommMenu, D(KBDelay+ModDelay),EXEC("CommState_On(CommStateAllow);"));			//pulse MIC Sw + Enter Commstate
+				}
+			if (X(Comm_Sw_Up,1)==PTT_Common)
+				{
+				if (Script_Debug) printf("Comm_Sw_Up = PTT Common (Gazelle)\xa");
+				T3_PO	=	CHAIN(X(Comm_Sw_Up,1),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(1);"));	//force DX for comm button
+				T3_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(Comm_Sw_Up,1)); CommState_Off(CommStateVAC, ProfID); if ((AirBrkFlash > -1) & (CommStateVAC < 1)) Lights_RLED1(0);");
+				if (TARS > 0)
+					{
+					T3_PI	=	T3_PO;	//selects intercom
+					T3_RI	=	T3_RO;
+					}				
+				else	T3_PI	=	CHAIN(PULSE+CommMenu, D(KBDelay+ModDelay),EXEC("CommState_On(CommStateAllow);"));			//pulse MIC Sw + Enter Commstate	
+				}
+			if (X(Comm_Sw_Rt,1)==PTT_Common)
+				{
+				if (Script_Debug) printf("Comm_Sw_Rt = PTT Common (Gazelle)\xa");
+				T4_PO	=	CHAIN(X(Comm_Sw_Rt,1),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(1);"));	//force DX for comm button
+				T4_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(Comm_Sw_Rt,1)); CommState_Off(CommStateVAC, ProfID); if ((AirBrkFlash > -1) & (CommStateVAC < 1)) Lights_RLED1(0);");
+				if (TARS > 0)
+					{
+					T4_PI	=	T4_PO;	//selects intercom
+					T4_RI	=	T4_RO;
+					}
+				else	T4_PI	=	CHAIN(PULSE+CommMenu, D(KBDelay+ModDelay),EXEC("CommState_On(CommStateAllow);"));			//pulse MIC Sw + Enter Commstate	
+				}			
+			if (X(Comm_Sw_Lt,1)==PTT_Common)
+				{
+				if (Script_Debug) printf("Comm_Sw_Lt = PTT Common (Gazelle)\xa");
+				T5_PO	=	CHAIN(X(Comm_Sw_Lt,1),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(1);"));	//force DX for comm button
+				T5_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(Comm_Sw_Lt,1)); CommState_Off(CommStateVAC, ProfID); if ((AirBrkFlash > -1) & (CommStateVAC < 1)) Lights_RLED1(0);");
+				if (TARS > 0)
+					{
+					T5_PI	=	T5_PO;	//selects intercom
+					T5_RI	=	T5_RO;
+					}
+				else	T5_PI	=	CHAIN(PULSE+CommMenu, D(KBDelay+ModDelay),EXEC("CommState_On(CommStateAllow);"));			//pulse MIC Sw + Enter Commstate	
+				}
+			}		
+		else
+			{
+			if (Script_Debug) printf("  Other than Gazelle\xa");	//for test purposes
+
+			T2_PO	=	CHAIN(X(Comm_Sw_Dn,1),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(1);"));	//force DX for comm button
+			T3_PO	=	CHAIN(X(Comm_Sw_Up,1),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(1);"));
+			T4_PO	=	CHAIN(X(Comm_Sw_Rt,1),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(1);"));
+			T5_PO	=	CHAIN(X(Comm_Sw_Lt,1),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(1);"));
+			
+			T2_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(Comm_Sw_Dn,0)); CommState_Off(CommStateVAC, ProfID, 1, DMS_SnapView); if ((AirBrkFlash > -1) & (CommStateVAC < 1)) Lights_RLED1(0);");
+			T3_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(Comm_Sw_Up,0)); CommState_Off(CommStateVAC, ProfID, 1, DMS_SnapView); if ((AirBrkFlash > -1) & (CommStateVAC < 1)) Lights_RLED1(0);");
+			T4_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(Comm_Sw_Rt,0)); CommState_Off(CommStateVAC, ProfID, 1, DMS_SnapView); if ((AirBrkFlash > -1) & (CommStateVAC < 1)) Lights_RLED1(0);");
+			T5_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(Comm_Sw_Lt,0)); CommState_Off(CommStateVAC, ProfID, 1, DMS_SnapView); if ((AirBrkFlash > -1) & (CommStateVAC < 1)) Lights_RLED1(0);");	//check for use/toggle, otherwise no toggle menu off						-Toggle	+TARS							-Toggle	+TARS
+			
+			T2_PI	=	CHAIN(PULSE+X(Comm_Sw_Dn,0),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateAllow);"));			//pulse MIC Sw + Enter Commstate	
+			T3_PI	=	CHAIN(PULSE+X(Comm_Sw_Up,0),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateAllow);"));			//pulse MIC Sw + Enter Commstate		
+			T4_PI	=	CHAIN(PULSE+X(Comm_Sw_Rt,0),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateAllow);"));			//pulse MIC Sw + Enter Commstate	
+			T5_PI	=	CHAIN(PULSE+X(Comm_Sw_Lt,0),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateAllow);"));			//pulse MIC Sw + Enter Commstate	
+			
+			T2_RI	=	EXEC("CommState_Off(CommStateAllow, ProfID);");
+			T3_RI	=	T2_RI;
+			T4_RI	=	T2_RI;
+			T5_RI	=	T2_RI;
+			}
+		}
+//	End VAICOM Mapping
+
+	//Start SRS mapping
+	else if (TARS > 0)		//If TS3 Radio is enabled.  This should overwrite unshifted states, shifted states can be overwritten by VAC.
+		{
+		if (Script_Debug) printf("SRS: %i\xa  PTT Common: %i\xa  ProfID: %i\xa",TARS,TARS_PTT_Common,ProfID);	//for test purposes
+	//T2 (Down)
+		//IO	
+		if 		((X(Comm_Sw_Dn,1)!=PTT_Common))		//either PTT_Common is used and this is it, or common not used and this is not normal common.  Either way, use for vox.
+				{
+				T2_PO	=	CHAIN(X(Comm_Sw_Dn,pttdx),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);")); 
+				}
+				
+	//T3 (up)
+		//IO
+		if 		((X(Comm_Sw_Up,1)!=PTT_Common))		//either PTT_Common is used and this is it, or common not used and this is not normal common.  Either way, use for vox.
+				{
+				T3_PO	=	CHAIN(X(Comm_Sw_Up,pttdx),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);")); 
+				}
+				
+	//T4 (Right)
+		//IO
+		if 		((X(Comm_Sw_Rt,1)!=PTT_Common))		//either PTT_Common is used and this is it, or common not used and this is not normal common.  Either way, use for vox.
+				{
+				T4_PO	=	CHAIN(X(Comm_Sw_Rt,pttdx),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);"));
+				}
+
+	//T5 (left)
+		//IO
+		if 		((X(Comm_Sw_Lt,1)!=PTT_Common))		//either PTT_Common is used and this is it, or common not used and this is not normal common.  Either way, use for vox.
+				{
+				T5_PO	=	CHAIN(X(Comm_Sw_Lt,pttdx),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);"));
+				}					
+		}
+
+
+	//Start Assigning buttons
+
+	if ((X(Comm_Sw_Dn,1) == PTT_Common) & !((prof == 1541) | (prof == 1542) | (prof == 2518) | (prof == 2615))	)	//Gazelle exception added in 2.11, Hornet in 2.45
+		{
+		if (Script_Debug) printf("Comm_Sw_Dn = PTT Common\xa");
+		MapKey	(&HCougar,	T2, CHAIN(PTT_Common, EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);")));
+		MapKeyR	(&HCougar,	T2,	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);"));
+		}
+	else
+		{
+		//if (Script_Debug) printf("Comm_Sw_Dn = Default\xa");
+		MapKeyIO(&HCougar,	T2,	T2_PI, T2_PO);
+		MapKeyRIO(&HCougar,	T2,	T2_RI, T2_RO);			//release states can release comm menu (Aries Radio)
+		}
+		
+	if (	((X(Comm_Sw_Up,1) == PTT_Common) & !((prof == 1541) | (prof == 1542)))	| (prof == 2518) | (prof == 2615)	)	//Gazelle exception added in 2.11, force hornet in 2.45
+		{
+		if (Script_Debug) printf("Comm_Sw_Up = PTT Common\xa");
+		MapKey	(&HCougar,	T3, CHAIN(PTT_Common, EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);")));
+		MapKeyR	(&HCougar,	T3,	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);"));
+		}
+	else
+		{
+		//if (Script_Debug) printf("Comm_Sw_Up = Default\xa");
+		MapKeyIO(&HCougar,	T3,	T3_PI, T3_PO);
+		MapKeyRIO(&HCougar,	T3,	T3_RI, T3_RO);			//release states can release comm menu (Aries Radio)
+		}
+
+	if ((X(Comm_Sw_Rt,1) == PTT_Common) & !((prof == 1541) | (prof==1542))	)	//Gazelle exception added in 2.11
+		{
+		if (Script_Debug) printf("Comm_Sw_Rt = PTT Common\xa");
+		MapKey	(&HCougar,	T4, CHAIN(PTT_Common, EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);")));
+		MapKeyR	(&HCougar,	T4,	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);"));
+		}
+	else
+		{
+		//if (Script_Debug) printf("Comm_Sw_Rt = Default\xa");
+		MapKeyIO(&HCougar,	T4,	T4_PI, T4_PO);
+		MapKeyRIO(&HCougar,	T4,	T4_RI, T4_RO);			//release states can release comm menu (Aries Radio)
+		}
+		
+	if ((X(Comm_Sw_Lt,1) == PTT_Common) & !((prof == 1541) | (prof==1542))	)	//Gazelle exception added in 2.11
+		{
+		if (Script_Debug) printf("Comm_Sw_Lt = PTT Common\xa");
+		MapKey	(&HCougar,	T5, CHAIN(PTT_Common, EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);")));
+		MapKeyR	(&HCougar,	T5,	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);"));
+		}
+	else
+		{
+		//if (Script_Debug) printf("Comm_Sw_Lt = Default\xa");
+		MapKeyIO(&HCougar,	T5,	T5_PI, T5_PO);
+		MapKeyRIO(&HCougar,	T5,	T5_RI, T5_RO);			//release states can release comm menu (Aries Radio)
+		}
+	}
+}	
+	
+
+
+
+int CommState_On(int allow = 1, int ch = 0, int flash = 0)		//Added in 0.25; lights RLED2 for Hot Mic while button is pressed.
+{
+if (WarthogStick > 0) CommState_WH_On(allow,ch,flash);
+else if (allow > 0)
+	{
+	if (Script_Debug) printf("CommState_On(HC)\xa");	//for test purposes
+	if ((ProfID == 2508) & (AV8_ACP_Sw_Cur < 7))	//disables LED if the ACP lights are doing something already
+		{
+		if (Script_Debug) printf("No LED: AV-8B ACP Switch is %i\xa",AV8_ACP_Sw_Cur);	//basically a dummy execution
+		}
+	else if (flash > 0) flashRLED2(1,500);
+	else Lights_RLED2(1);
+	if (ProfID == 2514) FkeyPress = 1;	//added in 2.31 for F-14 integration with SRS
+	else				FkeyPress = 0;
+
+				if (Script_Debug) printf("         Hat2 (F1-4)...");	
+					MapKey(	&HCougar, H2U,		CommState_F1);		//F1
+					MapKey(	&HCougar, H2R, 		CommState_F2);		//F2
+					MapKey(	&HCougar, H2D, 		CommState_F3);		//F3
+					MapKey(	&HCougar, H2L,		CommState_F4);		//F4
+				if (Script_Debug) printf("...Done!\xa");	
+				if (Script_Debug) printf("         Hat3 (F5-8)...");		
+					MapKey(	&HCougar, H3U,		CommState_F5);		//F5
+					MapKey(	&HCougar, H3R,		CommState_F6);		//F6
+					MapKey(	&HCougar, H3D,		CommState_F7);		//F7				
+					MapKey(	&HCougar, H3L,		CommState_F8);		//F8
+				if (Script_Debug) printf("...Done!\xa");	
+				if (Script_Debug) printf("         Hat4 (F9-12)...");	
+					MapKey	(&HCougar,	H4U,	CommState_F9);		//F9
+					MapKeyR	(&HCougar,	H4U,	0);											//added in 1.36 for bug fix
+					MapKey	(&HCougar,	H4R,	CommState_F10);		//F10
+					MapKey	(&HCougar,	H4D,	CommState_F11);		//F11
+					MapKeyR	(&HCougar,	H4D,	0);
+					if ((ProfID == 1050) & (ch == 1))									//added in 1.36 for Ka-50 so H4L will properly toggle comm menu even with SPU9_PTT
+						MapKey	(&HCougar,	H4L,	CommState_F12_Toggle_BS2);								//F12 long, commmenu toggle short
+					else if (ch == 4)
+						MapKey	(&HCougar,	H4L,	TEMPO(	CHAIN(PULSE+X(Mic_Sw_Aft,0),EXEC("FkeyPress=1;")),	//Rdo3_VHF_FM
+															CHAIN(USB[0x45],EXEC("FkeyPress=1;")),
+															ModTempo));	
+					else if (ch == 3)
+						MapKey	(&HCougar,	H4L,	TEMPO(	CHAIN(PULSE+X(Mic_Sw_Dn,0),EXEC("FkeyPress=1;")),	//Rdo2_UHF	 
+															CHAIN(USB[0x45],EXEC("FkeyPress=1;")),
+															ModTempo));	
+					else if (ch == 2)
+						MapKey	(&HCougar,	H4L,	TEMPO(	CHAIN(PULSE+X(Mic_Sw_Fwd,0),EXEC("FkeyPress=1;")),	//Rdo1_VHF_AM	 
+															CHAIN(USB[0x45],EXEC("FkeyPress=1;")),
+															ModTempo));	
+					else
+						MapKey	(&HCougar,	H4L,	CommState_F12_Toggle);								//F12 long, commmenu toggle short
+				if (Script_Debug) printf("...Done!\xa");
+	}
+else FkeyPress = 1;		//prevents CommMenu toggle off if not using commstate
+}
+
+int CommState_Off(int allow = 1, int prof = 0, int stn=1, int snap=0, int force=0)		//added stn in 1.15 for use with Mi-8 and separate H3 functions, added snap in 1.34 to allow for DMS as SnapViews (MiG-15 and DX), force added in 1.69 as passthru for TGZ_MapGearDn
+{
+int gearflapui; //local variables for gear toggle
+
+if (WarthogStick > 0) CommState_WH_Off(allow,prof,stn,snap);
+else if (allow > 0)	//allow=1 for init so mapping is done even without CommState enabled
+	{
+	if (Script_Debug) printf("CommState_Off(HC,%i)\xa",prof);	//for test purposes
+	if (!Helicopter) //cancels helo trim (was originally !Helicopter.  reason or bug?)
+		{
+		MapKeyR	(&HCougar,	H4U, 	0);
+		MapKeyR	(&HCougar,	H4D,	0);
+		}
+	if (prof == 998)	DCS_AWACS_Init(0);	//AWACS forces full profile reload (no Commstate, only for profile cancel).  0 argument to suppress wav.
+	else if 			(prof == 2019)
+		{
+		if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+CommMenu);
+		MiG19_HCS_Init(prof,force);
+		}
+	else if 	(prof == 2021)	//MiG-21 uses DMS for snapviews
+		{
+		if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(Mic_Sw_Fwd,TS3_DX));	//ActKey(KEYON+PULSE+CommMenu);	//	toggles comm menu again if no F-key was pressed
+		MiG21_HCS_Init();
+		}
+	else if		(prof == 2015)	//MiG-15 uses shifted DMS for snapviews
+		{
+		if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(Mic_Sw_Fwd,TS3_DX));	//ActKey(KEYON+PULSE+CommMenu);	//	toggles comm menu again if no F-key was pressed
+		MiG15_HCS_Init();
+		}
+	else if (prof == 1050) BS2_HCS_Init();		//Ka-50 has SPU-9 FKeypPress check in toggle function; added BS2_CommState_Toggle in 1.36
+	else if ((prof == 2025) | (prof == 2011) | (prof == 2027) | (prof == 2033) |  (prof == 2029) | (prof == 2509) | (prof == 2515))
+		{
+		//if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(Comm_Sw_Rt,TS3_DX));	//ActKey(KEYON+PULSE+CommMenu);	//	toggles comm menu again if no F-key was pressed; removed in 1.30 (release set to specific mic switches in FC3)
+		if (prof == 2025) Su25_HCS_Init(prof,force);
+		else if (prof == 2515) F15C_HCS_Init(prof,force);
+		else if (prof == 2509) A10A_HCS_Init(prof,force);
+		else Ruf_HCS_Init(prof,force);
+		}
+
+	else if (prof == 2510) A10C_HCS_Init(prof,force);		//A-10C has individual mic FKeypPress check in toggle function
+	else if (	(prof == 3551) |	(prof == 3090)	|	(prof == 3190)	|	(prof == 3009)	|	(prof == 3509)	|	(prof == 3516)	|	(prof == 3547)	|	(prof == 3606)	)	//Fw-190 added in 1.28, Bf109 in 1.31, SpitLFIX in 1.66, I-16 in 2.42, Mossie in 2.61
+		{
+		if (!FkeyPress)
+				{
+				//if (prof == 3090)	ActKey(KEYON+PULSE+X(Mic_Sw_Aft,TS3_DX));	//VHF-FM; may change this depending on Aries
+				//else			
+				ActKey(KEYON+PULSE+X(Mic_Sw_Fwd,TS3_DX));	//ActKey(KEYON+PULSE+CommMenu);	//	toggles comm menu again if no F-key was pressed
+				}
+		if ((prof == 3090) | (prof == 3190)) Fw190_HCS_Init(prof,force);
+		else if (prof == 3009) Bf109_HCS_Init();
+		else if ((prof == 3509)) Spit_HCS_Init(prof,force);
+		else if ((prof == 3606)) Mosquito_HCS_Init(prof,force);
+		else if (prof == 3516) I16_HCS_Init();
+		else P51D_HCS_Init(prof,force);		
+		}
+	else if (prof == 1501) UH1_HCS_Init(stn);	//UH-1 has position-specific FKeypPress check in own function
+	else if ((prof == 1008) | (prof == 1024))	Mi8_HCS_Init(stn,prof);	//Mi-8 uses UH-1 routine for position-specific FKeypPress check in own function
+	else if ((prof == 1564)	)											//AH-64
+		{
+		AH64_HCS_Init(stn,prof);
+		Mi8_H3_Map(stn,prof,Petrovich_Cur);
+		}
+	else if (	((prof >= 2520) & (prof <= 2524)) | (prof == 2508) | (prof == 2518) | (prof == 2615) | (prof == 2604) | (prof == 2501) | (prof == 2601) | (prof == 2516) | (prof == 2117))	//M2000C, AV8B, F-18, A-4E-C, C-101, F-16C, JF17
+		{
+		if (!FkeyPress) ActKey(KEYON+PULSE+CommMenu);	//Forced from X(Mic_Sw_Fwd,TS3_DX) to CommMenu in 1.64 to deconflict with V/UHF select
+		if (prof == 2520) 		M2000C_HCS_Init(prof,force);
+		else if ((prof > 2520) & (prof <= 2524)) MirageF1_HCS_Init(prof,force);
+		else if (prof == 2508) 	AV8B_HCS_Init(prof,force);
+		else if (prof == 2516) 	F16C_HCS_Init(prof,force);
+		else if (prof == 2117) 	JF17_HCS_Init(prof,force);
+		else if ((prof == 2518) | (prof == 2615)) 	FA18C_HCS_Init(prof,force);
+		else if (prof == 2604) 	A4EC_HCS_Init(prof,force);			//A-4E-C; may be moved later
+
+		else 					C101_Seat_Mapping_Stick(CurrentStation, prof, C101_MasterArm_Cur);
+//		else Hawk_HCS_Init(force);
+		}
+	else if (prof == 2514) F14_HCS_Init(CurrentStation,prof,force);	//forced to CurrentStation instead of Station until Tx_RO argument set to something other than 1
+	else if ((prof == 1542) | (prof == 1541))	SA342_HCS_Init(stn, prof);			//SA342L/M Gazelle
+	else if ((prof == 2039) | (prof == 2040))	L39_HCS_Init(stn, prof);			//L-39C/ZA
+	else if ((prof == 2537)	)					AJS37_HCS_Init(prof, force);		//AJS-37
+	
+	
+	else
+		{	//CommMenu keystroke used instead of Mic_Sw in event of multiple radio buttons (e.g. A-10C)
+		if ((prof != 0) & (!FkeyPress)) ActKey(KEYON+PULSE+CommMenu);		//	catch all if not listed above, but not DX; toggles comm menu again if no F-key was pressed
+		//else printf("Prof = %i\xaFkeyPress = %i\xa",prof,FkeyPress);	//for test purposes
+		//DX has position-specific FKeypPress check in own function based on simple or complex comms option
+		if (	(prof==0) & (Helicopter)	) H4UD_CPTM(prof);	//allows TARGET CPTM if DX set as helo, otherwise generic map
+		else
+			{		
+					if (Script_Debug) printf("         Hat2 (TMS)...");	
+						if (prof == 999)
+							{
+							if (Script_Debug) printf("CA...");
+							MapKeyIO(&HCougar,	H2U,	DX7,	TEMPO(DX7,CHAIN(DX30,D(ModDelay),DX7),DefTempo)	);	//CA
+							MapKeyIO(&HCougar,	H2D,	DX9,	TEMPO(DX9,CHAIN(DX30,D(ModDelay),DX9),DefTempo)	);	//CA
+							}
+						else
+							{
+							MapKey(&HCougar, 	H2U,	DX7);
+							MapKey(&HCougar, 	H2R,	DX8);
+							}
+						MapKey(&HCougar, 	H2D,	DX9);
+						MapKey(&HCougar, 	H2L,	DX10);
+					if (Script_Debug) printf("...Done!\xa");	
+					if (Script_Debug) printf("         Hat3 (");		
+						if (	((prof == 2000) & (!Gear_Discrete_DX))	|	(prof == 2539))	//gear toggle
+								gearflapui	=	Gear_Flaps_Up_T;
+						else	gearflapui	=	Gear_Flaps_Up;
+						
+						if ((snap > 0) & (TrackIR < 2))	//sets DMS to SnapViews instead of DX if enabled
+							{
+							if (snap > 1)
+								{
+								if (Script_Debug) printf("Shifted SnapViews)...");
+								MapKeyIO(&HCougar, 	H3U,	gearflapui,		Shift_SnapView5);	
+								MapKeyIO(&HCougar, 	H3R,	Std_SnapView3,	Shift_SnapView6);	
+								MapKeyIO(&HCougar, 	H3L,	Std_SnapView1,	Shift_SnapView4);	
+								}							
+							else
+								{
+								if (Script_Debug) printf("SnapViews)...");
+								MapKeyIO(&HCougar, 	H3U,	gearflapui,		Std_SnapView5);	
+								MapKeyIO(&HCougar, 	H3R,	Std_SnapView3,	Std_SnapView6);	
+								MapKeyIO(&HCougar, 	H3L,	Std_SnapView1,	Std_SnapView4);	
+								}
+							}
+						else
+							{
+							if (Script_Debug) printf("DMS)...");
+//							if (	((prof == 2000) & (!Gear_Discrete_DX))	|	(prof == 2539))	//gear toggle
+//								MapKeyIO(&HCougar, 	H3U,	Gear_Flaps_Up_T,DX11);
+							else if ((prof == 2586) & (UseDiscrete_F86))	//added in 1.32 for F-86 discrete landing light states.
+								MapKeyIO(&HCougar,	H3U,	Gear_Flaps_Up, TEMPO(EXEC("F86_Landing_Light_Sw_Set(2,Switch_Delay);"), 	EXEC("F86_Landing_Light_Sw_Set(1,Switch_Delay);"),	DefTempo)	);
+							else if (prof == 999)	//Combined Arms
+								MapKey	(&HCougar, 	H3U,	DX11);
+							else
+								MapKeyIO(&HCougar, 	H3U,	gearflapui,	DX11);
+							if ((prof == 2505) & (TrackIR < 2))	//F-5E SnapViews
+								{
+								MapKeyIO(&HCougar, 	H3R,	Std_SnapView8,	DX12);
+								MapKeyIO(&HCougar, 	H3L,	Std_SnapView2,	DX14);
+								}
+							else
+								{
+								MapKey	(&HCougar, 	H3R,	DX12);
+								MapKey	(&HCougar, 	H3L,	DX14);
+								}
+							}
+						TriggerZoom_MapGearDn(TriggerZoom_state, prof, snap, force);
+					if (Script_Debug) printf("...Done!\xa");	
+					if (Script_Debug) printf("         Hat4 (CMS)...");	
+						MapKey	(&HCougar,	H4U,	DX15);
+						MapKeyR	(&HCougar,	H4U, 	0);			//added to cancel helo trim
+						MapKey	(&HCougar,	H4D,	DX17);
+						MapKeyR	(&HCougar,	H4D,	0);			//added to cancel helo trim					
+						if (prof == 2505)
+							{
+							MapKeyIO(&HCougar,	H4R,	EXEC("F5E_Flare_Set(-1);"),	EXEC("F5E_Chaff_Set(-1);")	);
+							MapKeyIO(&HCougar,	H4L,	EXEC("F5E_Flare_Set(3);"),	EXEC("F5E_Chaff_Set(4);")	);
+							}
+						else if (prof == 999)	//CA
+							{
+							MapKeyIO(&HCougar,	H4R,	USB_F10,	TEMPO(DX16, USB_F10, DefTempo));	//Long Forces map view
+							MapKeyIO(&HCougar,	H4L,	TEMPO(USB_F1,JumpInAcft,DefTempo),	TEMPO(DX18, USB_F1,  DefTempo));	//Long Forces in-cockpit
+							}						
+						else
+							{
+							MapKey	(&HCougar,	H4R,	DX16);
+							MapKey	(&HCougar,	H4L,	DX18);
+							}
+					if (Script_Debug) printf("...Done!\xa");
+			}	
+		}
+	if ((ProfID == 2508) & (AV8_ACP_Sw_Cur < 7))	//disables LED if the ACP lights are doing something already
+		{
+		if (Script_Debug) printf("No LED: AV-8B ACP Switch is %i\xa",AV8_ACP_Sw_Cur);	//basically a dummy execution
+		}
+	else Lights_RLED2(0);
+	}
+}			
+
+
+int TriggerZoom_MapGearDn(int state, int prof = 0, int snap = 0, int force = 0)	// Added in 1.26 to terminate TriggerZoom if gear goes down; snap added in 1.34 to allow for snapview default in DX.  Added force in 1.69 to force mapping if TGZ disabled.
+{
+int gearflapui;
+int gearflapdi;
+
+if (Script_Debug) printf("TriggerZoom_MapGearDn(%i,%i,%i,%i)\xa",state, prof, snap, force);	//for test purposes
+if ((WarthogStick > 0) | (WarthogThrottle > 0))	TriggerZoom_MapGearDn_WH(state,prof,snap,force);
+else if ((TriggerZoomEnabled > 0) | (force))
+	{
+	if (Script_Debug) printf("TriggerZoomEnabled\xa");	//for test purposes
+	if ((prof == 2021) | (prof == 2019)) 	//MiG-19/21 Dogfight Down
+		{			// /I lock gear, /O gear down
+		if (state)	
+			{
+			MapKeyIO(&HCougar,	T8,	CHAIN(PULSE+DX26,EXEC("MiG21_GearUp_Unlock_Cur = 0; MiG21_GearUp_Map(Force_GearLock,MiG21_GearUp_Unlock_Cur); GearState_Blink(GearState,500);")),	//added GearState_Blink() in 1.29
+									CHAIN(	EXEC("TriggerZoom_toggle(0,1,0); "),PULSE+DX26,	D(250),	EXEC("GearStateInd(1, ProfID, FixedGear, Helicopter, GearCycleTimeDn, AirBrkFlash);"))	);
+			MapKeyRIO(&HCougar,	T8,	0, 		EXEC("TriggerZoom_MapGearDn(TriggerZoom_state, ProfID);Print_Value(21);"));	//remaps T8 to non-TriggerZoom after gear down release
+			}
+		else
+			{
+			MapKeyIO(&HCougar,	T8,	CHAIN(PULSE+DX26,EXEC("MiG21_GearUp_Unlock_Cur = 0; MiG21_GearUp_Map(Force_GearLock,MiG21_GearUp_Unlock_Cur); GearState_Blink(GearState,500);")),	//added GearState_Blink() in 1.29
+									CHAIN(										PULSE+DX26,			EXEC("GearStateInd(1, ProfID, FixedGear, Helicopter, GearCycleTimeDn, AirBrkFlash);"))	);
+			MapKeyR	(&HCougar,	T8,	0);
+			}
+//		MapKeyRIO(&HCougar,	T8,	0, 		EXEC("TriggerZoom_MapGearDn(TriggerZoom_state, ProfID);Print_Value(21);"));	//remaps T8 to non-TriggerZoom after gear down release; no need for global
+
+		}
+	else if (prof == 3516)
+		{			// Sustained gear hold
+		if (state)	
+			{
+			MapKey	(&HCougar,	T8,	CHAIN(	EXEC("TriggerZoom_toggle(0,1,0); "),DX26,	D(250),	EXEC("GearStateInd(1, ProfID, FixedGear, Helicopter, GearCycleTimeDn, AirBrkFlash); if (GearCheck_I16 > 0) DeferCall(GearCycleTimeDn,&&I16_GearCheck,1);"))	);
+			MapKeyR	(&HCougar,	T8,	 		EXEC("TriggerZoom_MapGearDn(TriggerZoom_state, ProfID);Print_Value(21);")	);	//remaps T8 to non-TriggerZoom after gear down release
+			}
+		else
+			{
+			MapKey	(&HCougar,	T8,	CHAIN(										DX26,			EXEC("GearStateInd(1, ProfID, FixedGear, Helicopter, GearCycleTimeDn, AirBrkFlash); if (GearCheck_I16 > 0) DeferCall(GearCycleTimeDn,&I16_GearCheck,1);"))	);
+			MapKeyR	(&HCougar,	T8,	0);
+			}
+		}
+	else if ((prof == 2025) | (prof == 2011) | (prof == 2027) | (prof == 2033) |  (prof == 2029) | (prof == 2509) | (prof == 2515))	//FC3 for UMD mapping
+		{
+		
+		if (Flaps_Array_FC3>0)
+			{
+			if (state)			
+			MapKeyIOUMD(&HCougar, H3D,	FC3_H3DUIF,
+										FC3_H3DUO,
+										FC3_H3DMIF_TGZ,
+										FC3_H3DMO,
+										FC3_H3DDIF,
+										FC3_H3DDO);
+			else
+			MapKeyIOUMD(&HCougar, H3D,	FC3_H3DUIF,
+										FC3_H3DUO,
+										FC3_H3DMIF,
+										FC3_H3DMO,
+										FC3_H3DDIF,
+										FC3_H3DDO);
+
+			}	
+		else
+			{
+			if (state)			
+			MapKeyIOUMD(&HCougar, H3D,	FC3_H3DDI,
+										FC3_H3DUO,
+										FC3_H3DMI_TGZ,
+										FC3_H3DMO,
+										FC3_H3DDI,
+										FC3_H3DDO);
+			else
+			MapKeyIOUMD(&HCougar, H3D,	FC3_H3DDI,
+										FC3_H3DUO,
+										FC3_H3DMI,
+										FC3_H3DMO,
+										FC3_H3DDI,
+										FC3_H3DDO);			
+			}
+		}
+	else if (prof == 2508)	//AV8B for flap mapping
+		{
+		if ((HornetStick > 0) & (HornetStick_Default > 0))
+			{
+			if (state)
+					MapKeyIO(&HCougar, 	H3D, 	Gear_Flaps_Dn_TGZ_AV8,	AV8_ECM_Dn	);
+			else	MapKeyIO(&HCougar, 	H3D, 	Gear_Flaps_Dn_AV8,		AV8_ECM_Dn	);
+			}
+		else
+			{
+			if (state)
+					MapKeyIO(&HCougar, 	H3D, 	Gear_Flaps_Dn_TGZ_AV8,	AV8_SSw_Dn	);
+			else	MapKeyIO(&HCougar, 	H3D, 	Gear_Flaps_Dn_AV8,		AV8_SSw_Dn	);
+			}
+		}
+	else if (prof == 2518)	//F-18 for flap mapping
+		{
+		if ((HornetStick > 0) & (HornetStick_Default > 0))
+			{
+			if (state)
+					MapKeyIO(&HCougar, 	H3D, 	Gear_Flaps_Dn_TGZ_F18,	F18_Flare_Disp	);
+			else	MapKeyIO(&HCougar, 	H3D, 	Gear_Flaps_Dn_F18,		F18_Flare_Disp	);			
+			}
+		else
+			{			
+			if (state)
+					MapKeyIO(&HCougar, 	H3D, 	Gear_Flaps_Dn_TGZ_F18,	F18_SSw_Dn	);
+			else	MapKeyIO(&HCougar, 	H3D, 	Gear_Flaps_Dn_F18,		F18_SSw_Dn	);
+			}
+		}
+	else if (prof == 2615)	//F-15E for SSW/Boat mapping
+		{
+		if ((HornetStick > 0) & (HornetStick_Default > 0))
+			{
+			if (state)
+					MapKeyIO(&HCougar, 	H3D, 	Gear_Flaps_Dn_TGZ,	DX9	);
+			else	MapKeyIO(&HCougar, 	H3D, 	Gear_Flaps_Dn,		DX9	);			
+			}
+		else
+			{			
+			if (state)
+					MapKeyIO(&HCougar, 	H3D, 	Gear_Flaps_Dn_TGZ,	F18_SSw_Dn	);
+			else	MapKeyIO(&HCougar, 	H3D, 	Gear_Flaps_Dn,		F18_SSw_Dn	);
+			}
+		}
+	else if (prof == 2117)	//JF-17 for CMS mapping
+		{
+		//if ((HornetStick > 0) & (HornetStick_Default > 0))
+		//	{
+		//	if (state)
+		//			MapKeyIO(&HCougar, 	H3D, 	Gear_Flaps_Dn_TGZ,	CM_Dispense	);
+		//	else	MapKeyIO(&HCougar, 	H3D, 	Gear_Flaps_Dn,		CM_Dispense	);		
+		//	}
+		//else
+		//	{			
+			if (state)
+					MapKeyIO(&HCougar, 	H3D, 	Gear_Flaps_Dn_TGZ,	CM_Dispense	);
+			else	MapKeyIO(&HCougar, 	H3D, 	Gear_Flaps_Dn,		CM_Dispense	); 
+		//	}
+		}
+	else if (prof == 2516)	//F-16C
+		{
+		if (state)
+				MapKeyIO(&HCougar,	H3D,	TEMPO(F16C_DMS_Down,Gear_Dn_TGZ,GearDnTempo), 	F16C_DMS_Down);
+		else	MapKeyIO(&HCougar,	H3D,	TEMPO(F16C_DMS_Down,Gear_Dn,GearDnTempo), 		F16C_DMS_Down);
+		}	
+	else if (prof == 2604)	//A-4E-c
+		{
+		if (state)
+				MapKeyIO(&HCougar,	H3D,	Gear_Flaps_Dn_TGZ, 	A4E_NavSel_D2);
+		else	MapKeyIO(&HCougar,	H3D,	Gear_Flaps_Dn, 		A4E_NavSel_D2);
+		MapKeyIO(&HCougar, 	H3L,	TEMPO(M2k_Hide_Stick, TailHook, DefTempo),	A4E_Doppler_Land);
+		}
+	else if (prof == 2510)	//A-10C for H2 mapping
+		{
+		if (state)
+				MapKeyIO(&HCougar, 	H2D, 	Gear_Flaps_Dn_TGZ,	DX9);
+		else	MapKeyIO(&HCougar, 	H2D, 	Gear_Flaps_Dn,		DX9);
+		}
+	else if (prof == 3509)	//Spitfire for T2 and SnapView
+		{
+		if (state)
+				{
+				if (TrackIR < 2)
+						MapKeyIO(&HCougar,	H3D,	Gear_Flaps_Dn_TGZ, 	Std_SnapView2);
+				else	MapKeyIO(&HCougar,	H3D,	Gear_Flaps_Dn_TGZ, 	CHAIN(DX30,D(ModDelay),DX11)	);
+				MapKey	(&HCougar, 	T2,		CHAIN(DOWN+DX30,Gear_Flaps_Dn_TGZ));	//Gear/Flaps with DX30 so S3 needs not be used
+				}
+		else	{
+				if (TrackIR < 2)
+						MapKeyIO(&HCougar,	H3D,	Gear_Flaps_Dn, 		Std_SnapView2);
+				else	MapKeyIO(&HCougar,	H3D,	Gear_Flaps_Dn, 		CHAIN(DX30,D(ModDelay),DX11)	);
+				MapKey	(&HCougar, 	T2,		CHAIN(DOWN+DX30,Gear_Flaps_Dn));		//Gear/Flaps with DX30 so S3 needs not be used
+				}
+		}
+	else if ((prof == 3551) | (prof == 3547))	//P-47/51 for T2 and toggle
+		{
+		if (state)
+				{
+				if (prof == 3551)	
+						MapKeyIO(&HCougar,	H3D,	Gear_Flaps_Dn_TGZ, 	TEMPO(DX13, Fuel_Selector_Main_LH, DefTempo));
+				else	MapKeyIO(&HCougar,	H3D,	Gear_Flaps_Dn_TGZ,	DX13);
+				MapKey	(&HCougar, 	T2,		CHAIN(DOWN+DX30,Gear_Flaps_Dn_TGZ));	//Gear/Flaps with DX30 so S3 needs not be used
+				}
+		else	{
+				if (prof == 3551)
+						MapKeyIO(&HCougar,	H3D,	Gear_Flaps_Dn, 		TEMPO(DX13, Fuel_Selector_Main_LH, DefTempo));
+				else	MapKeyIO(&HCougar,	H3D,	Gear_Flaps_Dn,		DX13);
+				MapKey	(&HCougar, 	T2,		CHAIN(DOWN+DX30,Gear_Flaps_Dn));		//Gear/Flaps with DX30 so S3 needs not be used
+				}
+		}
+	else if (	(prof == 2501) | (prof == 2601)	)	//C-101
+		{
+		if (state)
+				{
+				if (TrackIR < 2)
+						MapKeyIO(&HCougar,	H3D,	Gear_Flaps_Dn_TGZ, 		Shift_SnapView2);
+				else if (CurrentStation > 1)
+						MapKeyIO(&HCougar,	H3D,	Gear_Flaps_Dn_TGZ, 		CHAIN(DX30,D(ModDelay),DX17)	);	//seat height
+				else	MapKeyIO(&HCougar,	H3D,	Gear_Flaps_Dn_TGZ, 		C101_Seat_Dn);
+//				MapKey	(&HCougar, 	T2,		CHAIN(DOWN+DX30,Gear_Flaps_Dn_TGZ_T));	//Gear/Flaps with DX30 so S3 needs not be used
+				}
+		else
+				{
+				if (TrackIR < 2)
+						MapKeyIO(&HCougar,	H3D,	Gear_Flaps_Dn,	 		Shift_SnapView2);
+				else if (CurrentStation > 1)
+						MapKeyIO(&HCougar,	H3D,	Gear_Flaps_Dn, 			CHAIN(DX30,D(ModDelay),DX17)	);	//seat height
+				else	MapKeyIO(&HCougar,	H3D,	Gear_Flaps_Dn,	 		C101_Seat_Dn);
+//				MapKey	(&HCougar, 	T2,		CHAIN(DOWN+DX30,Gear_Flaps_Dn_TGZ_T));	//Gear/Flaps with DX30 so S3 needs not be used
+				}		
+		}
+	else if (	(prof == 2539)	)	//MB339
+		{
+		if (state)
+				{
+				if (TrackIR < 2)
+						MapKeyIO(&HCougar,	H3D,	Gear_Flaps_Dn_TGZ_T, 	Shift_SnapView2);
+				else	MapKeyIO(&HCougar,	H3D,	Gear_Flaps_Dn_TGZ_T, 	VR_Spyglass);	
+				}
+		else	{
+				if (TrackIR < 2)
+						MapKeyIO(&HCougar,	H3D,	Gear_Flaps_Dn_T, 		Shift_SnapView2);
+				else	MapKeyIO(&HCougar,	H3D,	Gear_Flaps_Dn_T, 		VR_Spyglass);		
+				}
+		}		
+		
+	else if ((prof == 2586))		//F-86 for T2 mapping; added routine in 1.32 for F-86 discrete landing light states.
+		{
+		//if ((prof == 3090) & (!Fw190_Gear_on_HOTAS))	//added in 1.29 to remove HOTAS gear/flaps commands for Fw190
+		//		{
+		//		MapKey	(&HCougar, 	H3D,	DX13);	
+		//		MapKey	(&HCougar, 	T2,		DX15);	//DX15/17 free on Fw190 unless H2 changed back to P-51.
+		//		}
+		//else
+		if (state)
+				{
+				if ((prof == 2586) & (UseDiscrete_F86))	//added in 1.32; double profile in case additional profiles added
+						MapKeyIO(&HCougar,	H3D,	Gear_Flaps_Dn_TGZ, 	TEMPO(EXEC("F86_Landing_Light_Sw_Set(0,Switch_Delay);"), EXEC("F86_Landing_Light_Sw_Set(1,Switch_Delay);"),	DefTempo)	);	//tempo for toggle between landing light retract and off (long)
+				else	MapKeyIO(&HCougar,	H3D,	Gear_Flaps_Dn_TGZ, 	CHAIN(DX30,D(ModDelay),DX13));	
+				MapKey	(&HCougar, 	T2,		CHAIN(DOWN+DX30,Gear_Flaps_Dn_TGZ));	//Gear/Flaps with DX30 so S3 needs not be used
+				}
+		else	{
+				if ((prof == 2586) & (UseDiscrete_F86))
+						MapKeyIO(&HCougar,	H3D,	Gear_Flaps_Dn, 		TEMPO(EXEC("F86_Landing_Light_Sw_Set(0,Switch_Delay);"), EXEC("F86_Landing_Light_Sw_Set(1,Switch_Delay);"),	DefTempo)	);	//tempo for toggle between landing light retract and off (long)
+				else	MapKeyIO(&HCougar,	H3D,	Gear_Flaps_Dn, 		CHAIN(DX30,D(ModDelay),DX13));	
+
+				MapKey	(&HCougar, 	T2,		CHAIN(DOWN+DX30,Gear_Flaps_Dn));		//Gear/Flaps with DX30 so S3 needs not be used
+				}
+		}
+	else if ((prof == 3090) | (prof == 3190) | (prof == 3009))	//LMFD Gear extend for Fw190; separate decision tree because it is independent of Fw190_Gear_on_HOTAS (MFD Gear Down is universal)
+		{
+			
+		MapKey	(&HCougar, 	T2,		DX15);	//DX15/17 free on Fw190/Bf109 unless H2 changed back to P-51.
+		if (prof == 3009)	//Bf109
+			{	
+			Bf109_LdgGear_Map(Force_GearLock_Fw190,Fw190_LdgGear_Cover_Cur,state);	//changed in 2.40
+			MapKey	(&HCougar, 	H3D,	DX13);
+			}
+		else				//Fw190
+			{	
+			if (state)
+				{
+				MapKey	(&LMFD,	OSB07,	CHAIN(EXEC("TriggerZoom_toggle(0,1,0);"),	DX31,D(250),		DX7,	EXEC("GearStateInd(1, ProfID, FixedGear, Helicopter, GearCycleTimeDn, AirBrkFlash);"))	);
+				MapKeyIO(&HCougar,H3D,	CHAIN(EXEC("TriggerZoom_toggle(0,1,0);"),	DX31,D(250),		DX7,	EXEC("GearStateInd(1, ProfID, FixedGear, Helicopter, GearCycleTimeDn, AirBrkFlash);")),
+										DX13);			
+				}
+			else
+				{
+				MapKey	(&LMFD,	OSB07,	CHAIN(										DX31,D(ModDelay),	DX7,	EXEC("GearStateInd(1, ProfID, FixedGear, Helicopter, GearCycleTimeDn, AirBrkFlash);"))	);
+				MapKeyIO(&HCougar,H3D,	CHAIN(										DX31,D(ModDelay),	DX7,	EXEC("GearStateInd(1, ProfID, FixedGear, Helicopter, GearCycleTimeDn, AirBrkFlash);")),
+										DX13);
+				}										
+			}
+
+		}
+	else if (prof == 2520)	//M-2000C, no flaps
+		{
+		if (TrackIR < 2)
+			{
+			if (state)	MapKeyIO(&HCougar,	H3D,	TEMPO(M2k_Hide_Throttle,	Gear_Dn_TGZ,	GearDnTempo),	Shift_SnapView2);	
+			else		MapKeyIO(&HCougar,	H3D,	TEMPO(M2k_Hide_Throttle,	Gear_Dn,		GearDnTempo),	Shift_SnapView2);
+			}
+		else
+			{
+			if (state)	MapKeyIO(&HCougar,	H3D,	TEMPO(M2k_Hide_Throttle,	Gear_Dn_TGZ,	GearDnTempo),	EXEC("M2k_Scope_Cycle(2,1);"));	//added in 2.43
+			else		MapKeyIO(&HCougar,	H3D,	TEMPO(M2k_Hide_Throttle,	Gear_Dn,		GearDnTempo),	EXEC("M2k_Scope_Cycle(2,1);"));
+			}		
+		}
+	else if (prof == 2505)	//F-5E Separate flaps
+		{
+		if (state)	MapKeyIO(&HCougar,	H3D,	TEMPO(DX13,	Gear_Dn_TGZ,	GearDnTempo),	DX13);	
+		else		MapKeyIO(&HCougar,	H3D,	TEMPO(DX13,	Gear_Dn,		GearDnTempo),	DX13);	
+		}
+	else if ((prof == 2039)|(prof == 2040))	//L-39 uses DF for gear
+		{
+		if (Script_Debug) printf("Gear down for L-39 (HC)\xa");	//for test purposes
+		if (state)	MapKeyIO(&HCougar,		T8,		0,	PULSE+Gear_Dn_TGZ);
+		else		MapKeyIO(&HCougar,		T8,		0,	PULSE+Gear_Dn);
+		}
+	else if (snap > 0)	//added in 1.34
+		{
+		if (	((prof == 2000) & (!Gear_Discrete_DX))	|	(prof == 2539))	//gear toggle
+				gearflapui	=	Gear_Flaps_Up_T;
+		else	gearflapui	=	Gear_Flaps_Up;
+						
+		if (snap > 1)
+			{
+			if (Script_Debug) printf("Shifted SnapViews)...");
+			MapKeyIO(&HCougar, 	H3U,	gearflapui,		Shift_SnapView5);	
+			MapKeyIO(&HCougar, 	H3R,	Std_SnapView3,	Shift_SnapView6);	
+			MapKeyIO(&HCougar, 	H3L,	Std_SnapView1,	Shift_SnapView4);	
+			}
+		else
+			{
+			if (Script_Debug) printf("SnapViews)...");
+			MapKeyIO(&HCougar, 	H3U,	gearflapui,		Std_SnapView5);	
+			MapKeyIO(&HCougar, 	H3R,	Std_SnapView3,	Std_SnapView6);	
+			MapKeyIO(&HCougar, 	H3L,	Std_SnapView1,	Std_SnapView4);	
+			}
+		if (	((prof == 2000) & (!Gear_Discrete_DX))	|	(prof == 2539))	//gear toggle
+//		if (	((prof==0) & (!Gear_Discrete_DX))	)	//removed Hawk in 2.45
+			{
+			if (state)	gearflapdi	=	Gear_Flaps_Dn_TGZ_T;
+			else		gearflapdi	=	Gear_Flaps_Dn_T;
+			}
+		else
+			{
+			if (state)	gearflapdi	=	Gear_Flaps_Dn_TGZ;
+			else		gearflapdi	=	Gear_Flaps_Dn;
+			}
+		if (snap > 1)	MapKeyIO(&HCougar,	H3D,	gearflapdi, 	Shift_SnapView2);
+		else			MapKeyIO(&HCougar,	H3D,	gearflapdi, 	Std_SnapView2);
+		}
+	else if (prof == 999)	MapKey	(&HCougar,	H3D,	DX13);			//Combined Arms
+//	else if ((prof > 3999) & (prof < 5000))		IL2GB_DF_Init(0,prof,state);	//IL-2 has gear on DF
+	else
+		{
+		printf("No profile detected.  Assignment to H3D used.\xa");	//for test purposes
+		if (state)
+				MapKeyIO(&HCougar,	H3D,	Gear_Flaps_Dn_TGZ, 	DX13);
+		else	MapKeyIO(&HCougar,	H3D,	Gear_Flaps_Dn, 		DX13);
+		}
+	}
+}
+
+int Simple_Comm_Enable_CommState(int rdo)
+{
+if (	((rdo == 1) & (	(HCougar[T4]) | (Throttle[MSR])) )	|	((rdo == 2) & (	(HCougar[T2]) | (Throttle[MSD])) )	|	((rdo == 3) & (	(HCougar[T5]) | (Throttle[MSL])) )	)
+	{
+	FkeyPress = 0;
+	CommState_On(CommStateVAC);
+	DeferCall(ModDelay+KBDelay,&ActKey,KEYON+PULSE+CommMenu);
+	}
+	
+}
+int Simple_Comm_Enable_CommState_MicSw(int rdo)	//separate routine due to DeferCall allowing only one argument
+{
+if (	((rdo == 1) & (	(HCougar[T4]) | (Throttle[MSR])) )	|	((rdo == 2) & (	(HCougar[T2]) | (Throttle[MSD])) )	|	((rdo == 3) & (	(HCougar[T5]) | (Throttle[MSL])) )	)
+	{
+	FkeyPress = 0;
+	CommState_On(CommStateVAC);
+	DeferCall(ModDelay+KBDelay,&ActKey,KEYON+PULSE+Mic_Sw);
+	}
+}
+
+/////////////////////////////////////////////////
+//  MASTER ROUTINE FRAMEWORK
+
+//T2
+	//IOUM (D=0)
+//	T2_PUO	=	
+//	T2_PUI	=	
+//	T2_RUO	=	
+//	T2_RUI	=	
+
+//	T2_PMO	=	
+//	T2_PMI	=	
+//	T2_RMO	=	
+//	T2_RMI	=	
+
+	//UM (no IO, D=0)
+//	T2_PU	=	
+//	T2_RU	=	
+//	T2_PM	=	
+//	T2_RM	=	
+	
+	//IO
+//	T2_PO	=	
+//	T2_PI	=	
+//	T2_RO	=	
+//	T2_RI	=	
+
+	//O only
+//	T2_P	=	
+//	T2_R	=	
+
+
+//T3
+	//IOUM (D=0)
+//	T3_PUO	=	
+//	T3_PUI	=	
+//	T3_RUO	=	
+//	T3_RUI	=	
+
+//	T3_PMO	=	
+//	T3_PMI	=	
+//	T3_RMO	=	
+//	T3_RMI	=	
+
+	//UM (no IO, D=0)
+//	T3_PU	=	
+//	T3_RU	=	
+//	T3_PM	=	
+//	T3_RM	=	
+	
+	//IO
+//	T3_PO	=	
+//	T3_PI	=	
+//	T3_RO	=	
+//	T3_RI	=	
+
+	//O only
+//	T3_P	=	
+//	T3_R	=	
+
+//T4
+	//IOUM (D=0)
+//	T4_PUO	=	
+//	T4_PUI	=	
+//	T4_RUO	=	
+//	T4_RUI	=	
+
+//	T4_PMO	=	
+//	T4_PMI	=	
+//	T4_RMO	=	
+//	T4_RMI	=	
+
+	//UM (no IO, D=0)
+//	T4_PU	=	
+//	T4_RU	=	
+//	T4_PM	=	
+//	T4_RM	=	
+	
+	//IO
+//	T4_PO	=	
+//	T4_PI	=	
+//	T4_RO	=	
+//	T4_RI	=	
+
+	//O only
+//	T4_P	=	
+//	T4_R	=	
+//END MASTER
+/////////////////////////////////////////////////
+
+
+//3.0 integrated comm mapping routine
+//int	MicSw_Map(int wh, int btn, int key, int srs, int vac, int csforce = 0)	//wh is warthog throttle, btn is msx,tx, key is assignment map, srs/vac are whether present, csforce is whether commstate is forced
+//{
+//int keyo;
+//int keyi;
+
+//placeholders until actual keymaps are determined (meat of routine)
+
+//if		(key == 6)	keyo	=	0;	//VACPTT_Other
+//else if	(key == 5)	keyo	=	0;	//ICS
+//else if	(key == 4)
+//	{
+//	if ((vac) | (srs))
+//		{
+//		keyo	=	0;	//Rdo4
+//		keyi	=	0;	//Rdo4 DCS Menu	//force for now, change if commstate not forced
+//		}
+//	else				keyo	=	0;	//Rdo4 DCS Menu
+//	}
+//else if	(key == 3)
+//		{
+//		keyo	=	0;	//Rdo3
+//		keyi	=	0;	//Rdo3 DCS Menu	//force for now, change if commstate not forced
+//		}
+//	else				keyo	=	0;	//Rdo3 DCS Menu
+//else if	(key == 2)
+//		{
+//		keyo	=	0;	//Rdo2
+//		keyi	=	0;	//Rdo2 DCS Menu	//force for now, change if commstate not forced
+//		}
+//	else				keyo	=	0;	//Rdo2 DCS Menu
+//else if	(key == 1)
+//		{
+//		keyo	=	0;	//Rdo1
+//		keyi	=	0;	//Rdo1 DCS Menu	//force for now, change if commstate not forced
+//		}
+//	else				keyo	=	0;	//Rdo1 DCS Menu
+
+//else					keyo	=	0;	//PTT_Common
+
+
+
+//add walkman for F-14/AJS37 here
+//add vaicom /I MSP here
+
+//else if (!CommStateVAC)	//no forced commstate
+//	{
+//	keyi	=	keyo;
+//	}
+	
+//assignments when all is figured out
+//if (	(wh == 1)	|	((wh > 0) & (!WH_Use_TQS))	)
+//	{
+//	if		(btn == 5)	MapKeyIO(&Throttle,	MSL,	keyi,keyo);
+//	else if	(btn == 4)	MapKeyIO(&Throttle,	MSR,	keyi,keyo);
+//	else if (btn == 3)	MapKeyIO(&Throttle,	MSD,	keyi,keyo);
+//	else if (btn == 2)	MapKeyIO(&Throttle,	MSU,	keyi,keyo);
+//	else				MapKeyIO(&Throttle,	MSP,	keyi,keyo);
+//	}
+//else
+//	{
+//	if		(btn == 5)	MapKeyIO(&HCougar,	T5,		keyi,keyo);
+//	else if	(btn == 4)	MapKeyIO(&HCougar,	T4,		keyi,keyo);
+//	else if	(btn == 3)	MapKeyIO(&HCougar,	T3,		keyi,keyo);
+//	else if	(btn == 2)	MapKeyIO(&HCougar,	T2,		keyi,keyo);
+//	else				MapKeyIO(&HCougar,	T1,		keyi,keyo);	//only for single radio, perhaps deprecate with TS3/srs/vaicom, esp with deprecation of gear/flap on T2/3
+//	}
+//}
+
+//add macro routines for standard radios (e.g. 1 radio, 2 radio, 3 radio, 2 radio with ics, etc.)

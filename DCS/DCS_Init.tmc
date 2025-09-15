@@ -1,0 +1,2366 @@
+//==========================================================================================
+//		DCS World Initialization Subroutines for HOTAS Cougar/Warthog and Cougar MFDs
+//						by Don "Home Fries" Heumphreus
+//							last updated: 15JUL2023
+//	Change Log:
+//	0.1		Initial Beta Release
+//	0.11	Added Engine Start/Stop routine with LEDs
+//	0.12	Improved Start/Stop routine and separated as function
+//	0.2		Added MapKeys for FC3 autopilot routine
+//	0.23	Added version label to Init printf
+//	0.24	removed Baro Alt from Master AP modes.
+//			Added differential braking framework (using rudders and S4)
+//	0.25	Tightened Hat1 TrackIR subs
+//	0.33	Incorporated new DiffBraking() into rudder AXMAP2
+//			Added MFD Power settings for A-10C (incl. backlighting)
+//	0.37	Returned MFD Power to PULSE in order to fix bug with DeferCall
+//			Changed MFD Power knob to short TEMPO (long for other function)
+//	0.50	Added Radio Channels and Modes for P-51D
+//	0.52	Added TEMPO and array sequences for A-10C functions
+//	0.53	Added A-10C Laser Switch Safe and Taxi/Ldg Light Off TEMPOs to LOSB8P & LOSB16
+//			Prevent padlock when SnapView enabled
+//	0.55	Moved S3 functionality from individual modules to here and updated for new S3 subs
+//			Integrated Enable_Acft_Swap() into MFD_Init()
+//			Fixed Throttle-based engine start bug introduced in 0.50
+//	0.58	Added UH1 (prof = 6) MFD Assignments
+//	0.59	Moved Analog Throttle axis map to individual profiles
+//			Added UH-1 Dome Light routine to ROSB19 in MFD_Init()
+//	0.60	Added global shift/long routines for kneeboard and nvg gain
+//			Incorporated shift/long routines for FC3,BS2,P-51D modules.
+//			Added StationCheck() to H1L/R for Huey seat swapping
+//	0.61	UH1 PVT Hot Mic adjusted to new comm routine
+//	0.62	Removed LOSB1 unshifted tempo from A-10C profile
+//	0.64	Incorporated revamped UH1 ICS routine into MFD_Init().  Added ICS_Channel variable.
+//	0.67	Added option for PVT to toggle CommState
+//	0.68	Added Helicopter Variable
+//	0.69	Added UH1 Caution Panel, Flare, and Autopilot/AI commands to LMFD for DCSW 1.2.7
+//			Converted Autopilot SEQ to Array and Subroutine
+//	0.70	Incorporated UH1 XM60 State Tracking
+//	0.71	Added D(ModDelay) to CHAIN commands
+//	1.00	Initial Release/Rebaseline
+//	1.01	Added Mi-8 to MFD_Init()
+//			Converted LOSB2/3 Unshifted TEMPOs to LongTempo
+//	1.03	Added UHF_Intercom_Cycle to Mi8
+//	1.04	Removed S3 mapping from DCS_Init()
+//	1.11	Consolidated Aux TQS Axes into single function Aux_Axis_Init()
+//	1.12	Added UH1 Misc Control Panel to RMFD OSBs 1-4 Long in MFD_Init()
+//	1.13	Replaced all TEMPO() and TEMPO(500) with TEMPO(DefTempo)
+//	1.14	Added DragChuteEngage() to FC3 LOSB17 and allowed TEMPO Short if T10 is engaged
+//	1.15	Fixed RMFD copilot emergency bomb release switches (Mi-8)
+//	1.17	Fixed swapped Attitude and Altitude+Roll FC3 autopilot settings (T6 toggle only)
+//			Added TEMPO to LOSB18 for UH-1 Cargo Camera
+//	1.19	Updated UH1_XM60_Cycle() arguments for LOSB4
+//	1.21	Added ROSB13 short for FC3 for use with F-15C Fuel Tank Select
+//	1.22	Added UH1_SetT1T6() to Aux_Axis_Init() and Eject_Init()
+//			Merged Hat1 functions into a single function
+//	1.24	Swapped Targeting Pod power and Laser Arm LOSBs (A-10C)
+//			Additional A-10C functionality to S3+OSBs
+//	1.25	Added Single Engine SetDigitalThrottle() 
+//	1.26	Added DCS_Axis_Init() for all profiles.
+//			Enhanced PVI-800 functionality (RMFD) on Ka-50.  Added Rotor RPM Warn to LOSB5 long (Ka-50).
+//			Converted MapKey OSBs with TEMPO to MapKeyIO for cleaner shifted execution.
+//			UH-1: added Cargo Door open/close to LOSB11/12 (TEMPO Long)
+//	1.27	Removed H1D double tap trim reset for helicopters (exception: Ka-50 for Shkval center)
+//			Reoriented microstick for reverse throttle (helo)
+//			Ka-50: Added Standby Attitude Indicator controls to RMFD (ROSB5 and SYM)
+//	1.28	Added F-86 to ROSB2 and Fw190 to ROSB4
+//			Added Fw190 specific MFD mappings
+//			Modified Profile Swap assignments
+//	1.29	Moved Fw190 LMFD Gear Down to TriggerZoom_MapGearDn() function
+//			Tied Digital Throttle sectors to ThrottleMin and IdleDetent values
+//			Added MiG-21 to Single Throttle
+//			Restored LockView to non-TIR Hat1 (H/T cake_o_fruits)
+//			Fixed bug with Ka-50 Microstick Offset affecting XM60 control in the UH-1
+//	1.31	CenterPositRudder moved here from DCS World.tmc for helicopter specific trim options
+//			Added TEMPO to ROSB10 for Mi-8
+//			Moved Fw190_LdgGear_Cover_Array here for use with Bf-109, added Bf-109 to MFD_Init()
+//			Fixed issue with LOSB 4 and 5
+//	1.32	F-86: Added TEMPO ROSB 7,9 and NVG possibility for F-86 in MFD.  F86_Map_Airbrake() removed from engine start/stop routines.
+//	1.33	Added NWSwithBrake to Rudder arguments for DiffBraking()
+//			Updated DCS_Axis_Init() to work with single engine DX profile
+//			Changed Throttle based engine start to DeferCall with ThrottleEngineShutdown to prevent inadvertent shutdown
+//	1.34	Added MiG-15 to MFD_Init()
+//			Added TARGET conventional trim functions to H1_Init()
+//	1.35	Updated DCS_Axis_Init() digital throttle cues to be based on Eng_Start_x instead of prof argument
+//	1.36	Ka-50: Remapped ROSB5 to "traditional" DX32+DX5 for remapping of RSYM.
+//	1.50	Added Warthog to Axis routines
+//			Modified Cancel_HOTAS_Init() to include Warthog and re-map for TriggerZoom
+//			Added ability to use Toe Brakes attached to Cougar if WarthotStick == 1
+//			Added L-39 and M20000C Swap to MFD_Init()
+//			Added M2000C digital microstick/SCXY to Aux_Axis_Init() and Aux_Axis_Init_WH()
+//			Added Keymap to WH_SCX_Set() and WH_SCY_Set()
+//			Added M2000C Radar modes to MAN_RNG AXMAP in Aux_Axis_Init() 
+//	1.51	Fixed the Cougar ANT_ELEV knob not working if RudderPedals = 0.
+//	1.53	Changed profile selection routine; moved selection routines to DCS_SelMod.tmc
+//	1.63	Added routine to Aux_Axis_Init() for F-5E
+//	1.66	Added GearDn_Ind_Default argument to M2000C in MFD_Init()
+//			Added Spitfire LF Mk.IX to MFD_Init()
+//	1.67	Added AJS-37 to MFD_Init()
+//	1.68	Added VR settings to H1_Init() and H1_Init_WH()
+//			Added 3 AB stage LEDs to AJS-37 in SetDigitalThrottle_WH()
+//			Added separate left detent settings for WH digital and analog throttle.
+//	1.72	Added Su-33 Standalone profile to arguments
+//	2.00	Added AV-8B to MFD_Init()
+//	2.01	F5E_Microstick_Init() moved from DCS_F5E.tmc, renamed Digital_Microstick_Init() and AV8B added.
+//	2.02	Renamed and Remmed WH_LED_ArrayI (not used)
+//	2.20	Added J-11A and F/A-18C to MFD_Init()
+//	2.21	Added NS430 logic for LOSB1 (most modules)
+//	2.24	Added condition for LED actuation in L/RMFD_Power() for REXEC use.
+//			Changed F/A-18C LMFD Power/LED to REXEC
+//	2.25	Added WH Left Throttle analog option for western helos
+//			Added THR_FC to Rudder axis for VR users (axis reversed)
+//	2.27	Added Combined Arms to MFD_Init()
+//	2.28	Added C-101 to MFD_Init()
+//			Added C-101 Range Knob to Aux_Axis_Init()
+//			Added DCS Scratchpad compatibility if enabled and NS430 not mapped
+//	2.28b	Fixed S4Brake_USN reference for Cougar
+//	2.29	Added AB detent option for AV-8B throttle
+//			Fixed AV-8B Throttle LED option
+//			Added AWACS to MFD_Init()
+//			Added neutral curves/scales to Joystick/TDC analog axes
+//			Added Mouse option to H1_Init (XYAxisTrim < 0)
+//	2.30	Revised H1 controls for consistency in seat switching between VR and non-VR.  Also removed double-tap requirement in UH-1/Mi-8
+//	2.31	Added F-14
+//	2.34	Fixed H1 VR1 functionality for Cougar users
+//			Reversed stations 1 and 2 for Mi-8 in H1_Init() and H1_Init_WH()
+//	2.34a	Fixed Cougar VR Scroll Wheel in H1_Init()
+//	2.34b	Removed UH-1/Mi-8 specific LOSB1 mapping for consistency (now NS430 /I default)
+//	2.40	Added digital throttle hooks for Elite: Dangerous and analog throttle for IL-2GB
+//			Added Microstick_Mouse_Init() to map microstick/SC as mouse (similar to AWACS module)
+//			Added Fw190A8, IL-2 and Elite to MFD_Init()
+//			Flattened extremes of curves in DCS_Axis_Init() at 100 to prevent spiking
+//	2.41	Added error traps and Script_Debug breakpoints to backlighting functions
+//	2.42	Added MiG-19 and I-16 to MFD_Init()
+//			Added AXMAP2() for ANT_ELEV for Elite subsystem cycle
+//			Added arguments to clear ANT_ELEV and RUDDER digital axes if no DiffBraking
+//	2.43	Added TQS mapping options when WarthogThrottle > 1 and WH_Use_TQS = 1 (for F-16C/JF-17)
+//			Moved UH1/Mi8 specific exceptions from Aux_Axis_Init() to Digital_Microstick_Init()
+//			Added option in H1_Init() to disable StationCheck() if StnCheckDisabled + TARS > 1 (i.e. StnCheckDisabled + multiplayer in use).
+//	2.43b	Added LGAINU assignment for A-10C in MFD_Init()
+//	2.44	Changed H1_Init() VR routines to actuate macros instead of DX hat switches
+//			Fixed Ka-50 ProfID reference for TCPTM doubletap in H1_Init() and H1_Init_WH()
+//			Added emergency throttle axis to M-2000C in DCS_Axis_Init() (Warthog)
+//	2.45	Removed Hawk support
+//	2.46	Added Global ROSB20 mapping for SRS Overlay
+//	2.47	Added P-47D to MFD_Init() and Aux_Axis_Init_WH()
+//			Removed AV-8B Throttle RPM LEDs from SetDigitalThrottle_WH()
+//	2.49	Added hold argument to VRZoom_Init() to allow doubletap hold (for S1)
+//			Fixed SetDigitialThrottle_WH() to not enable WEP for P-51/I-16 if AB detent not enabled
+//	2.54	Added PULSE to ROSB20 Rdo_Ovly in MFD_Init().
+//	2.55	Removed radar power digital axis on M2000C (Cougar MAN_RNG)
+//	2.60	Removed IL-2 and Elite Dangerous references
+//	2.61	Updated Digital_Microstick_Init() to make Analog_TDC = 0 value global digital 0 by default.
+//	2.63	M2000C: Set MAN_RNG to digital AXMAP2 with DX13/14 for Ant Elev.
+//	2.63d	I-16: Updated DCS_Axis_Init() THR_LEFT for new mixture routine.
+//	2.64	AH-64: Updated DCS_Axis_Init() THR_LEFT to allow for detent
+//	2.68	Added F-15E to S4Brake_USN parameter in SetDigitalThrottle()
+//	2.69	Updated MFD_Init() to account for UFC_MFD1_Suppress_F15E options on LOSB01/20
+//			
+//
+//==========================================================================================
+
+//Consider moving UH-1 Trigger Comm variables here
+//F-5E: 2505 added to Aux_Axis_Init (402 and 406) until analog TDC.  Remove WH 2505 references at 512 and revert CougarToe to 2 when fixed.
+
+//	Global variables for Engine Start routines.  Assigned constant values by individual modules.
+int	Eng_Start_x		=	0;
+int Eng_Stop_x		=	0;
+int Starter_Ind_x	=	0;
+int MFD_Eng_Start	=	0;	//added in 0.24 to allow engine start LED indications with MFDs in FC3
+
+//Differential Braking (framework added in 0.24)
+int RudderToe = 3;			//AXMAP2 value if DiffBrakes > 1 (differential braking)
+int WheelBrakeOn = 0;		//state of wheel brake (1 = on)
+int	Cougar_ToeBrake_L;
+int	Cougar_ToeBrake_R;
+
+int ProfID;		//determines whether profile has profile specific MFD mappings.
+int LMFD_Pwr;
+int RMFD_Pwr;
+int LMFD_Pwr_State;
+int RMFD_Pwr_State;
+int	NVG_Capable;	//added in 1.40 for individual modules (used in MFD_Init() )
+int AB_Capable;		//added in 1.61 for individual modules (used in WH throttle curves and digital init)
+int	VRZoom;			//added in 1.68: current state of VR Zoom
+
+int MFD_Lt;			//Lt for Light, not Left.  Same array for LMFD, RMFD, WHT
+int FixedGear;
+int Helicopter;
+int T6WheelBrake;
+int CurrentStation = 1;
+int	TIR_Paused = 0;			//variable is for paused, not active (1 = paused)
+int ICS_Current;			//added in 0.63 to track UH-1 ICS state (entering/exiting HotMic)
+int RangeKnob;				//added in 1.22 to allow for digital cues with range knob
+int	HeloRotateMicrostick;	//added in 1.29 to prevent offset with helos using digital microstick.
+int	CenterPositRudder;		//moved from DCS World.tmc in 1.31 to allow for helicopter specific trim options
+int	JoyAsAnalogBrake;		//added in 1.33 as flag for analog braking if DiffBrakes==2
+int	JoyYMax;				//added in 1.33 as part of analog braking/ebrake routine
+
+int	XYAxisTrim;				//added in 1.34 to allow TARGET based conventional fixed wing trimming
+int		JoyXTrim;
+int		JoyYTrim;
+
+int	WheelBrakeFull;			//added in 1.35 to allow full wheelbraking when only L/R brakes are available
+int	ThrottleAxis;			//added in 1.40 to determine how many throttle axes are mapped.
+
+int NS430_Enabled;			//added in 2.21 for selective NS430 compatibility
+
+//Digital Throttle Variables added in 1.29
+int DigThr1_Shutdown;
+int DigThr1_Startup;
+int DigThr2_Shutdown;
+int	DigThr2_Startup;
+int	DigThr_Neutral;
+
+int	DigThr_ABLo;	//added in 1.40 for WH digital AB Detent
+int	DigThr_ABHi;
+int	DigThr_ABLoL;	//added in 1.61 for WH LED on AB Detent (individual throttles)
+int	DigThr_ABHiL;
+
+int	AB_L_On;	//added in 2.20 for F/A-18 (making sure both throttles are in/out of AB).  _R also used for P-47 water injection as of 2.49
+int AB_R_On;
+
+
+//int	WH_LED_ArrayI;
+int	Fw190_LdgGear_Cover_Array;
+
+int WH_Use_TQS;			//added in 2.43 for users with Cougar TQS and WH Throttle attached 
+int Analog_TDC;			//added in 2.43; allows selection of analog or digital TDC slew
+int EngineCount;		//added in 2.43; provides # of axis argument for axis init
+int StnCheckDisabled;	//added in 2.43.  Allows ability to force-disable StationCheck() if set to 2 or set to 1 with SRS enabled (i.e. multiplayer).
+int	Rdo_Ovly;			//Radio Overlay command for SRS (either keyboard or DX)
+
+int DCS_Init()		//This is the baseline routine to assign most of the buttons that won't change between profiles.  Also points to custom init functions at the end.
+{
+printf("\xa\xa");
+printf("DCS_Init (Profile v%i.%i):\xa",MajorVersion,MinorVersion);
+
+Lights_ALL(0);
+
+HOTAS_Cougar_Button_Init();	//moved before axis in 1.33; this is the default profile selection in DCS World.tmc
+
+}
+
+//----------------------------------
+//Individual Initialization Routines
+//----------------------------------
+
+int DCS_Axis_Init(int prof, int eng = 2, int ms = 1)	//maps Joy XY, ANT, Rudders; ms added in 1.35 in order to pass argument to Aux_Axis_Init() where 0 disables the microstick (analog toe-brake routine now deprecated); eng added in 1.40 for number of throttle axes mapped (Warthog)
+{
+int min;
+int minidle;
+int max;
+int abdelta;	//added in 2.40 for Elite Dangerous (diff b/t abhi and ablo)
+
+//if (prof == 4001)	IL2TC_Joystick_Map(WarthogStick,Stick_as_Mouse_IL2TC); //added in 2.40 for IL2TC
+//else	
+//	{
+	printf("   Map Axes:\xa");
+	if (WarthogStick > 0)
+		{
+		printf("      Axis mapping Warthog Stick...");
+
+			MapAxis(&Joystick, JOYX, DX_X_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
+			MapAxis(&Joystick, JOYY, DX_Y_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
+			SetSCurve(&Joystick, JOYX, 0, 0, 0, 0, 0	);			
+			SetSCurve(&Joystick, JOYY, 0, 0, 0, 0, 0	);
+
+		}			
+	else
+		{
+		printf("      Axis mapping Cougar Stick...");
+
+			MapAxis(&HCougar, JOYX, DX_X_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
+			MapAxis(&HCougar, JOYY, DX_Y_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
+			SetSCurve(&HCougar, JOYX, 0, 0, 0, 0, 0	);			
+			SetSCurve(&HCougar, JOYY, 0, 0, 0, 0, 0	);
+
+
+			KeyAxis(&HCougar, JOYY, 0, AXMAP2 (	//Determines whether emergency brake is enabled 
+												5,
+												0,	//no action on forward 20% of Y axis																		
+												EXEC("JoyYMax=-1;if ((HCougar[S4])&(S4asNWS != 0)) DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull);"),		//Beyond 10% fwd of center, NWS enabled with S4
+												EXEC("JoyYMax=0; if ((HCougar[S4])&(S4asNWS != 0)) DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull);"),			//Set as 0 when not at max
+												EXEC("JoyYMax=0;"),
+												EXEC("JoyYMax=1;")	)	);	//Set as 1 for back 20%
+												
+			if ((WarthogStick == 0) & (DiffBrakes == 2))	//added in 1.33 for JoyXY analog braking (not rudder), WarthogStick added in 1.40 to prevent WH ability.
+				{
+				printf("Stick as Differential Brake...");
+				if ((RudderPedals == 0) | (CougarToeBrakes > 0)) KeyAxis(&HCougar, JOYX, 0, AXMAP2 (	//X only because modifiers shift with axis.  Disabled in favor of Y if Rudder as differential braking
+													11,
+													EXEC("RudderToe=2;"),																			//4 indetical sectors to make center sector 4.5% each side
+													EXEC("RudderToe=2;"),
+													EXEC("RudderToe=2;"),
+													EXEC("RudderToe=2;"),
+													EXEC("RudderToe=2; if (HCougar[S4]) DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull);"),	//only interior sector has DiffBraking() to prevent 40ms of axis trim
+													
+													EXEC("RudderToe=3; if (HCougar[S4]) DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull);"),	//Center position
+													
+													EXEC("RudderToe=1; if (HCougar[S4]) DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull);"),	//only interior sector has DiffBraking() to prevent 40ms of axis trim
+													EXEC("RudderToe=1;"),																			//4 indetical sectors to make center sector 4.5% each side
+													EXEC("RudderToe=1;"),
+													EXEC("RudderToe=1;"),
+													EXEC("RudderToe=1;")	)	);
+				}
+	
+		}
+		printf("Done!\xa");
+//	}
+	if (	(WarthogThrottle == 1)	|	((WarthogThrottle > 1) & (!WH_Use_TQS))	)	//either exclusive WH Throttle or WHT and TQS disabled (added in 2.43)
+		{
+		if (WarthogThrottle > 1)	MapAxis(&HCougar, THROTTLE, 0, AXIS_NORMAL, MAP_ABSOLUTE);	//added in 2.43 to zero Cougar Axis
+		printf("      Axis Mapping Warthog Throttle");
+		if ((Helicopter > 0) | (eng == 1))
+			{
+			if ((Helicopter > 1) | (prof == 2520))	//helo or mirage 2000 for emer throttle axis
+				{
+				printf(" (Left Throttle as Throttle)...");
+				MapAxis (&Throttle,	THR_LEFT,	DX_THROTTLE_AXIS,	 AXIS_NORMAL, MAP_ABSOLUTE);
+				}
+			else	MapAxis (&Throttle,	THR_LEFT,	0,	 				 AXIS_NORMAL, 	MAP_ABSOLUTE);	//not needed for collective; allows use of DX_THROTTLE_AXIS for additional function
+			if ((Helicopter > 0) & (Helo_Throttle_Rev > 0))
+				{
+				printf(" (Reversed for Collective)...");
+				MapAxis (&Throttle,	THR_RIGHT,	DX_Z_AXIS,			 AXIS_REVERSED, MAP_ABSOLUTE);
+				}
+			else
+				{
+				printf(" (Single Engine)...");
+				MapAxis (&Throttle,	THR_RIGHT,	DX_Z_AXIS,			 AXIS_NORMAL, MAP_ABSOLUTE);
+				}
+			if (WH_AB_Detent_Enabled > 0)	//moved here in 1.61
+				{
+				if (AB_Capable > 0)	//added in 1.61
+					{
+					printf("Throttle Curve (AB)...\xa");	
+					SetCustomCurve(&Throttle, THR_RIGHT,	LIST(0,0,		WH_AB_DetentLow_R,70,		WH_AB_DetentHigh_R,70,	100,100)); 					//linear to AB, locked at MIL in AB detent, linear after AB
+					if (prof == 2520)	//M2000C Emer Throttle
+							SetCustomCurve(&Throttle, THR_LEFT,		LIST(0,0,													WH_AB_DetentLow_L,100)); 	//linear to AB 
+					else	SetCustomCurve(&Throttle, THR_LEFT,		LIST(0,0,													100,100)); 					//linear
+					}
+				else
+					{
+					printf("Throttle Curve...\xa");	
+					SetCustomCurve(&Throttle, THR_RIGHT,	LIST(0,0,		WH_AB_DetentLow_R,100)); 					//linear to AB
+					if ((Helicopter > 1) & (prof != 1564))	//Apache wants detent
+							SetCustomCurve(&Throttle, THR_LEFT,		LIST(0,0,			WH_AB_DetentLow_L,100)); 				//linear to AB 
+					else	SetCustomCurve(&Throttle, THR_LEFT,		LIST(0,0,			100,100)); 								//linear 
+					}
+				}
+			if (Script_Debug) printf("Call SetDigitalThrottle_WH(x,%i).\xa",prof);	//for test purposes
+			if 		(Helicopter > 1)	UH1_Throttle_Lock(0);
+			else if (AB_Capable > 0)	
+						SetDigitalThrottle_WH(1, ProfID, WH_AB_DetentLow_R, WH_AB_DetentHigh_R, WH_AB_DetentLow_L, WH_AB_DetentHigh_L);
+//			else if (	(prof == 5000)	&	((WH_AB_Detent_Enabled > 0) | (AB_Throttle_EliteD > 0))	)	//added in 2.40 for Elite Dangerous
+//				{
+				//if (WH_AB_Detent_Enabled > 0)
+						//SetDigitalThrottle_WH(1, ProfID, WH_AB_DetentLow_R, WH_AB_DetentHigh_R, WH_AB_DetentLow_L, WH_AB_DetentHigh_L);	
+//				if (!WH_AB_Detent_Enabled)	//must be custom curve without detent but with AB_Throttle_EliteD
+//						{
+//						printf("Throttle Curve (Elite)\xa");
+//						SetCustomCurve(&Throttle, THR_RIGHT,	LIST(0,0,	ABLo_EliteD,100)); //linear to AB, locked at MIL in AB detent, linear after AB
+						//SetDigitalThrottle_WH(1, ProfID, ABLo_EliteD, ABHi_EliteD, 100, 100);
+//						}	
+//				EliteD_Throttle_Map(1);	//applies to both AB and non-ab					
+//				}
+			else		SetDigitalThrottle_WH(-1);
+			}
+		else
+			{
+			printf(" (Multi-Engine)...");
+//			if (prof == 4001)		//IL-2 TC
+//					{
+//					if 		(Throttle[PSF]) IL2TC_RNG_Map(1, 1,WHTLeft_Enable_IL2TC);	//visor Y
+//					else if (Throttle[PSB])	IL2TC_RNG_Map(1,-1,WHTLeft_Enable_IL2TC);	//sight Y
+//					else					IL2TC_RNG_Map(1, 0,WHTLeft_Enable_IL2TC);	//sight Y
+//					}
+//			else	
+			if ((prof == 3516) & (TrackIR <= 1))	//added in 2.63d to put RPM on RZ (consistent with VR)
+					MapAxis (&Throttle,	THR_LEFT,	DX_ZROT_AXIS,		 AXIS_NORMAL, MAP_ABSOLUTE);
+			else	MapAxis (&Throttle,	THR_LEFT,	DX_THROTTLE_AXIS,	 AXIS_NORMAL, MAP_ABSOLUTE);
+			MapAxis (&Throttle,	THR_RIGHT,	DX_Z_AXIS,			 AXIS_NORMAL, MAP_ABSOLUTE);
+			
+			if (WH_AB_Detent_Enabled > 0)	//moved here in 1.61
+				{
+//				if ((prof > 3999) & (prof < 5000))	//IL-2 GB added in 2.35
+//					{
+//					printf("Throttle Curve (IL-2 GB)...\xa");	
+//					SetCustomCurve(&Throttle, THR_RIGHT,	LIST(0,0,		WH_AB_DetentLow_R,CombatThrottle_IL2GB,		WH_AB_DetentHigh_R,CombatThrottle_IL2GB,	100,100)); 					//linear to AB, locked at MIL in AB detent, linear after AB
+//					SetCustomCurve(&Throttle, THR_LEFT,		LIST(0,0,		WH_AB_DetentLow_L,100,						100,100));			//linear, max at AB
+//					}
+//				else 
+				if (AB_Capable > 0)
+					{
+					printf("Throttle Curve (AB)...\xa");	
+					SetCustomCurve(&Throttle, THR_RIGHT,	LIST(0,0,		WH_AB_DetentLow_R,70,		WH_AB_DetentHigh_R,70,	100,100)); 			//linear to AB, locked at MIL in AB detent, linear after AB
+					//if (prof == 3551)
+					//		SetCustomCurve(&Throttle, THR_LEFT,		LIST(0,0,		WH_AB_DetentLow_L,100)); 										//linear to AB (P-51 Prop)
+					//else 	
+					if (prof == 2520)	//M2k no AB on emer throttle
+							SetCustomCurve(&Throttle, THR_LEFT,		LIST(0,0,	WH_AB_DetentLow_L,100,							100,100)); 			//linear to AB
+					else	SetCustomCurve(&Throttle, THR_LEFT,		LIST(0,0,	WH_AB_DetentLow_L,70,	WH_AB_DetentHigh_L,70,	100,100)); 			//linear to AB, locked at MIL in AB detent, linear after AB
+					}
+				else
+					{
+					if ((prof == 3551) | (prof == 3516) | (prof == 3547))	//added in 1.68
+						{
+						printf("Throttle Curve (I-16/P-47D/P-51D)...\xa");
+						SetCustomCurve(&Throttle, THR_RIGHT,	LIST(0,0,	WH_AB_DetentLow_R,100, (100+WH_AB_DetentHigh_R)/2,99,	100,100)); 		//linear to AB
+						}
+					else if ((prof == 2508) & (WH_Throttle_Detent_AV8 > 0))	//added in 2.29.  H/T Cypher
+						{
+						printf("Throttle Curve (AV-8B)...\xa");
+						SetCustomCurve(&Throttle, THR_RIGHT,	LIST(0,0,	WH_AB_DetentLow_R,WH_Throttle_Detent_Posit_AV8,	WH_AB_DetentHigh_R,WH_Throttle_Detent_Posit_AV8,	100,100)); //linear to AB, locked at MIL in AB detent, linear after AB
+						}	
+					
+					else
+						{
+						printf("Throttle Curve...\xa");	
+						SetCustomCurve(&Throttle, THR_RIGHT,	LIST(0,0,	WH_AB_DetentLow_R,100,	100,100)); 					//linear to AB
+						}
+					SetCustomCurve(&Throttle, THR_LEFT,			LIST(0,0,	WH_AB_DetentLow_L,100,	100,100)); 					//linear to AB
+					}
+				}
+			if (Script_Debug) printf("Call SetDigitalThrottle_WH (2 or -1).\xa");	//for test purposes
+			if (	(WH_AB_Detent_Enabled > 0)	&	((prof == 3551) | (prof == 3516) | (prof == 3547))	)	//WHAB added in 2.49 to force use of SC if no detent
+										SetDigitalThrottle_WH(2, ProfID, WH_AB_DetentLow_R, WH_AB_DetentHigh_R, WH_AB_DetentLow_L, WH_AB_DetentHigh_L);
+			else if (AB_Capable > 0) 	SetDigitalThrottle_WH(2, ProfID, WH_AB_DetentLow_R, WH_AB_DetentHigh_R, WH_AB_DetentLow_L, WH_AB_DetentHigh_L);
+			else						SetDigitalThrottle_WH(-1,ProfID);	//ProfID added in 2.02 for AV-8B
+			}
+		}
+	else
+		{
+		if (WarthogThrottle > 1)	//added in 2.43 to zero out throttle in favor of TQS
+			{
+			MapAxis (&Throttle,	THR_LEFT,	0);
+			MapAxis (&Throttle,	THR_RIGHT,	0);
+			}
+		printf("      Axis Mapping TQS Main...");
+			//placeholder ANT /I 3 ^ KPENT ^
+			
+			max = 100-ThrottleMax;
+			min = 100-ThrottleMin;
+			minidle = 100-(IdleDetentLow+ThrottleMin)/2;	//Takes the average of ThrottleMin and IdleDetentLow to allow movement behind idle while limiting wasted throttle axis
+
+			//Throttle Map
+			if (Helicopter)	//analog throttle only, likely reversed
+				{
+				if (Helo_Throttle_Rev > 0) 
+						{
+						MapAxis(&HCougar, THROTTLE, DX_Z_AXIS, AXIS_REVERSED, MAP_ABSOLUTE);	//added in 0.59
+						if (HeloRotateMicrostick)	RotateDXAxis(DX_THROTTLE_AXIS, DX_YROT_AXIS, Helo_Microstick_Offset);	//added in 1.27 to account for reverse throttle; HeloRotateMicrostick check added in 1.29 to prevent rotation on non-microstick axes.
+						else						RotateDXAxis(DX_THROTTLE_AXIS, DX_YROT_AXIS, Microstick_Offset);
+						}
+				else 	{
+						MapAxis(&HCougar, THROTTLE, DX_Z_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
+						RotateDXAxis(DX_THROTTLE_AXIS, DX_YROT_AXIS, Microstick_Offset);
+						}
+				SetCustomCurve(&HCougar, THROTTLE, LIST(max,0, 	min,100));	//added in 1.17; allows non-idle users to tweak throttle range
+				//call engine start/stop routine
+				SetDigitalThrottle(0);
+				}
+//			else if ((prof == 5000) & (AB_Throttle_EliteD > 0))
+//				{
+//				printf("Throttle Curve (Elite)...");
+				
+//				abdelta = ABHi_EliteD - ABLo_EliteD;				//error traps
+//				if (abdelta < 1) abdelta = 1;
+				
+//				if (ABHi_EliteD >= ThrottleMax)						
+//					{
+//					printf("ABHi changed from %i to ",ABHi_EliteD);
+//					ABHi_EliteD = ThrottleMax - (100-ABHi_EliteD);	
+//					printf("%i...",ABHi_EliteD);
+//					}
+//				if (ABLo_EliteD >= ABHi_EliteD)
+//					{
+//					printf("ABLo changed from %i to ",ABLo_EliteD);
+//					ABLo_EliteD = ABHi_EliteD - abdelta;
+//					printf("%i...",ABLo_EliteD);
+//					}
+//				MapAxis(&HCougar, THROTTLE, DX_Z_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
+//				SetCustomCurve(&HCougar, THROTTLE, LIST(100-ABLo_EliteD,0, 	min,100));
+//				EliteD_Throttle_Map(0);
+//				}
+			else if (	((Eng_Start_x == 0) & (Eng_Stop_x == 0))	|	((prof == 2000) & (Eng_Quantity_DX == 0)) | (!IdleDetentLow)	)	//regular throttle with no digital or idle stop, also includes DX profile if engine startup disabled
+				{
+				RotateDXAxis(DX_THROTTLE_AXIS, DX_YROT_AXIS, Microstick_Offset);	//added in 1.29 to force default offset
+				MapAxis(&HCougar, THROTTLE, DX_Z_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);	//moved here in 0.59
+				SetCustomCurve(&HCougar, THROTTLE, LIST(max,0, 	min,100));	//added in 1.17; allows non-idle users to tweak throttle range
+				//call engine start/stop routine
+				if ((prof == 3509) & (IdleDetentLow > 0)) SetDigitalThrottle(3509);	//Spit with some idledetent allows for actuation of U/C indicator switch (added in 1.66)
+				else if (prof == 2518) SetDigitalThrottle(2518);	//F/A-18 added in 2.20
+				else SetDigitalThrottle(0);
+				}	
+			else	//1 or 2 engine with optional digital throttle/idle stop
+				{
+				RotateDXAxis(DX_THROTTLE_AXIS, DX_YROT_AXIS, Microstick_Offset);	//added in 1.29 to force default offset
+				MapAxis(&HCougar, THROTTLE, DX_Z_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
+				if (IdleDetentLow > ThrottleMin)	SetCustomCurve(&HCougar, THROTTLE, LIST(max,0, 	minidle,100,	100,100));	//printf("SetCustomCurve w/ Idle\xa");}	//updated in 1.61 to take average low end if idle used.
+				else								SetCustomCurve(&HCougar, THROTTLE, LIST(max,0, 	min,100,		100,100));	//updated in 1.61.	
+	
+				//call engine start/stop routine
+				if ((prof == 2505) & (IdleDetentLow > 0)) SetDigitalThrottle(2505);	//F-5E with some idledetent allows for throttle based MFD start
+				else if	( (Eng_Start_x <= IdleDetentLow) | ((prof == 2000 ) & (Eng_Quantity_DX == 1))	)	//IdleDetentLow normally used for Eng_Start_x on single engine planes with throttle idle detent.
+								{
+								SetDigitalThrottle(1);	
+								if (Script_Debug) printf("Call SetDigitalThrottle(1)\xaEng_Start_x = %i\xaIdleDetentHigh = %i\xa",Eng_Start_x,IdleDetentHigh);	//for test purposes
+								}
+				else 			
+								{
+								SetDigitalThrottle(2);	
+								if (Script_Debug) printf("Call SetDigitalThrottle(2)\xa");	//for test purposes
+								}
+				}
+
+			}
+	
+	Aux_Axis_Init(prof, eng, ms);
+	printf("...Done!\xa");
+	Rudder_Init();		//added in 1.40
+}
+
+int Rudder_Init()
+{
+if (RudderPedals > 0)
+	{
+			if 		(RudderPedals == 2)																			//ANT as rudder
+				{
+				if (RevANTRudder) MapAxis(&HCougar, RDR_X, DX_ZROT_AXIS, AXIS_REVERSED, MAP_ABSOLUTE);
+				else MapAxis(&HCougar, RDR_X, DX_ZROT_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);							//RDR_X is ANT	
+				if (DiffBrakes == 1)
+					{
+					if (RevANTRudder)	KeyAxis(&HCougar, RDR_X, 0, AXMAP2 (
+														3,
+														EXEC("RudderToe=1; DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull);"),
+														EXEC("RudderToe=3; DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull);"),
+														EXEC("RudderToe=2; DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull);")	)	);
+					else 				KeyAxis(&HCougar, RDR_X, 0, AXMAP2 (
+														3,
+														EXEC("RudderToe=2; DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull);"),
+														EXEC("RudderToe=3; DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull);"),
+														EXEC("RudderToe=1; DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull);")	)	);
+					}	
+				else 	KeyAxis(&HCougar, RDR_X, 0, AXMAP2 (1,0));		//Zero out digital axis (added in 2.42)
+				}
+			else	
+				{
+
+				if	(RudderPedals == 1) 																		//enables gameport rudders
+					{
+					if (Script_Debug) printf("RudderPedals = %i",RudderPedals);
+					MapAxis(&HCougar, RUDDER, DX_ZROT_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);							//Rudder
+					if ((DiffBrakes == 1) | (DiffBrakes == 2))
+							KeyAxis(&HCougar, RUDDER, 0, AXMAP2 (			//difbrakes == 1/2 changed from diffbrakes > 0 in 1.40 to prevent mapping if diffbrakes==3
+											3,
+											EXEC("RudderToe=2; DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull);"),
+											EXEC("RudderToe=3; DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull);"),
+											EXEC("RudderToe=1; DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull);")	)	);
+					else 	KeyAxis(&HCougar, RUDDER, 0, AXMAP2 (1,0));		//Zero out digital axis (added in 2.42)
+					}
+				else printf("TFRPRudder only externally supported.\xa");
+				}
+
+	}
+if (	(RudderPedals != 2)	&	(WarthogThrottle == 0)	|	((WarthogThrottle > 1) & (WH_Use_TQS > 0))	)	//either exclusive TQS or WHT and TQS enabled (added in 2.43) and ANT not rudder
+	{
+	MapAxis(&HCougar, RDR_X, DX_XROT_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);								//RDR X is ANT knob (bug in target.tmh)
+	//MapAxis(&HCougar, ANT_ELEV, DX_THROTTLE_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);							//lines deactivated due to bug in tmh
+//	if (ProfID == 5000)
+//			KeyAxis(&HCougar, RDR_X, 0, AXMAP1 (			//Cycle Subsystems in Elite (added in 2.42)
+//							Ant_Steps_EliteD,
+//							PULSE+ED_TgtSubsysPrev,
+//							PULSE+ED_TgtSubsysNext)	);
+//	else
+	KeyAxis(&HCougar, RDR_X, 0, AXMAP2(1,0));
+	}
+	
+}
+
+int Microstick_Mouse_Init(int wh)
+{
+if (wh > 0)
+	{
+	MapAxis	(&Throttle, SCX,						MOUSE_X_AXIS,	AXIS_NORMAL,	MAP_RELATIVE);	
+	MapAxis	(&Throttle,	SCY,						MOUSE_Y_AXIS,	AXIS_NORMAL,	MAP_RELATIVE);
+	}
+else
+	{
+	MapAxis	(&HCougar,	IN_POSITION_AXIS_SLIDER2,	MOUSE_X_AXIS,	AXIS_NORMAL,	MAP_RELATIVE);
+	MapAxis	(&HCougar,	RDR_Y, 						MOUSE_Y_AXIS, 	AXIS_NORMAL,	MAP_RELATIVE);	
+	}
+}
+int Microstick_Mouse_Curve_Set(int wh, int dz = 0, int mscale = 0)
+{
+if (wh > 0)
+	{
+	SetSCurve(&Throttle,SCX,
+		0, //Left Deadzone
+		dz, //Center Deadzone
+		0, //Right Deadzone
+		0, //Curve
+		mscale //Scale/zoom
+		);			
+					
+	SetSCurve(&Throttle, SCY,
+		0, //Left Deadzone
+		dz, //Center Deadzone
+		0, //Right Deadzone
+		0, //Curve
+		mscale //Scale/zoom
+		);	
+	}
+else
+	{
+	SetSCurve(&HCougar, IN_POSITION_AXIS_SLIDER2,
+		0, //Left Deadzone
+		dz, //Center Deadzone
+		0, //Right Deadzone
+		0, //Curve
+		mscale //Scale/zoom
+		);			
+					
+	SetSCurve(&HCougar, RDR_Y,
+		0, //Left Deadzone
+		dz, //Center Deadzone
+		0, //Right Deadzone
+		0, //Curve
+		mscale //Scale/zoom
+		);		
+	}
+}
+
+int Aux_Axis_Init(int prof = 0, int eng = 2, int ms = 1, int lock = 0)	//Maps Microstick and Man Rng; added as separate routine in 1.11 to error trap against changing profiles from FC3 while S3 is pressed (would leave microstick as relative axis). added ms in 1.35 to allow disable for L/R braking algorithm;  eng is a dummy for WH
+{
+
+if (	(WarthogThrottle == 1)	|	((WarthogThrottle > 1) & (!WH_Use_TQS))	)	Aux_Axis_Init_WH(prof,eng,ms,lock);	//for WH exclusive users or WH+TQS with TQS disabled (added in 2.43)
+else
+	{
+	if (WarthogThrottle > 1)	//added in 2.43 to zero out WH throttle in favor of TQS
+		{
+		MapAxis(&Throttle,	THR_FC, 0);	
+		MapAxis(&Throttle,	SCX,	0);
+		MapAxis(&Throttle,	SCY,	0);
+		}
+	printf("      Axis Mapping TQS Auxiliary...");
+//	if (prof == 4001)	IL2TC_Microstick_Map(WarthogThrottle,Stick_as_Mouse_IL2TC);	//IL-2 tank
+//	else if	((prof > 3999) & (prof < 5000))	IL2GB_Microstick_Init(Microstick_Mouse_IL2GB);	//IL-2 non-tank maps scroll wheel to SCY/MSX
+//	else if ((prof == 5000) & (Microstick_Mouse_EliteD > 0))	Microstick_Mouse_Init(0);	//Elite
+//	else
+//		{
+	//Microstick X Analog
+		if ((prof == 3551)	|	(prof == 1501)	|	(prof == 3509)	|	(prof == 3516)	|	(prof == 3547)	| (!ms)	|	((CougarToeBrakes > 0) & (ToeBrakesAvailable == 1))	)	//2505 for F-5E removed in 2.01 (replaced with ms=0 argument).  I-16 added in 2.42
+				MapAxis(&HCougar, IN_POSITION_AXIS_SLIDER2, 0);  //Here because of ANT hotswap (T10 in P51, XM60 in UH1, RNG/LThr in I-16)
+		else	MapAxis(&HCougar, IN_POSITION_AXIS_SLIDER2, DX_THROTTLE_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
+	//Microstick Y Analog
+		if ((prof == 1501)	|	(prof == 3516)	|	(prof == 3547)	| (!ms))			//2505 for F-5E removed in 2.01 (replaced with ms=0 argument).  I-16 added in 2.42
+				MapAxis(&HCougar, RDR_Y, 0);					//Here because of RNG hotswap (XM60 in UH1)
+		else	MapAxis(&HCougar, RDR_Y, DX_YROT_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
+		
+		SetSCurve(&HCougar, IN_POSITION_AXIS_SLIDER2, 0, 0, 0, 0, 0);
+		SetSCurve(&HCougar, RDR_Y, 0, 0, 0, 0, 0);
+//		}	
+	//Man Rng Analog
+				MapAxis(&HCougar, MAN_RNG, DX_SLIDER_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
+		printf("Done.\xa");
+	//Microstick Digital
+	printf("      Digital Aux Axis Mapping:\xa");
+//	if 		(prof == 1501)		UH1_Microstick_Init(1);	//Microstick is searchlight (digital axis) in UH-1
+//	else if (prof != 1008)	Digital_Microstick_Init(0);	// (prof != 2505))	//Mi-8 has its own context-sensitive mapping.  2505 removed in 2.01
+//	else if (Digital_TDC > 0)	Digital_Microstick_Init(Digital_TDC,prof);	// here because digital tdc may be in conjunction iwth analog axis for WIP/EA modules.  forces digital regardless of analog setting.
+//	else if (prof != 1008)		Digital_Microstick_Init(abs(ms-1),prof);	// (prof != 2505))	//Mi-8 has its own context-sensitive mapping.  2505 removed in 2.01
+	Digital_Microstick_Init(abs(ms-1),prof);
+
+	//MAN_RNG Digital
+	if (prof == 1050)	//MAN RNG throttle position dictates CommSw commands (Ka-50)
+		{
+		printf("         Man Range to position determines T2/T3 Rotor Brake and S3+T6 Stop functionality...");
+		KeyAxis(&HCougar, MAN_RNG, 0, 	AXMAP2 (
+										5,
+										EXEC("RangeKnob=2; BS2_MapDFT6(GearState, BS2_Starter, 2);"),
+										0,
+										EXEC("RangeKnob=1; BS2_MapDFT6(GearState, BS2_Starter, 1);"),
+										EXEC("RangeKnob=1; BS2_MapCommSw(BS2_Starter,1, DF_Posit);"),
+										EXEC("RangeKnob=0; BS2_MapCommSw(BS2_Starter,0, DF_Posit); BS2_MapDFT6(GearState, BS2_Starter, 0);")	));
+		printf("Done!\xa");	
+		}
+	else if (prof == 2510)	//MAN RNG is autopilot switch in A-10C
+		{
+		printf("         Man Range to Autopilot Switch...");	
+		KeyAxis(&HCougar, MAN_RNG, 0,	AXMAP2 (
+										3,
+										PULSE+A10C_AP_Path,
+										PULSE+A10C_AP_AltHdg,
+										PULSE+A10C_AP_Alt));
+		printf("Done!\xa");	
+		}
+	else if ((prof == 2501) | (prof == 2601))	//MAN RNG is target range settings
+		{
+		printf("         Man Range to C-101 Digital Target Ranging...");	
+		KeyAxis(&HCougar, MAN_RNG, 0, 	AXMAP1(5, PULSE+C101_Range_Prev, PULSE+C101_Range_Next));
+		printf("Done!\xa");	
+		}		
+	else if (prof == 1501)	//MAN RNG throttle position dictates T6 commands (UH-1 with counterclockwise throttle)
+		{
+		printf("         Man Range to position determines T6 functionality...");
+		KeyAxis(&HCougar, MAN_RNG, 0, 	AXMAP2 (
+										3,
+										EXEC("RangeKnob=1; UH1_SetT1T6(1, UH1_XM60_Current, TrackIR);"),
+										0,
+										EXEC("RangeKnob=0; UH1_SetT1T6(0, UH1_XM60_Current, TrackIR);")	));
+		printf("Done!\xa");	
+		}							
+	else if (prof == 1008)	//MAN RNG throttle position dictates T6 commands; Mi-8 0/1 reversed from UH-1 because throttle is clockwise (keeps functions similar)	
+		{
+		printf("         Man Range to position determines T6 functionality...");
+		KeyAxis(&HCougar, MAN_RNG, 0, 	AXMAP2 (
+										3,
+										EXEC("RangeKnob=0; Mi8_SetT1T6(0, CurrentStation, TrackIR);"),
+										0,
+										EXEC("RangeKnob=1; Mi8_SetT1T6(1, CurrentStation, TrackIR);")	));
+		printf("Done!\xa");	
+		}
+	else if (prof == 2520)	//MAN RNG for radar elevation digital commands (added in 2.63)
+		{
+		KeyAxis(&HCougar, MAN_RNG, 0,	AXMAP2	(
+										3,
+										DX14,
+										0,
+										DX13	));
+		}
+//	else if (prof == 2520)	//MAN RNG for radar mode switch position	//removed in 2.55 in favor of wingspan axis
+//		{
+//		printf("         Man Range (shifted) for Radar Mode Select...");
+//		KeyAxis(&HCougar, MAN_RNG, 0, 	AXMAP2 (
+//										4,
+//										PULSE+M2k_Radar_On,
+//										PULSE+M2k_Radar_Stby,
+//										PULSE+M2k_Radar_Warm,
+//										PULSE+M2k_Radar_Off	));
+//		}
+	else			KeyAxis(&HCougar, MAN_RNG, 0, AXMAP2 (0));	//added in 0.25 due to AXMAP in A-10C
+	}
+}
+
+
+
+
+//Warthog
+
+int Aux_Axis_Init_WH(int prof = 0, int eng = 2, int ms = 1, int lock = 0)	//Maps Microstick and Man Rng; added as separate routine in 1.11 to error trap against changing profiles from FC3 while S3 is pressed (would leave microstick as relative axis). added ms in 1.35 to allow disable for L/R braking algorithm (dummy for WH), added lock in 1.40(dummy); eng currently dummy
+{
+if (Script_Debug) printf ("Aux_Axis_Init_WH(%i,%i,%i,%i)\xa",prof,eng,ms,lock);
+//if ((CougarToeBrakes == 1) & (ToeBrakesAvailable == 2))	lock = 1;	//added lock in 1.40 for locking SC if Cougar Toe Brakes and SC in use to prevent TDC drift with toe brakes.
+if (WarthogThrottle > 1)	//added in 2.43 to zero out TQS
+	{
+	MapAxis(&HCougar, IN_POSITION_AXIS_SLIDER2, 0);
+	MapAxis(&HCougar, RDR_Y, 0);
+	MapAxis(&HCougar, MAN_RNG,	0);
+	MapAxis(&HCougar, ANT_ELEV,	0);
+	}
+printf("Axis Mapping Warthog Throttle Auxiliary");
+//SC X/Y Analog
+//	if (prof == 4001)	IL2TC_Microstick_Map(WarthogThrottle,Stick_as_Mouse_IL2TC);	//IL-2 tank
+//	else if	((prof > 3999) & (prof < 5000))	IL2GB_Microstick_Init(Microstick_Mouse_IL2GB);	//Il-2 not tank maps scroll wheel to SCY/MSX
+//	else if	((prof == 5000) & (Microstick_Mouse_EliteD > 0)) Microstick_Mouse_Init(1); 		//maps mouse to SC/MS
+//	else
+	if (	(prof == 1501) 	|	(prof == 3516)	|	(prof == 3547)	|	(!ms)	)	//	|	((CougarToeBrakes>0) & (ToeBrakesAvailable==1) )	)	//(prof == 2021)	|	(prof == 3551)	|	(prof == 1501)	|	(prof == 3090)	|	(prof == 3009)	|	(prof == 2015)	)	//MiG-21, P-51, UH-1, Fw190, Bf109, MiG-15: single engine acft with target ranging or forced no axis.  I-16 added in 2.42
+			{
+//			if ((WH_SC_SetRange > 0) & (prof != 2586))			// != UH1 so that axis isn't mapped with Huey
+//				WH_SCXY_Set(-1,lock);	//relative axes
+//			else	
+				WH_SCXY_Set(0,lock);  //Here because of XM60 hotswap or toe brakes
+			}
+	else	WH_SCXY_Set(1,lock);	//default absolute
+	
+	//if (prof == 1501) 			Digital_Microstick_Init(0);					//zero's digital commmands on TDC for UH-1
+	//else if (Digital_TDC > 0)	Digital_Microstick_Init(Digital_TDC,prof);	// here because digital tdc may be in conjunction iwth analog axis for WIP/EA modules.  forces digital regardless of analog setting.
+	//else
+	Digital_Microstick_Init(abs(ms-1),prof);	//inverse of ms (1 zeroes out digital commands, 0 sets digital mirage commands)
+//Man Rng Analog
+			printf("...FC for ");
+			if (	((TrackIR > 1) | (!WH_Friction_FOV))	)	//	&	(prof != 5000)	)	//sets non-FOV axis for VR (not Elite Dangerous)
+				{
+				printf("VR");
+//				if (prof == 4001)
+//						{
+//						printf(" (Il-2 TC)");
+//						MapAxis(&Throttle, THR_FC, DX_YROT_AXIS, 	AXIS_NORMAL, MAP_ABSOLUTE);	//Gunsight distance (DX axis)
+//						}
+//				else if ((prof > 3999) & (prof < 5000))
+//						{
+//						printf(" (Il-2)");
+//						MapAxis(&Throttle, THR_FC, MOUSE_Z_AXIS, 	AXIS_NORMAL, MAP_ABSOLUTE);	//Gunsight distance
+//						}
+//				else	
+				MapAxis(&Throttle, THR_FC, DX_ZROT_AXIS, 	AXIS_REVERSED, MAP_ABSOLUTE);
+				}
+			else
+				{
+				printf("FOV");
+				MapAxis(&Throttle, THR_FC, DX_SLIDER_AXIS, 	AXIS_NORMAL, MAP_ABSOLUTE);
+				}
+			KeyAxis(&Throttle, THR_FC, 0, AXMAP2(1, 0));	//zeros out any possible digital throttle from Ka-50 engine start routine.
+	printf("...Done.\xa");
+//Microstick Digital
+printf("      Digital Aux Axis Mapping:\xa");
+printf("         None\xa");	//for now
+
+}
+
+
+
+int	WH_SCX_Set(int sx = 1, int kx = 0)
+{
+//X axis
+	if (Script_Debug) printf("Warthog SCX:\xa   State = %i\xa KeyAxis = %i\xa",sx,kx);	//for test purposes
+if (sx == 0)
+	{
+	if (Script_Debug) printf("Setting: No Axis\xa");	//for test purposes
+	MapAxis(&Throttle, SCX, 0);
+	}
+else if (sx < 0)	//negative for relative
+		{
+		if (Script_Debug) printf("Setting: Relative\xa");	//for test purposes
+		MapAxis(&Throttle, SCX, DX_XROT_AXIS, AXIS_NORMAL, MAP_RELATIVE);
+		
+		}
+else //positive for absolute
+		{
+		if (Script_Debug) printf("Setting: Absolute\xa");	//for test purposes
+		MapAxis(&Throttle, SCX, DX_XROT_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
+		
+		}
+if (Script_Debug) printf("Flatten SCX Curve\xa");
+SetSCurve(&Throttle, SCX, 0, 0, 0, 0, 0);
+//if (kx > 0) 	KeyAxis(&Throttle,	SCX, 0, AXMAP1(2,	EXEC("LockAxis(&Throttle, SCX, 0);"),
+//														EXEC("LockAxis(&Throttle, SCX, 0);"),
+//														EXEC("LockAxis(&Throttle, SCX, 1);TrimDXAxis(DX_XROT_AXIS, SET(0));"))	);
+//else 
+if (!kx)
+	{
+	if (Script_Debug) printf("Lock out KeyAxis\xa");
+	KeyAxis(&Throttle,	SCX, 0, AXMAP2(1, 0));	//logic so that kx == -1 will not do any keyaxis command
+	}
+}
+
+int	WH_SCY_Set(int sy = 1, int ky = 0)	//ky no longer lock, but forcing keyaxis off if 0
+{
+//Y axis
+	if (Script_Debug) printf("Warthog SCY:\xa   State = %i\xa Keyaxis = %i\xa",sy,ky);	//for test purposes
+if (sy == 0)
+	{
+	if (Script_Debug) printf("Setting: No Axis\xa");	//for test purposes
+	MapAxis(&Throttle, SCY, 0);
+	}
+else if (sy < 0)	//negative for relative
+		{
+		if (Script_Debug) printf("Setting: Relative\xa");	//for test purposes
+		MapAxis(&Throttle, SCY, DX_YROT_AXIS, AXIS_NORMAL, MAP_RELATIVE);
+		}
+else //positive for absolute
+		{
+		if (Script_Debug) printf("Setting: Absolute\xa");	//for test purposes
+		MapAxis(&Throttle, SCY, DX_YROT_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
+		}
+if (Script_Debug) printf("Flatten SCX Curve\xa");
+SetSCurve(&Throttle, SCY, 0, 0, 0, 0, 0);
+//if (ky > 0)		KeyAxis(&Throttle,	SCY, 0, AXMAP1(2,	EXEC("LockAxis(&Throttle, SCY, 0);"),
+//														EXEC("LockAxis(&Throttle, SCY, 0);"),
+//														EXEC("LockAxis(&Throttle, SCY, 1);TrimDXAxis(DX_YROT_AXIS, SET(0));"))	);
+//else
+if (!ky)
+	{
+	if (Script_Debug) printf("Lock out KeyAxis\xa");
+	KeyAxis(&Throttle,	SCY, 0, AXMAP2(1, 0));	//logic so that kx == -1 will not do any keyaxis command
+	}
+}
+
+int	WH_SCXY_Set(int s = 1, int k = 0)	//both X and Y functions combined for DeferCall
+{
+	WH_SCX_Set(s,k);
+	WH_SCY_Set(s,k);
+}
+
+int Digital_Microstick_Init(int active = 1, int prof = 2505)	//routine obsolete with analog TDC in-game, though useful for other pre-analog TDCs.  prof added in 2.01
+{
+if (active)
+	{
+	if (prof == 2508) active = 2;	//AV-8B
+	else if ((prof == 2505) | (prof == 2520) | (prof == 2000))	active = 1;		//F-5, Mirage, or DX
+	else active = 0;
+	}
+
+if ((WarthogThrottle == 0) & (prof == 1501))		UH1_Microstick_Init(1);	//Cougar Microstick is searchlight (digital axis) in UH-1
+else if (prof == 1008)		printf("Mi-8 (separate microstick routine)\xa");
+
+else if (active > 0)
+	{
+	if (WarthogThrottle > 0)
+		{
+		printf("      Map SC to Digital TDC...");		
+		if (active == 2)
+			{
+
+			KeyAxis(&Throttle, SCX, 			0,	AXMAP2 (
+															4,
+															AV8_TDC_Lt_DX,
+															0,
+															0,
+															AV8_TDC_Rt_DX));
+			KeyAxis(&Throttle, SCY,				0,	AXMAP2 (
+															4,
+															AV8_TDC_Up_DX,
+															0,
+															0,
+															AV8_TDC_Dn_DX));		
+			}
+		else
+			{
+
+			KeyAxis(&Throttle, SCX, 			0,	AXMAP2 (
+															4,
+															M2k_TDC_Lt,
+															0,
+															0,
+															M2k_TDC_Rt));
+			KeyAxis(&Throttle, SCY,				0,	AXMAP2 (
+															4,
+															M2k_TDC_Up,
+															0,
+															0,
+															M2k_TDC_Dn));		
+			}
+		}
+	else
+		{
+		printf("      Map Microstick to Digital TDC...");
+		if (active == 2)
+			{
+			KeyAxis(&HCougar, IN_POSITION_AXIS_SLIDER2, 0, AXMAP2 (
+															4,
+															AV8_TDC_Lt_DX,
+															0,
+															0,
+															AV8_TDC_Rt_DX));
+			KeyAxis(&HCougar, RDR_Y,				    0, AXMAP2 (
+															4,
+															AV8_TDC_Up_DX,
+															0,
+															0,
+															AV8_TDC_Dn_DX));	
+			}	
+		else
+			{
+			KeyAxis(&HCougar, IN_POSITION_AXIS_SLIDER2, 0, AXMAP2 (
+															3,
+															M2k_TDC_Lt,
+															0,
+															M2k_TDC_Rt));
+			KeyAxis(&HCougar, RDR_Y,				    0, AXMAP2 (
+															3,
+															M2k_TDC_Up,
+															0,
+															M2k_TDC_Dn));	
+			}				
+		}
+	printf("Done.\xa");
+	}
+else
+	{
+	if (WarthogThrottle > 0)	
+		{
+		printf("      Unmapping Microstick...");
+		KeyAxis(&Throttle, SCX, 0, AXMAP2 (0));	//added in 1.27 to allow cancel if T1 held
+		KeyAxis(&Throttle, SCY,	0, AXMAP2 (0));	//added in 1.27 to allow cancel if T1 held
+		printf("Done.\xa");
+		}
+	else
+		{
+		printf("      Unmapping Microstick...");
+		KeyAxis(&HCougar, IN_POSITION_AXIS_SLIDER2, 0, AXMAP2 (0));	//added in 1.27 to allow cancel if T1 held
+		KeyAxis(&HCougar, RDR_Y,				    0, AXMAP2 (0));	//added in 1.27 to allow cancel if T1 held
+		printf("Done.\xa");
+		}
+	}		
+
+}
+
+int H1_Init(int tir, int padlock, int prof = 0, int trim = 0, int tirpaused = 0)	//trim added in 1.34 to allow for TARGET based conventional trim, tirpaused added in 1.40 to allow for TIR Pause to enable H1 POV
+//TODO: change absolute XYAxisTrim to trim argument
+{
+if (WarthogStick > 0) H1_Init_WH(tir,padlock,prof,trim,tirpaused);
+else
+	{
+	if (tir > 1)
+		{
+		if (VRTrimDefault > 0)	//Trim as Default
+			{
+			printf("      Init Trim for VR Users.\xa");
+				printf("         Hat1 (Trim/Mouse)...");							
+					if ((Helicopter > 0) & (!HeloHatTrim) & (CrewCount > 2))	//Multicrew helos that don't use hat trim have 1/2 on R/L and 3/4 Long
+						{
+						if (ProfID == 1008)
+							{
+							printf("Helo (Mi-8)...");	//Stns 1 and 2 reversed
+							MapKeyIO(&HCougar, H1R,		VR_MouseBtnRt,	TEMPO(	CHAIN(DX30,D(ModDelay),	DXHATRIGHT,	EXEC("StationCheck(ProfID,2);")),
+																				CHAIN(DX30,D(ModDelay),	DXHATRIGHT,	EXEC("StationCheck(ProfID,3);")),	DefTempo)	);	//DX32+Hat for VRmouse.  Stncheck tempo added in 2.30
+							MapKeyIO(&HCougar, H1L,		VR_MouseBtnLt,	TEMPO(	CHAIN(DX30,D(ModDelay),	DXHATLEFT,	EXEC("StationCheck(ProfID,1);")),
+																				CHAIN(DX30,D(ModDelay),	DXHATLEFT,	EXEC("StationCheck(ProfID,4);")),	DefTempo)	);	//DX32+Hat for VRmouse.  Stncheck tempo added in 2.30
+							}							
+						else
+							{
+							printf("Helo...");
+							MapKeyIO(&HCougar, H1R,		VR_MouseBtnRt,	TEMPO(	CHAIN(DX30,D(ModDelay),	DXHATRIGHT,	EXEC("StationCheck(ProfID,1);")),
+																				CHAIN(DX30,D(ModDelay),	DXHATRIGHT,	EXEC("StationCheck(ProfID,3);")),	DefTempo)	);	//DX32+Hat for VRmouse.  Stncheck tempo added in 2.30
+							MapKeyIO(&HCougar, H1L,		VR_MouseBtnLt,	TEMPO(	CHAIN(DX30,D(ModDelay),	DXHATLEFT,	EXEC("StationCheck(ProfID,2);")),
+																				CHAIN(DX30,D(ModDelay),	DXHATLEFT,	EXEC("StationCheck(ProfID,4);")),	DefTempo)	);	//DX32+Hat for VRmouse.  Stncheck tempo added in 2.30
+							}	
+						}							
+					else	//graceflag means doubletap to change stations
+						{
+						MapKeyIO(&HCougar, H1R,		VR_MouseBtnRt,	CHAIN(DX30,D(ModDelay),	DXHATRIGHT,	EXEC("if ((GraceFlag==2) & !(StnCheckDisabled + TARS > 1))  DeferCall(DoubleTap,&StationCheck1,ProfID); if (Script_Debug) Print_Value(7);")));	//StationCheck(ProfID,1);")));	//DX32+Hat for rudder trim	;added StationCheck in 0.60
+						MapKeyIO(&HCougar, H1L,		VR_MouseBtnLt,	CHAIN(DX30,D(ModDelay),	DXHATLEFT,	EXEC("if ((GraceFlag==4) & !(StnCheckDisabled + TARS > 1))  DeferCall(DoubleTap,&StationCheck2,ProfID); if (Script_Debug) Print_Value(7);")));	//StationCheck(ProfID,2);")));	
+						}
+
+//					MapKeyIO(&HCougar, H1R,		CHAIN(DX32,D(ModDelay),	DXHATRIGHT,	EXEC("if (GraceFlag==2) StationCheck(ProfID,3);")),	CHAIN(DX30,D(ModDelay),	DXHATRIGHT,	EXEC("if (GraceFlag==2) StationCheck(ProfID,1);")));	//DX32+Hat for rudder trim	;added StationCheck in 0.60
+//					MapKeyIO(&HCougar, H1L,		CHAIN(DX32,D(ModDelay),	DXHATLEFT,	EXEC("if (GraceFlag==4) StationCheck(ProfID,4);")),	CHAIN(DX30,D(ModDelay),	DXHATLEFT,	EXEC("if (GraceFlag==4) StationCheck(ProfID,2);")));			
+					MapKeyIO(&HCougar, H1U,		TEMPO(VR_MouseWheelUp, 	CHAIN(DOWN+L_SHIFT,DOWN+R_ALT,D(ModDelay),REXEC(3, VRMouseWheelRate, "ActKey(KEYON+PULSE+VR_MouseWheelUpRx);")), 	ModTempo),	CHAIN(DX30,D(ModDelay),	DXHATUP));		// /I doubletap for VR Zoom Toggle
+					MapKeyIO(&HCougar, H1D,		TEMPO(VR_MouseWheelDn,	CHAIN(DOWN+L_SHIFT,DOWN+R_ALT,D(ModDelay),REXEC(3, VRMouseWheelRate, "ActKey(KEYON+PULSE+VR_MouseWheelDnRx);")),	ModTempo),	CHAIN(DX30,D(ModDelay),	DXHATDOWN));	// /I doubletap for Trim Center
+
+					//MapKeyRIO(&HCougar,H1U, CHAIN(DOWN+DX31,D(DoubleTap),UP+DX31),	0);							//for VR Zoom (changed to DX31 because 32 already in use for mwheel)
+					//MapKeyR	(&HCougar, H1D,	0);		
+					MapKeyRIO(&HCougar,H1U, CHAIN(UP+L_SHIFT,UP+R_ALT,EXEC("VRZoom_Init();DeferCall(ModDelay,&VRZoom_Set,1);DeferCall(DoubleTap,&VRZoom_Set,0);")),	0);		//for VR Zoom 
+					MapKeyRIO(&HCougar,H1D, CHAIN(UP+L_SHIFT,UP+R_ALT,DOWN+DX31,D(DoubleTap+ModDelay),UP+DX31),	0);							//for center trim, +moddelay because of tempo		
+
+			}	
+		else	//Mouse as Default
+			{
+			printf("      Init Mouse Buttons for VR Users.\xa");
+				printf("         Hat1 (Mouse/Trim)...");	
+					if ((Helicopter > 0) & (!HeloHatTrim) & (CrewCount > 2))	//Multicrew helos that don't use hat trim
+						{
+						if (ProfID == 1008)		//stns 1 and 2 reversed						
+							{
+							printf("Helo (Mi-8)...");
+							MapKeyIO(&HCougar, H1R,		TEMPO(	CHAIN(DXHATRIGHT,	EXEC("StationCheck(ProfID,2);")),
+																CHAIN(DXHATRIGHT,	EXEC("StationCheck(ProfID,3);")),	DefTempo),
+														VR_MouseBtnRt);	//added TEMPO to StationCheck in 2.30
+																			
+							MapKeyIO(&HCougar, H1L,		TEMPO(	CHAIN(DXHATLEFT,	EXEC("StationCheck(ProfID,1);")),
+																CHAIN(DXHATLEFT,	EXEC("StationCheck(ProfID,4);")),	DefTempo),
+														VR_MouseBtnLt);	//added TEMPO to StationCheck in 2.30
+							}
+						else							
+							{
+	
+							printf("Helo...");
+							MapKeyIO(&HCougar, H1R,		TEMPO(	CHAIN(DXHATRIGHT,	EXEC("StationCheck(ProfID,1);")),
+																CHAIN(DXHATRIGHT,	EXEC("StationCheck(ProfID,3);")),	DefTempo),
+														VR_MouseBtnRt);	//added TEMPO to StationCheck in 2.30
+																			
+							MapKeyIO(&HCougar, H1L,		TEMPO(	CHAIN(DXHATLEFT,	EXEC("StationCheck(ProfID,2);")),
+																CHAIN(DXHATLEFT,	EXEC("StationCheck(ProfID,4);")),	DefTempo),
+														VR_MouseBtnLt);	//added TEMPO to StationCheck in 2.30
+							}
+						}							
+					else
+						{
+						MapKeyIO(&HCougar, H1R,		CHAIN(DXHATRIGHT,	EXEC("if ((GraceFlag==2) & !(StnCheckDisabled + TARS > 1))  StationCheck(ProfID,1); if (Script_Debug) Print_Value(7);")),	VR_MouseBtnRt);	//DX32+Hat for rudder trim	;added StationCheck in 0.60
+						MapKeyIO(&HCougar, H1L,		CHAIN(DXHATLEFT,	EXEC("if ((GraceFlag==4) & !(StnCheckDisabled + TARS > 1))  StationCheck(ProfID,2); if (Script_Debug) Print_Value(7);")),	VR_MouseBtnLt);	
+						}
+//					MapKeyIO(&HCougar, H1R,		CHAIN(DXHATRIGHT,	EXEC("if (GraceFlag==2) StationCheck(ProfID,3);")),	CHAIN(DXHATRIGHT,	EXEC("if (GraceFlag==2) StationCheck(ProfID,1);")));	//DX32+Hat for rudder trim	;added StationCheck in 0.60
+//					MapKeyIO(&HCougar, H1L,		CHAIN(DXHATLEFT,	EXEC("if (GraceFlag==4) StationCheck(ProfID,4);")),	CHAIN(DXHATLEFT,	EXEC("if (GraceFlag==4) StationCheck(ProfID,2);")));	
+
+					MapKeyIO(&HCougar, H1U,		DXHATUP,	TEMPO(VR_MouseWheelUp, 	CHAIN(DOWN+L_SHIFT,DOWN+R_ALT,D(ModDelay),REXEC(3, VRMouseWheelRate, "ActKey(KEYON+PULSE+VR_MouseWheelUpRx);")),	ModTempo)	);
+					MapKeyIO(&HCougar, H1D,		DXHATDOWN,	TEMPO(VR_MouseWheelDn,	CHAIN(DOWN+L_SHIFT,DOWN+R_ALT,D(ModDelay),REXEC(3, VRMouseWheelRate, "ActKey(KEYON+PULSE+VR_MouseWheelDnRx);")),	ModTempo)	);	
+				
+					//MapKeyRIO(&HCougar,H1U, CHAIN(DOWN+DX32,D(DoubleTap),UP+DX32),	0);							//for VR Zoom (changed to DX31 because 32 already in use for mwheel)		
+					//MapKeyR	(&HCougar, H1U,	0);
+					//MapKeyRIO(&HCougar,H1U,
+					MapKeyRIO(&HCougar,H1U, 0,	CHAIN(UP+L_SHIFT,UP+R_ALT,EXEC("VRZoom_Init();DeferCall(ModDelay,&VRZoom_Set,1);DeferCall(DoubleTap,&VRZoom_Set,0);"))	);	//for VR Zoom 		
+					MapKeyRIO(&HCougar,H1D, CHAIN(DOWN+DX32,D(DoubleTap),UP+DX32),	CHAIN(UP+L_SHIFT,UP+R_ALT));							//for center trim		
+
+			}	
+
+		MapKeyR	(&HCougar, H1R,	EXEC("GraceFlag = 2; DeferCall(DoubleTap,&Grace_Flag,0);"));	//EXEC added in 1.40 for revamped position change
+		MapKeyR	(&HCougar, H1L,	EXEC("GraceFlag = 4; DeferCall(DoubleTap,&Grace_Flag,0);"));
+		}
+	else
+		{
+		if ((tir == 1) & (!tirpaused))		//TrackIR in use
+			{
+			if(padlock > 0) //TrackIR with Padlock option enabled
+				{
+				if ((Helicopter > 0) & (!HeloHatTrim) & (CrewCount > 2))	//Multicrew helos that don't use hat trim
+					{
+					printf("      Init Stn Sel with Padlock for TrackIR Users.\xa");
+					if (ProfID == 1008)		//stn 1 and 2 switched
+						{	
+							printf("         Hat1 (Mi-8 Stn Sel)...");		
+								MapKeyIO(&HCougar, H1R,		TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_missile_Threat);"), 	EXEC("StationCheck(ProfID,3);"),	ModTempo),	TEMPO(EXEC("StationCheck(ProfID,2);"),EXEC("StationCheck(ProfID,3);"),DefTempo)	);	//DX32+Hat for rudder trim ; added StationCheck in 0.60
+								MapKeyIO(&HCougar, H1L,		TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_terrain_view);"), 	EXEC("StationCheck(ProfID,4);"), 	ModTempo),	TEMPO(EXEC("StationCheck(ProfID,1);"),EXEC("StationCheck(ProfID,4);"),DefTempo)	);	//added StationCheck in 0.60
+								MapKeyIO(&HCougar, H1U,		TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+LockView);"), EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+UnlockView);"), 						ModTempo),	CHAIN(DX30,D(ModDelay),	DXHATUP));										//if short shift, Cycle Padlockview, long shift Unlock view 
+							
+								//MapKeyR covered in next section
+						}
+					else				
+						{	
+							printf("         Hat1 (Helo Stn Sel)...");		
+								MapKeyIO(&HCougar, H1R,		TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_missile_Threat);"), 	EXEC("StationCheck(ProfID,3);"),	ModTempo),	TEMPO(EXEC("StationCheck(ProfID,1);"),EXEC("StationCheck(ProfID,3);"),DefTempo)	);	//DX32+Hat for rudder trim ; added StationCheck in 0.60
+								MapKeyIO(&HCougar, H1L,		TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_terrain_view);"), 	EXEC("StationCheck(ProfID,4);"), 	ModTempo),	TEMPO(EXEC("StationCheck(ProfID,2);"),EXEC("StationCheck(ProfID,4);"),DefTempo)	);	//added StationCheck in 0.60
+								MapKeyIO(&HCougar, H1U,		TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+LockView);"), EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+UnlockView);"), 						ModTempo),	CHAIN(DX30,D(ModDelay),	DXHATUP));										//if short shift, Cycle Padlockview, long shift Unlock view 
+							
+								//MapKeyR covered in next section
+						}	
+					}					
+				else if (XYAxisTrim)	//added in 1.34
+					{
+					printf("      Init TARGET Trim with Padlock for TrackIR Users.\xa");
+						printf("         Hat1 (TARGET Trim)...");		
+							MapKeyIO(&HCougar, H1R,		EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_missile_Threat);"),	REXEC(2,XYAxisTrim_Rate,"TrimX( JoyXTrim);")	);	// 2 is rexec value for trim; positive trim value for right
+							MapKeyIO(&HCougar, H1L,		EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_terrain_view);"),		REXEC(2,XYAxisTrim_Rate,"TrimX(-JoyXTrim);")	);	// 2 is rexec value for trim; negative trim value for left
+							MapKeyIO(&HCougar, H1U,		TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+LockView);"), EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+UnlockView);"), 	ModTempo),
+														REXEC(2,XYAxisTrim_Rate,"TrimY(-JoyYTrim);")	);																					// 2 is rexec value for trim; negative trim value for down
+		
+							MapKeyRIO(&HCougar,H1L,		0,	EXEC("StopAutoRepeat(2);"));
+							MapKeyRIO(&HCougar,H1R,		0,	EXEC("StopAutoRepeat(2);"));
+							MapKeyRIO(&HCougar,H1U,		0,	EXEC("StopAutoRepeat(2);"));
+					}		
+				else
+					{	
+					printf("      Init Trim with Padlock for TrackIR Users.\xa");
+						printf("         Hat1 (Trim)...");		
+							MapKeyIO(&HCougar, H1R,		TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_missile_Threat);"), 	CHAIN(DX32,D(ModDelay),DXHATRIGHT,EXEC("StationCheck(ProfID,3);")),	ModTempo),	CHAIN(DX30,D(ModDelay),	DXHATRIGHT,	EXEC("if ((GraceFlag==2) & !(StnCheckDisabled + TARS > 1))  StationCheck(ProfID,1);")));	//DX32+Hat for rudder trim ; added StationCheck in 0.60
+							MapKeyIO(&HCougar, H1L,		TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_terrain_view);"), 	CHAIN(DX32,D(ModDelay),DXHATLEFT, EXEC("StationCheck(ProfID,4);")), ModTempo),	CHAIN(DX30,D(ModDelay),	DXHATLEFT,	EXEC("if ((GraceFlag==4) & !(StnCheckDisabled + TARS > 1))  StationCheck(ProfID,2);")));	//added StationCheck in 0.60
+							MapKeyIO(&HCougar, H1U,		TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+LockView);"), EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+UnlockView);"), 					ModTempo),	CHAIN(DX30,D(ModDelay),	DXHATUP));										//if short shift, Cycle Padlockview, long shift Unlock view 
+						
+							//MapKeyR covered in next section
+					}
+				}
+			else 			//TrackIR with Padlock option disabled
+				{
+				if ((Helicopter > 0) & (!HeloHatTrim) & (CrewCount > 2))	//Multicrew helos that don't use hat trim
+					{
+					printf("      Init Stn Sel for TrackIR Users.\xa");
+					if (ProfID == 1008)		//stn 1 and 2 switched
+						{
+							printf("         Hat1 (Mi-8 Stn Sel)...");		
+								MapKeyIO(&HCougar, H1R,		EXEC("StationCheck(ProfID,3);"),	TEMPO(EXEC("StationCheck(ProfID,2);"),EXEC("StationCheck(ProfID,3);"),DefTempo)	);	//DX32+Hat for rudder trim	;added StationCheck in 0.60
+								MapKeyIO(&HCougar, H1L,		EXEC("StationCheck(ProfID,4);"),	TEMPO(EXEC("StationCheck(ProfID,1);"),EXEC("StationCheck(ProfID,4);"),DefTempo)	);	
+								MapKeyIO(&HCougar, H1U,		TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_missile_Threat);"), EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+UnlockView);"), ModTempo),
+															CHAIN(DX30,D(ModDelay),	DXHATUP));	//if short shift, Cycle Padlockview, long shift Unlock view 
+								//MapKeyR covered in next section				
+						}		
+					else
+						{
+							printf("         Hat1 (Helo Stn Sel)...");		
+								MapKeyIO(&HCougar, H1R,		EXEC("StationCheck(ProfID,3);"),	TEMPO(EXEC("StationCheck(ProfID,1);"),EXEC("StationCheck(ProfID,3);"),DefTempo)	);	//DX32+Hat for rudder trim	;added StationCheck in 0.60
+								MapKeyIO(&HCougar, H1L,		EXEC("StationCheck(ProfID,4);"),	TEMPO(EXEC("StationCheck(ProfID,2);"),EXEC("StationCheck(ProfID,4);"),DefTempo)	);	
+								MapKeyIO(&HCougar, H1U,		TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_missile_Threat);"), EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+UnlockView);"), ModTempo),
+															CHAIN(DX30,D(ModDelay),	DXHATUP));	//if short shift, Cycle Padlockview, long shift Unlock view 
+								//MapKeyR covered in next section				
+						}
+					}					
+				else if (XYAxisTrim)	//added in 1.34
+					{
+					printf("      Init TARGET Trim for TrackIR Users.\xa");
+						printf("         Hat1 (TARGET Trim)...");		
+							MapKey	(&HCougar, H1R,		REXEC(2,XYAxisTrim_Rate,"TrimX( JoyXTrim);")	);	// 2 is rexec value for trim; positive trim value for right
+							MapKey	(&HCougar, H1L,		REXEC(2,XYAxisTrim_Rate,"TrimX(-JoyXTrim);")	);	// 2 is rexec value for trim; negative trim value for left
+							MapKey	(&HCougar, H1U,		REXEC(2,XYAxisTrim_Rate,"TrimY(-JoyYTrim);")	);	// 2 is rexec value for trim; negative trim value for down
+							
+							MapKeyR	(&HCougar,H1L,		EXEC("StopAutoRepeat(2);"));
+							MapKeyR	(&HCougar,H1R,		EXEC("StopAutoRepeat(2);"));
+							MapKeyR	(&HCougar,H1U,		EXEC("StopAutoRepeat(2);"));
+					}
+				else
+					{
+					printf("      Init Trim for TrackIR Users.\xa");
+						printf("         Hat1 (Trim)...");		
+							MapKeyIO(&HCougar, H1R,		CHAIN(DX32,D(ModDelay),	DXHATRIGHT,	EXEC("if ((GraceFlag==2) & !(StnCheckDisabled + TARS > 1))  StationCheck(ProfID,3); if (Script_Debug) Print_Value(7);")),	CHAIN(DX30,D(ModDelay),	DXHATRIGHT,	EXEC("if ((GraceFlag==2) & !(StnCheckDisabled + TARS > 1))  StationCheck(ProfID,1); if (Script_Debug) Print_Value(7);")));	//DX32+Hat for rudder trim	;added StationCheck in 0.60
+							MapKeyIO(&HCougar, H1L,		CHAIN(DX32,D(ModDelay),	DXHATLEFT,	EXEC("if ((GraceFlag==4) & !(StnCheckDisabled + TARS > 1))  StationCheck(ProfID,4); if (Script_Debug) Print_Value(7);")),	CHAIN(DX30,D(ModDelay),	DXHATLEFT,	EXEC("if ((GraceFlag==4) & !(StnCheckDisabled + TARS > 1))  StationCheck(ProfID,2); if (Script_Debug) Print_Value(7);")));	
+							MapKeyIO(&HCougar, H1U,		TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_missile_Threat);"), EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+UnlockView);"), ModTempo),
+														CHAIN(DX30,D(ModDelay),	DXHATUP));	//if short shift, Cycle Padlockview, long shift Unlock view 
+							//MapKeyR covered in next section				
+					}										
+				}
+	
+			//For H1URL /R and H1D
+			if (XYAxisTrim) //both TrackIR options; /R for RLU done in individual options
+				{
+				MapKeyIO(&HCougar, H1D,	TEMPO(EXEC("TrimXYResetCheck(GraceFlag);"),EXEC("Pause_TrackIR(1,1,1);"),DefTempo),	REXEC(2,XYAxisTrim_Rate,"TrimY( JoyYTrim);")	);	// 2 is rexec value for trim; positive trim value for up; graceflag allows for double tap to neutralize trim (forced to 3 in 1.40 for H1D only)
+				}
+			else 			
+				{
+				MapKeyIO(&HCougar, H1D,	TEMPO(DXHATDOWN,EXEC("Pause_TrackIR(1,1,1);"),DefTempo),	CHAIN(DX30,D(ModDelay),	DXHATDOWN));	// /I Long for TIR Pause Toggle, also prevents toggle if double tapping for trim reset
+	
+				MapKeyR	(&HCougar, H1R,	EXEC("GraceFlag = 2; DeferCall(DoubleTap,&Grace_Flag,0);"));	//EXEC added in 1.40 for revamped position change
+				MapKeyR	(&HCougar, H1L,	EXEC("GraceFlag = 4; DeferCall(DoubleTap,&Grace_Flag,0);"));
+				MapKeyR	(&HCougar, H1U,	0);
+				}	
+			}
+		else			//TrackIR not in use
+			{
+			if (tirpaused)	printf("TrackIR Paused (Init POV).\xa");
+			else			printf("      Init POV for non-TrackIR Users.\xa");
+				if (trim < 0)	//Mouse		
+					{
+					if (trim < -1)	//mousewheel
+						{
+						printf("         Hat1 (Scrollwheel)...");	
+						MapKey	(&HCougar, H1U, AXIS(MOUSE_Z_AXIS,   Mouse_Zincr_H1,	Mouse_Zdelay_H1));
+						MapKey	(&HCougar, H1D, AXIS(MOUSE_Z_AXIS,  -Mouse_Zincr_H1,	Mouse_Zdelay_H1));
+						
+						MapKey	(&HCougar,  H1L, 	MOUSE_CENTER);
+						MapKey	(&HCougar,  H1R, 	MOUSE_CENTER);					
+						}
+					else
+						{				
+						printf("         Hat1 (Mouse)...");	
+						if (Mouse_Y_Rev > 0)
+							{
+							MapKeyIO(&HCougar, H1D, AXIS(MOUSE_Z_AXIS,  -Mouse_Zincr_H1,	Mouse_Zdelay_H1),
+													AXIS(MOUSE_Y_AXIS,	-Mouse_Incr_H1, 	Mouse_Delay_H1));
+							MapKeyIO(&HCougar, H1U, AXIS(MOUSE_Z_AXIS,   Mouse_Zincr_H1,	Mouse_Zdelay_H1),
+													AXIS(MOUSE_Y_AXIS,	 Mouse_Incr_H1,		Mouse_Delay_H1));
+							}
+						else
+							{				
+							MapKeyIO(&HCougar, H1U, AXIS(MOUSE_Z_AXIS,   Mouse_Zincr_H1,	Mouse_Zdelay_H1),
+													AXIS(MOUSE_Y_AXIS,	-Mouse_Incr_H1, 	Mouse_Delay_H1));
+							MapKeyIO(&HCougar, H1D, AXIS(MOUSE_Z_AXIS,  -Mouse_Zincr_H1,	Mouse_Zdelay_H1),
+													AXIS(MOUSE_Y_AXIS,	 Mouse_Incr_H1, 	Mouse_Delay_H1));
+							}
+						MapKeyIO(&HCougar,  H1L, 	MOUSE_CENTER,	AXIS(MOUSE_X_AXIS,	-Mouse_Incr_H1, 	Mouse_Delay_H1));
+						MapKeyIO(&HCougar,  H1R, 	MOUSE_CENTER,	AXIS(MOUSE_X_AXIS,	 Mouse_Incr_H1, 	Mouse_Delay_H1));	
+						}	
+					MapKeyR	(&HCougar,H1U,	0);
+					MapKeyR	(&HCougar,H1R,	0);
+					MapKeyR	(&HCougar,H1L,	0);
+					}				
+				else if (XYAxisTrim > 0)
+					{
+					printf("         Hat1 (POV+TARGET Trim)...");		
+						MapKeyIO(&HCougar, H1U, TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+LockView);"),							REXEC(2,XYAxisTrim_Rate,"TrimY(-JoyYTrim);"),	ModTempo),	DXHATUP);		// 2 is rexec value for trim; negative trim value for down
+						MapKeyIO(&HCougar, H1D, TEMPO(EXEC("if (GraceFlag == 3) Pause_TrackIR(0,1,1); else TrimXYResetCheck(GraceFlag,-1);"),	REXEC(2,XYAxisTrim_Rate,"TrimY( JoyYTrim);"), 	ModTempo),	DXHATDOWN);		// 2 is rexec value for trim; positive trim value for up; -1 in TrimXYResetCheck forces PULSE+UnlockView if no reset
+						MapKeyIO(&HCougar, H1R, TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_missile_Threat);"), 				REXEC(2,XYAxisTrim_Rate,"TrimX( JoyXTrim);"),	ModTempo),	DXHATRIGHT);	// 2 is rexec value for trim; positive trim value for right	
+						MapKeyIO(&HCougar, H1L, TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_terrain_view);"), 				REXEC(2,XYAxisTrim_Rate,"TrimX(-JoyXTrim);"),	ModTempo),	DXHATLEFT);		// 2 is rexec value for trim; negative trim value for left
+		
+						MapKeyRIO(&HCougar,H1U, EXEC("StopAutoRepeat(2);"), CHAIN(DOWN+DX32,D(DoubleTap),UP+DX32));				//Will allow view center if H1U A(noshift) is double-tapped.  Map center view to DX32+DXHATUP.
+						MapKeyRIO(&HCougar,H1L,	EXEC("StopAutoRepeat(2);"),	0);
+						MapKeyRIO(&HCougar,H1R,	EXEC("StopAutoRepeat(2);"),	0);		
+						
+					}	
+				else
+					{
+					printf("         Hat1 (POV)...");		
+						MapKeyIO(&HCougar, H1U, TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+LockView);"), 	DXHATUP,	ModTempo),	DXHATUP);		//modified to remove snapview override in 0.60
+						MapKeyIO(&HCougar, H1D, TEMPO(EXEC("if (GraceFlag == 3) Pause_TrackIR(0,1,1); else if (SnapViewState == 0) ActKey(KEYON+PULSE+UnlockView);"), 				DXHATDOWN, 	ModTempo),	DXHATDOWN);		//modified to remove snapview override in 0.60
+	
+						if (ProfID == 1008)	//stn 1 and 2 reversed for Mi-8
+							{
+							MapKeyIO(&HCougar, H1R, TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_missile_Threat);"), 	DXHATRIGHT, ModTempo),	CHAIN(DXHATRIGHT,EXEC("if ((GraceFlag==2) & !(StnCheckDisabled + TARS > 1))  StationCheck(ProfID,2); if (Script_Debug) Print_Value(7);"))	);	//modified to remove snapview override and added StationCheck in 0.60, StationCheck changed to unshifted notempo in 1.40				
+							MapKeyIO(&HCougar, H1L, TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_terrain_view);"), 	DXHATLEFT, ModTempo),	CHAIN(DXHATLEFT, EXEC("if ((GraceFlag==4) & !(StnCheckDisabled + TARS > 1))  StationCheck(ProfID,1); if (Script_Debug) Print_Value(7);"))	);	//modified to remove snapview override and added StationCheckin 0.60, StationCheck changed to unshifted notempo in 1.40		
+							}
+						else
+							{					
+							MapKeyIO(&HCougar, H1R, TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_missile_Threat);"), 	DXHATRIGHT, ModTempo),	CHAIN(DXHATRIGHT,EXEC("if ((GraceFlag==2) & !(StnCheckDisabled + TARS > 1))  StationCheck(ProfID,1); if (Script_Debug) Print_Value(7);"))	);	//modified to remove snapview override and added StationCheck in 0.60, StationCheck changed to unshifted notempo in 1.40				
+							MapKeyIO(&HCougar, H1L, TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_terrain_view);"), 	DXHATLEFT, ModTempo),	CHAIN(DXHATLEFT, EXEC("if ((GraceFlag==4) & !(StnCheckDisabled + TARS > 1))  StationCheck(ProfID,2); if (Script_Debug) Print_Value(7);"))	);	//modified to remove snapview override and added StationCheckin 0.60, StationCheck changed to unshifted notempo in 1.40		
+							}
+						MapKeyRIO(&HCougar,H1U, 0,	CHAIN(DOWN+DX32,D(DoubleTap),UP+DX32));				//Will allow view center if H1U A(noshift) is double-tapped.  Map center view to DX32+DXHATUP.
+						MapKeyRIO(&HCougar,H1R,	0,	EXEC("GraceFlag = 2; DeferCall(DoubleTap,&Grace_Flag,0);"));	//graceflag separate values for individual hat direction
+						MapKeyRIO(&HCougar,H1L,	0, 	EXEC("GraceFlag = 4; DeferCall(DoubleTap,&Grace_Flag,0);"));
+						
+					}
+			}
+		//H1D /R	
+	//	if(	(Helicopter) & (prof!=2)	)	//removes double tap trim reset for TCPTM (except for Ka-50 which centers Shkval)
+	//			MapKeyRIO(&HCougar, H1D,	0);				//added in 1.27 to remove from helos (for TCPTM and Mi-8 searchlight function)
+	//	else
+		if ((tir) & (tirpaused))
+				MapKeyRIO(&HCougar,H1D,	EXEC("GraceFlag = 3; DeferCall(DoubleTap,&Grace_Flag,0);"),0);
+		else if (tir) MapKeyRIO(&HCougar, H1D,	CHAIN(DOWN+DX32,D(DoubleTap),UP+DX32,EXEC("GraceFlag = 3; DeferCall(DoubleTap,&Grace_Flag,0);")),0);				//Will allow trim reset if Shift+H1D is double-tapped.
+		else if(	(Helicopter) & (prof != 1050)	)			//removes double tap trim reset for TCPTM (except for Ka-50 which centers Shkval)
+				MapKeyRIO(&HCougar, H1D,	0);				//added in 1.27 to remove from helos (for TCPTM and Mi-8 searchlight function)
+		else if (trim != 0)
+					{
+					if (trim < 0)	MapKeyR	(&HCougar, H1D,	0);	//mouse
+					else if (tir)	MapKeyRIO(&HCougar,H1D,	EXEC("GraceFlag = 3; DeferCall(DoubleTap,&Grace_Flag,0);"), EXEC("StopAutoRepeat(2);")	);	//cycles grace flag for DoubleTap timeframe to allow TARGET trim reset if S3+H1D double-tapped (graceflag = 3 in 1.40). no shifted StopAutoRepeat() for TrackIR
+					else			MapKeyRIO(&HCougar,H1D,	EXEC("StopAutoRepeat(2);GraceFlag = 3; DeferCall(DoubleTap,&Grace_Flag,0);"),0	);	//cycles grace flag for DoubleTap timeframe to allow TARGET trim reset if S3+H1D double-tapped
+					}
+		else	MapKeyRIO(&HCougar, H1D,	CHAIN(DOWN+DX32,D(DoubleTap),UP+DX32),0);				//Will allow trim reset if Shift+H1D is double-tapped.			
+		printf("Done!\xa");
+		}
+	}
+}	
+
+int H1_Init_WH(int tir, int padlock, int prof = 0, int trim = 0, int tirpaused = 0)	//trim added in 1.34 to allow for TARGET based conventional trim
+{
+//TODO: change absolute XYAxisTrim to trim argument
+if (tir > 1)
+	{
+	if (VRTrimDefault > 0)	//Trim as Default
+		{
+		printf("      Init Trim for VR Users.\xa");
+			printf("         Hat1 (Trim/Mouse)...");
+				if ((Helicopter > 0) & (!HeloHatTrim) & (CrewCount > 2))	//Multicrew helos that don't use hat trim, R/L cycles 1/2 and R/L Long cycles 3/4
+					{
+					if (ProfID == 1008)	//stn 1 and 2 reversed
+						{
+						printf("Helo (Mi-8)...");
+						MapKeyIO(&Joystick, H1R,	VR_MouseBtnRt,	TEMPO(	CHAIN(DX30,D(ModDelay),	DXHATRIGHT,	EXEC("StationCheck(ProfID,2);")),
+																			CHAIN(DX30,D(ModDelay),	DXHATRIGHT,	EXEC("StationCheck(ProfID,3);")),	DefTempo)	);	//DX32+Hat for VRmouse.  Stncheck tempo added in 2.30
+						MapKeyIO(&Joystick, H1L,	VR_MouseBtnLt,	TEMPO(	CHAIN(DX30,D(ModDelay),	DXHATLEFT,	EXEC("StationCheck(ProfID,1);")),
+																			CHAIN(DX30,D(ModDelay),	DXHATLEFT,	EXEC("StationCheck(ProfID,4);")),	DefTempo)	);	//DX32+Hat for VRmouse.  Stncheck tempo added in 2.30
+						}			
+					else
+						{
+						printf("Helo...");
+						MapKeyIO(&Joystick, H1R,	VR_MouseBtnRt,	TEMPO(	CHAIN(DX30,D(ModDelay),	DXHATRIGHT,	EXEC("StationCheck(ProfID,1);")),
+																			CHAIN(DX30,D(ModDelay),	DXHATRIGHT,	EXEC("StationCheck(ProfID,3);")),	DefTempo)	);	//DX32+Hat for VRmouse.  Stncheck tempo added in 2.30
+						MapKeyIO(&Joystick, H1L,	VR_MouseBtnLt,	TEMPO(	CHAIN(DX30,D(ModDelay),	DXHATLEFT,	EXEC("StationCheck(ProfID,2);")),
+																			CHAIN(DX30,D(ModDelay),	DXHATLEFT,	EXEC("StationCheck(ProfID,4);")),	DefTempo)	);	//DX32+Hat for VRmouse.  Stncheck tempo added in 2.30
+						}	
+					}
+				else	//graceflag means double-tap to change stations
+					{
+					MapKeyIO(&Joystick, H1R,	VR_MouseBtnRt,	CHAIN(DX30,D(ModDelay),	DXHATRIGHT,	EXEC("if ((GraceFlag==2) & !(StnCheckDisabled + TARS > 1)) DeferCall(DoubleTap,&StationCheck1,ProfID); if (Script_Debug) Print_Value(7);")));	//StationCheck(ProfID,1);"))	);	//DX32+Hat for rudder trim	;added StationCheck in 0.60 and StnCheckDisabled+TARS in 2.43 to disable station check if stncheck disabled in multiplayer (or forced with 2)
+					MapKeyIO(&Joystick, H1L,	VR_MouseBtnLt,	CHAIN(DX30,D(ModDelay),	DXHATLEFT,	EXEC("if ((GraceFlag==4) & !(StnCheckDisabled + TARS > 1)) DeferCall(DoubleTap,&StationCheck2,ProfID); if (Script_Debug) Print_Value(7);")));	//StationCheck(ProfID,2);"))	);	
+					}
+//				MapKeyIO(&Joystick, H1R,	CHAIN(DX32,D(ModDelay),	DXHATRIGHT,	EXEC("if (GraceFlag==2) StationCheck(ProfID,3);")),	CHAIN(DX30,D(ModDelay),	DXHATRIGHT,	EXEC("if (GraceFlag==2) StationCheck(ProfID,1);")));	//DX32+Hat for rudder trim	;added StationCheck in 0.60
+//				MapKeyIO(&Joystick, H1L,	CHAIN(DX32,D(ModDelay),	DXHATLEFT,	EXEC("if (GraceFlag==4) StationCheck(ProfID,4);")),	CHAIN(DX30,D(ModDelay),	DXHATLEFT,	EXEC("if (GraceFlag==4) StationCheck(ProfID,2);")));	
+				//MapKeyIO(&Joystick, H1U,	CHAIN(DX32,D(ModDelay),	DXHATUP),	CHAIN(DX30,D(ModDelay),	DXHATUP));		// /I doubletap for VR Zoom Toggle
+				//MapKeyIO(&Joystick, H1D,	CHAIN(DX32,D(ModDelay),DXHATDOWN),	CHAIN(DX30,D(ModDelay),	DXHATDOWN));	// /I doubletap for Trim Center
+				MapKeyIO(&Joystick, H1U,		TEMPO(VR_MouseWheelUp,	CHAIN(DOWN+L_SHIFT,DOWN+R_ALT,D(ModDelay),REXEC(3, VRMouseWheelRate, "ActKey(KEYON+PULSE+VR_MouseWheelUpRx);")),	ModTempo),	CHAIN(DX30,D(ModDelay),	DXHATUP));		// /I doubletap for VR Zoom Toggle
+				MapKeyIO(&Joystick, H1D,		TEMPO(VR_MouseWheelDn,	CHAIN(DOWN+L_SHIFT,DOWN+R_ALT,D(ModDelay),REXEC(3, VRMouseWheelRate, "ActKey(KEYON+PULSE+VR_MouseWheelDnRx);")),	ModTempo),	CHAIN(DX30,D(ModDelay),	DXHATDOWN));	// /I doubletap for Trim Center
+
+
+				//MapKeyRIO(&Joystick,H1U, CHAIN(DOWN+DX31,D(DoubleTap),UP+DX31),	0);							//for VR Zoom (changed to DX31 because 32 already in use for mwheel)		
+				//MapKeyR (&Joystick, H1U, 0);
+				MapKeyRIO(&Joystick,H1U, CHAIN(UP+L_SHIFT,UP+R_ALT,EXEC("VRZoom_Init();DeferCall(ModDelay,&VRZoom_Set,1);DeferCall(DoubleTap,&VRZoom_Set,0);")),	0);		//for VR Zoom 	
+				MapKeyRIO(&Joystick,H1D, CHAIN(UP+L_SHIFT,UP+R_ALT,DOWN+DX31,D(DoubleTap+ModTempo),UP+DX31),	EXEC("Print_Value(3);"));							//for center trim		
+
+		}	
+	else	//Mouse as Default
+		{
+		printf("      Init Mouse Buttons for VR Users.\xa");
+			printf("         Hat1 (Mouse/Trim)...");	
+				if ((Helicopter > 0) & (!HeloHatTrim) & (CrewCount > 2))	//Multicrew helos that don't use hat trim
+					{
+					if (ProfID == 1008)	//stn 1 and 2 reversed
+						{
+						printf("Helo (Mi-8)...");
+						MapKeyIO(&Joystick, H1R,	TEMPO(	CHAIN(DXHATRIGHT,	EXEC("StationCheck(ProfID,2);")),
+															CHAIN(DXHATRIGHT,	EXEC("StationCheck(ProfID,3);")),	DefTempo),
+													VR_MouseBtnRt);	//added TEMPO to StationCheck in 2.30
+																		
+						MapKeyIO(&Joystick, H1L,	TEMPO(	CHAIN(DXHATLEFT,	EXEC("StationCheck(ProfID,1);")),
+															CHAIN(DXHATLEFT,	EXEC("StationCheck(ProfID,4);")),	DefTempo),
+													VR_MouseBtnLt);	//added TEMPO to StationCheck in 2.30
+						}	
+					else
+						{
+						printf("Helo...");
+						MapKeyIO(&Joystick, H1R,	TEMPO(	CHAIN(DXHATRIGHT,	EXEC("StationCheck(ProfID,1);")),
+															CHAIN(DXHATRIGHT,	EXEC("StationCheck(ProfID,3);")),	DefTempo),
+													VR_MouseBtnRt);	//added TEMPO to StationCheck in 2.30
+																		
+						MapKeyIO(&Joystick, H1L,	TEMPO(	CHAIN(DXHATLEFT,	EXEC("StationCheck(ProfID,2);")),
+															CHAIN(DXHATLEFT,	EXEC("StationCheck(ProfID,4);")),	DefTempo),
+													VR_MouseBtnLt);	//added TEMPO to StationCheck in 2.30
+						}	
+					}						
+				else
+					{
+					MapKeyIO(&Joystick, H1R,	CHAIN(DXHATRIGHT,	EXEC("if ((GraceFlag==2) & !(StnCheckDisabled + TARS > 1))  StationCheck(ProfID,1); if (Script_Debug) Print_Value(7);")),	VR_MouseBtnRt);	//DX32+Hat for rudder trim	;added StationCheck in 0.60
+					MapKeyIO(&Joystick, H1L,	CHAIN(DXHATLEFT,	EXEC("if ((GraceFlag==4) & !(StnCheckDisabled + TARS > 1))  StationCheck(ProfID,2); if (Script_Debug) Print_Value(7);")),	VR_MouseBtnLt);	
+					}			
+//				MapKeyIO(&Joystick, H1R,	CHAIN(DXHATRIGHT,	EXEC("if (GraceFlag==2) StationCheck(ProfID,3);")),	CHAIN(DXHATRIGHT,	EXEC("if (GraceFlag==2) StationCheck(ProfID,1);")));	//DX32+Hat for rudder trim	;added StationCheck in 0.60
+//				MapKeyIO(&Joystick, H1L,	CHAIN(DXHATLEFT,	EXEC("if (GraceFlag==4) StationCheck(ProfID,4);")),	CHAIN(DXHATLEFT,	EXEC("if (GraceFlag==4) StationCheck(ProfID,2);")));	
+				MapKeyIO(&Joystick, H1U,	DXHATUP,	TEMPO(VR_MouseWheelUp, 	CHAIN(DOWN+L_SHIFT,DOWN+R_ALT,D(ModDelay),REXEC(3, VRMouseWheelRate, "ActKey(KEYON+PULSE+VR_MouseWheelUpRx);")),	ModTempo)	);
+				MapKeyIO(&Joystick, H1D,	DXHATDOWN,	TEMPO(VR_MouseWheelDn,	CHAIN(DOWN+L_SHIFT,DOWN+R_ALT,D(ModDelay),REXEC(3, VRMouseWheelRate, "ActKey(KEYON+PULSE+VR_MouseWheelDnRx);")),	ModTempo)	);	
+				
+//				MapKeyRIO(&Joystick,H1U, CHAIN(DOWN+DX32,D(DoubleTap),UP+DX32),	0);							//for VR Zoom (changed to DX31 because 32 already in use for mwheel)	
+				MapKeyRIO(&Joystick,H1U, 0, CHAIN(UP+L_SHIFT,UP+R_ALT,EXEC("VRZoom_Init();DeferCall(ModDelay,&VRZoom_Set,1);DeferCall(DoubleTap,&VRZoom_Set,0);"))	);		//for VR Zoom 		
+				MapKeyRIO(&Joystick,H1D, CHAIN(DOWN+DX32,D(DoubleTap),UP+DX32),	CHAIN(UP+L_SHIFT,UP+R_ALT,	EXEC("Print_Value(2);"))	);							//for center trim		
+		}
+		
+	MapKeyR	(&Joystick, H1R,	EXEC("GraceFlag = 2; DeferCall(DoubleTap,&Grace_Flag,0);"));	//EXEC added in 1.40 for revamped position change
+	MapKeyR	(&Joystick, H1L,	EXEC("GraceFlag = 4; DeferCall(DoubleTap,&Grace_Flag,0);"));
+	}
+else	//Non-VR
+	{
+	if((tir == 1) & (!tirpaused))		//TrackIR in use
+		{
+		if(padlock > 0) //TrackIR with Padlock option enabled
+			{
+			if ((Helicopter > 0) & (!HeloHatTrim) & (CrewCount > 2))	//Multicrew helos that don't use hat trim
+				{	
+				printf("      Init Stn Sel with Padlock for TrackIR Users.\xa");
+				if (ProfID == 1008)	//stn 1 and 2 reversed
+					{
+						printf("         Hat1 (Mi-8 Stn Sel)...");		
+							MapKeyIO(&Joystick, H1R,		TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_missile_Threat);"), 	EXEC("StationCheck(ProfID,3);"),	ModTempo),	TEMPO(EXEC("StationCheck(ProfID,2);"),EXEC("StationCheck(ProfID,3);"),DefTempo)	);	//DX32+Hat for rudder trim ; added StationCheck in 0.60
+							MapKeyIO(&Joystick, H1L,		TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_terrain_view);"), 	EXEC("StationCheck(ProfID,4);"), 	ModTempo),	TEMPO(EXEC("StationCheck(ProfID,1);"),EXEC("StationCheck(ProfID,4);"),DefTempo)	);	//added StationCheck in 0.60
+							MapKeyIO(&Joystick, H1U,		TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+LockView);"), EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+UnlockView);"), 						ModTempo),	CHAIN(DX30,D(ModDelay),	DXHATUP));										//if short shift, Cycle Padlockview, long shift Unlock view 
+					}
+				else
+					{
+						printf("         Hat1 (Stn Sel)...");		
+							MapKeyIO(&Joystick, H1R,		TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_missile_Threat);"), 	EXEC("StationCheck(ProfID,3);"),	ModTempo),	TEMPO(EXEC("StationCheck(ProfID,1);"),EXEC("StationCheck(ProfID,3);"),DefTempo)	);	//DX32+Hat for rudder trim ; added StationCheck in 0.60
+							MapKeyIO(&Joystick, H1L,		TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_terrain_view);"), 	EXEC("StationCheck(ProfID,4);"), 	ModTempo),	TEMPO(EXEC("StationCheck(ProfID,2);"),EXEC("StationCheck(ProfID,4);"),DefTempo)	);	//added StationCheck in 0.60
+							MapKeyIO(&Joystick, H1U,		TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+LockView);"), EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+UnlockView);"), 						ModTempo),	CHAIN(DX30,D(ModDelay),	DXHATUP));										//if short shift, Cycle Padlockview, long shift Unlock view 
+					}
+				}				
+			else if (XYAxisTrim)	//added in 1.34
+				{
+				printf("      Init TARGET Trim with Padlock for TrackIR Users.\xa");
+					printf("         Hat1 (TARGET Trim)...");		
+						MapKeyIO(&Joystick, H1R,		EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_missile_Threat);"),	REXEC(2,XYAxisTrim_Rate,"TrimX( JoyXTrim);")	);	// 2 is rexec value for trim; positive trim value for right
+						MapKeyIO(&Joystick, H1L,		EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_terrain_view);"),		REXEC(2,XYAxisTrim_Rate,"TrimX(-JoyXTrim);")	);	// 2 is rexec value for trim; negative trim value for left
+						MapKeyIO(&Joystick, H1U,		TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+LockView);"), EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+UnlockView);"), 	ModTempo),
+														REXEC(2,XYAxisTrim_Rate,"TrimY(-JoyYTrim);")	);																					// 2 is rexec value for trim; negative trim value for down
+	
+						MapKeyRIO(&Joystick,H1L,		0,	EXEC("StopAutoRepeat(2);"));
+						MapKeyRIO(&Joystick,H1R,		0,	EXEC("StopAutoRepeat(2);"));
+						MapKeyRIO(&Joystick,H1U,		0,	EXEC("StopAutoRepeat(2);"));
+				}		
+			else
+				{	
+				printf("      Init Trim with Padlock for TrackIR Users.\xa");
+					printf("         Hat1 (Trim)...");		
+						MapKeyIO(&Joystick, H1R,		TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_missile_Threat);"), 	CHAIN(DX32,D(ModDelay),DXHATRIGHT,EXEC("StationCheck(ProfID,3);")),	ModTempo),	CHAIN(DX30,D(ModDelay),	DXHATRIGHT,	EXEC("if ((GraceFlag==2) & !(StnCheckDisabled + TARS > 1))  StationCheck(ProfID,1); if (Script_Debug) Print_Value(7);"))	);	//DX32+Hat for rudder trim ; added StationCheck in 0.60
+						MapKeyIO(&Joystick, H1L,		TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_terrain_view);"), 	CHAIN(DX32,D(ModDelay),DXHATLEFT, EXEC("StationCheck(ProfID,4);")), ModTempo),	CHAIN(DX30,D(ModDelay),	DXHATLEFT,	EXEC("if ((GraceFlag==4) & !(StnCheckDisabled + TARS > 1))  StationCheck(ProfID,2); if (Script_Debug) Print_Value(7);"))	);	//added StationCheck in 0.60
+						MapKeyIO(&Joystick, H1U,		TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+LockView);"), EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+UnlockView);"), 					ModTempo),	CHAIN(DX30,D(ModDelay),	DXHATUP));										//if short shift, Cycle Padlockview, long shift Unlock view 
+				}
+			}
+		else 			//TrackIR with Padlock option disabled
+			{
+			if ((Helicopter > 0) & (!HeloHatTrim) & (CrewCount > 2))	//Multicrew helos that don't use hat trim
+				{
+				printf("      Init Stn Sel for TrackIR Users.\xa");
+					printf("         Hat1 (Stn Sel)...");		
+						MapKeyIO(&Joystick, H1R,		EXEC("StationCheck(ProfID,3);"),	TEMPO(EXEC("StationCheck(ProfID,1);"),EXEC("StationCheck(ProfID,3);"),DefTempo)	);	//DX32+Hat for rudder trim	;added StationCheck in 0.60
+						MapKeyIO(&Joystick, H1L,		EXEC("StationCheck(ProfID,4);"),	TEMPO(EXEC("StationCheck(ProfID,2);"),EXEC("StationCheck(ProfID,4);"),DefTempo)	);	
+						MapKeyIO(&Joystick, H1U,		TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_missile_Threat);"), EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+UnlockView);"), ModTempo),
+														CHAIN(DX30,D(ModDelay),	DXHATUP));	//if short shift, Cycle Padlockview, long shift Unlock view 			
+				}						
+			else if (XYAxisTrim)	//added in 1.34
+				{
+				printf("      Init TARGET Trim for TrackIR Users.\xa");
+					printf("         Hat1 (TARGET Trim)...");		
+						MapKey	(&Joystick, H1R,		REXEC(2,XYAxisTrim_Rate,"TrimX( JoyXTrim);")	);	// 2 is rexec value for trim; positive trim value for right
+						MapKey	(&Joystick, H1L,		REXEC(2,XYAxisTrim_Rate,"TrimX(-JoyXTrim);")	);	// 2 is rexec value for trim; negative trim value for left
+						MapKey	(&Joystick, H1U,		REXEC(2,XYAxisTrim_Rate,"TrimY(-JoyYTrim);")	);	// 2 is rexec value for trim; negative trim value for down
+						
+						MapKeyR	(&Joystick,H1L,			EXEC("StopAutoRepeat(2);"));
+						MapKeyR	(&Joystick,H1R,			EXEC("StopAutoRepeat(2);"));
+						MapKeyR	(&Joystick,H1U,			EXEC("StopAutoRepeat(2);"));
+				}
+			else
+				{
+				printf("      Init Trim for TrackIR Users.\xa");
+					printf("         Hat1 (Trim)...");		
+						MapKeyIO(&Joystick, H1R,		CHAIN(DX32,D(ModDelay),	DXHATRIGHT,	EXEC("if ((GraceFlag==2) & !(StnCheckDisabled + TARS > 1))  StationCheck(ProfID,3);")),	CHAIN(DX30,D(ModDelay),	DXHATRIGHT,	EXEC("if ((GraceFlag==2) & !(StnCheckDisabled + TARS > 1))  StationCheck(ProfID,1); if (Script_Debug) Print_Value(7);")));	//DX32+Hat for rudder trim	;added StationCheck in 0.60
+						MapKeyIO(&Joystick, H1L,		CHAIN(DX32,D(ModDelay),	DXHATLEFT,	EXEC("if ((GraceFlag==4) & !(StnCheckDisabled + TARS > 1))  StationCheck(ProfID,4);")),	CHAIN(DX30,D(ModDelay),	DXHATLEFT,	EXEC("if ((GraceFlag==4) & !(StnCheckDisabled + TARS > 1))  StationCheck(ProfID,2); if (Script_Debug) Print_Value(7);")));	
+						MapKeyIO(&Joystick, H1U,		TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_missile_Threat);"), EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+UnlockView);"), ModTempo),
+														CHAIN(DX30,D(ModDelay),	DXHATUP));	//if short shift, Cycle Padlockview, long shift Unlock view 				
+	
+				}										
+			}
+		if (XYAxisTrim) //both TrackIR options; /R for RLU done in individual options
+			{
+			MapKeyIO(&Joystick,	H1D,	TEMPO(EXEC("TrimXYResetCheck(GraceFlag);"),EXEC("Pause_TrackIR(1,1,1);"),DefTempo),	REXEC(2,XYAxisTrim_Rate,"TrimY( JoyYTrim);")	);	// 2 is rexec value for trim; positive trim value for up; graceflag allows for double tap to neutralize trim (forced to 3 in 1.40 for H1D only)
+			}
+		else 			
+			{
+			MapKeyIO(&Joystick, H1D,	TEMPO(CHAIN(DXHATDOWN,EXEC("if (Script_Debug) Print_Value(0);")),EXEC("Pause_TrackIR(1,1,1);Print_Value(1);"),DefTempo),	CHAIN(DX30,D(ModDelay),	DXHATDOWN));	// /I Long for TIR Pause Toggle, also prevents toggle if double tapping for trim reset
+	
+			MapKeyR	(&Joystick, H1R,	EXEC("GraceFlag = 2; DeferCall(DoubleTap,&Grace_Flag,0);"));
+			MapKeyR	(&Joystick, H1L,	EXEC("GraceFlag = 4; DeferCall(DoubleTap,&Grace_Flag,0);"));
+			MapKeyR	(&Joystick, H1U,	0);				
+			}
+		}
+	else			//TrackIR not in use (or TrackIR Paused as of 1.40)
+		{
+		if (tirpaused)	printf("TrackIR Paused (Init POV).\xa");
+		else			printf("      Init POV for non-TrackIR Users.\xa");
+			if (trim < 0)	//Mouse		
+			{
+			if (trim < -1)	//scrollwheel
+				{			
+				printf("         Hat1 (Scrollwheel)...");		
+	
+					MapKey	(&Joystick, H1U, 	AXIS(MOUSE_Z_AXIS,   Mouse_Zincr_H1,	Mouse_Zdelay_H1));
+					MapKey	(&Joystick, H1D, 	AXIS(MOUSE_Z_AXIS,  -Mouse_Zincr_H1,	Mouse_Zdelay_H1));
+				
+					MapKey	(&Joystick, H1L, 	MOUSE_CENTER);
+					MapKey	(&Joystick, H1R, 	MOUSE_CENTER);
+				}			
+			else			
+				{			
+				printf("         Hat1 (Mouse)...");		
+				if (Mouse_Y_Rev > 0)
+					{
+					MapKeyIO(&Joystick, H1D,	AXIS(MOUSE_Z_AXIS,  -Mouse_Zincr_H1,	Mouse_Zdelay_H1),
+												AXIS(MOUSE_Y_AXIS,	-Mouse_Incr_H1, 	Mouse_Delay_H1));
+					MapKeyIO(&Joystick, H1U, 	AXIS(MOUSE_Z_AXIS,   Mouse_Zincr_H1,	Mouse_Zdelay_H1),
+												AXIS(MOUSE_Y_AXIS,	 Mouse_Incr_H1, 	Mouse_Delay_H1));
+					}
+				else
+					{
+					MapKeyIO(&Joystick, H1U, 	AXIS(MOUSE_Z_AXIS,   Mouse_Zincr_H1,	Mouse_Zdelay_H1),
+												AXIS(MOUSE_Y_AXIS,	-Mouse_Incr_H1, 	Mouse_Delay_H1));
+					MapKeyIO(&Joystick, H1D, 	AXIS(MOUSE_Z_AXIS,  -Mouse_Zincr_H1,	Mouse_Zdelay_H1),
+												AXIS(MOUSE_Y_AXIS,	 Mouse_Incr_H1, 	Mouse_Delay_H1));
+					}					
+					MapKeyIO(&Joystick, H1L, 	MOUSE_CENTER,	AXIS(MOUSE_X_AXIS,	-Mouse_Incr_H1, 	Mouse_Delay_H1));
+					MapKeyIO(&Joystick, H1R, 	MOUSE_CENTER,	AXIS(MOUSE_X_AXIS,	 Mouse_Incr_H1, 	Mouse_Delay_H1));
+				}
+			MapKeyR	(&Joystick, H1U, 0);
+			MapKeyR	(&Joystick, H1R, 0);
+			MapKeyR	(&Joystick, H1L, 0);		
+			}			
+			else if (XYAxisTrim > 0)
+			{
+				printf("         Hat1 (POV+TARGET Trim)...");		
+					MapKeyIO(&Joystick, H1U,	TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+LockView);"),									REXEC(2,XYAxisTrim_Rate,"TrimY(-JoyYTrim);"),		ModTempo),	DXHATUP);		// 2 is rexec value for trim; negative trim value for down
+					MapKeyIO(&Joystick, H1D,	TEMPO(EXEC("if (GraceFlag == 3) Pause_TrackIR(0,1,1); TrimXYResetCheck(GraceFlag,-1);"),				REXEC(2,XYAxisTrim_Rate,"TrimY( JoyYTrim);"), 		ModTempo),	DXHATDOWN);		// 2 is rexec value for trim; positive trim value for up; -1 in TrimXYResetCheck forces PULSE+UnlockView if no reset
+					MapKeyIO(&Joystick, H1R,	TEMPO(EXEC("if (GraceFlag == 1) if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_missile_Threat);"), 	REXEC(2,XYAxisTrim_Rate,"TrimX( JoyXTrim);"),		ModTempo),	DXHATRIGHT);	// 2 is rexec value for trim; positive trim value for right	
+					MapKeyIO(&Joystick, H1L,	TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_terrain_view);"), 						REXEC(2,XYAxisTrim_Rate,"TrimX(-JoyXTrim);"),		ModTempo),	DXHATLEFT);		// 2 is rexec value for trim; negative trim value for left
+	
+					MapKeyRIO(&Joystick,H1U, 	EXEC("StopAutoRepeat(2);"), CHAIN(DOWN+DX32,D(DoubleTap),UP+DX32));					//Will allow view center if H1U A(noshift) is double-tapped.  Map center view to DX32+DXHATUP.
+					MapKeyRIO(&Joystick,H1L,	EXEC("StopAutoRepeat(2);"),	0);
+					MapKeyRIO(&Joystick,H1R,	EXEC("StopAutoRepeat(2);"),	0);		
+			}		
+			else
+			{
+				printf("         Hat1 (POV)...");		
+					MapKeyIO(&Joystick, H1U,	TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+LockView);"), 															DXHATUP,	ModTempo),	DXHATUP);		//modified to remove snapview override in 0.60
+					MapKeyIO(&Joystick, H1D,	TEMPO(EXEC("if (GraceFlag == 3) Pause_TrackIR(0,1,1); if (SnapViewState == 0) ActKey(KEYON+PULSE+UnlockView);"), 				DXHATDOWN, 	ModTempo),	DXHATDOWN);		//modified to remove snapview override in 0.60
+					
+				if (prof == 1008)	//stn 1 and 2 reversed for Mi-8
+						{				
+						MapKeyIO(&Joystick, H1R,	TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_missile_Threat);"), 	DXHATRIGHT,	ModTempo),	CHAIN(DXHATRIGHT,EXEC("if ((GraceFlag==2) & !(StnCheckDisabled + TARS > 1))  StationCheck(ProfID,2); if (Script_Debug) Print_Value(7);"))	);	//modified to remove snapview override and added StationCheck in 0.60, StationCheck changed to unshifted notempo in 1.40
+						MapKeyIO(&Joystick, H1L,	TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_terrain_view);"), 	DXHATLEFT,	ModTempo),	CHAIN(DXHATLEFT, EXEC("if ((GraceFlag==4) & !(StnCheckDisabled + TARS > 1))  StationCheck(ProfID,1); if (Script_Debug) Print_Value(7);"))	);	//modified to remove snapview override and added StationCheck in 0.60, StationCheck changed to unshifted notempo in 1.40
+						}
+				else
+						{				
+						MapKeyIO(&Joystick, H1R,	TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_missile_Threat);"), 	DXHATRIGHT,	ModTempo),	CHAIN(DXHATRIGHT,EXEC("if ((GraceFlag==2) & !(StnCheckDisabled + TARS > 1))  StationCheck(ProfID,1); if (Script_Debug) Print_Value(7);"))	);	//modified to remove snapview override and added StationCheck in 0.60, StationCheck changed to unshifted notempo in 1.40
+						MapKeyIO(&Joystick, H1L,	TEMPO(EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_terrain_view);"), 	DXHATLEFT,	ModTempo),	CHAIN(DXHATLEFT, EXEC("if ((GraceFlag==4) & !(StnCheckDisabled + TARS > 1))  StationCheck(ProfID,2); if (Script_Debug) Print_Value(7);"))	);	//modified to remove snapview override and added StationCheck in 0.60, StationCheck changed to unshifted notempo in 1.40
+						}	
+						
+					MapKeyRIO(&Joystick,H1U,	0,	CHAIN(DOWN+DX32,D(DoubleTap),UP+DX32));		//Will allow view center if H1U A(noshift) is double-tapped.  Map center view to DX32+DXHATUP.
+					MapKeyRIO(&Joystick,H1R,	0,	EXEC("GraceFlag = 2; DeferCall(DoubleTap,&Grace_Flag,0);"));
+					MapKeyRIO(&Joystick,H1L,	0,	EXEC("GraceFlag = 4; DeferCall(DoubleTap,&Grace_Flag,0);"));
+			}
+		}
+		
+		//H1D /R	
+	//	if(	(Helicopter) & (prof!=2)	)	//removes double tap trim reset for TCPTM (except for Ka-50 which centers Shkval)
+	//			MapKeyR	(&Joystick,  H1D,	0);				//added in 1.27 to remove from helos (for TCPTM and Mi-8 searchlight function)
+	//	else
+	if ((tir) & (tirpaused))
+			MapKeyRIO(&Joystick, H1D,	EXEC("GraceFlag = 3; DeferCall(DoubleTap,&Grace_Flag,0);"),0);
+	else if (tir) MapKeyRIO(&Joystick,	H1D,	CHAIN(DOWN+DX32,D(DoubleTap),UP+DX32,EXEC("GraceFlag = 3; DeferCall(DoubleTap,&Grace_Flag,0);")),0);				//Will allow trim reset if Shift+H1D is double-tapped.
+	else if(	(Helicopter) & (prof != 1050)	)	//removes double tap trim reset for TCPTM (except for Ka-50 which centers Shkval)
+			MapKeyR	(&Joystick,  H1D,	0);				//added in 1.27 to remove from helos (for TCPTM and Mi-8 searchlight function)
+	else if (trim != 0)
+				{
+				if (trim < 0)	MapKeyR	(&Joystick,  H1D,	0);	//mouse
+				else if (tir)	MapKeyRIO(&Joystick	,H1D,	EXEC("GraceFlag = 3; DeferCall(DoubleTap,&Grace_Flag,0);"), EXEC("StopAutoRepeat(2);")	);	//cycles grace flag for DoubleTap timeframe to allow TARGET trim reset if S3+H1D double-tapped (graceflag = 3 in 1.40). no shifted StopAutoRepeat() for TrackIR
+				else			MapKeyRIO(&Joystick	,H1D,	EXEC("StopAutoRepeat(2);GraceFlag = 3; DeferCall(DoubleTap,&Grace_Flag,0);"),0	);	//cycles grace flag for DoubleTap timeframe to allow TARGET trim reset if S3+H1D double-tapped
+				}	
+	else	MapKeyRIO(&Joystick, H1D,	CHAIN(DOWN+DX32,D(DoubleTap),UP+DX32),EXEC("Print_Value(1);")	);				//Will allow trim reset if Shift+H1D is double-tapped.			
+	printf("Done!\xa");
+	if (Script_Debug) printf(" tir = %i \xa tirpaused = %i \xa",tir,tirpaused);	//for test purposes
+	}
+}	
+
+
+
+int Map_Cougar_ToeBrakes(int m)	//m determines whether axes are mapped, 2+ is whether DX31/32 modifier is added, 3 also does digital mapping (FC3), negative for digital only (added in 1.40)
+{
+//if (CougarToeBrakes)	//needs to be here to prevent calling HCougar with WH only
+//	{
+//	if (m != 0)
+//		{
+//		MapAxis(&HCougar, JOYX, DX_XROT_AXIS, AXIS_REVERSED, MAP_ABSOLUTE);
+//		MapAxis(&HCougar, JOYY, DX_YROT_AXIS, AXIS_REVERSED, MAP_ABSOLUTE);
+//		if (m == 2)	//analog with modifier
+//			{
+//			if (WarthogThrottle > 0)
+//				{
+//				KeyAxis(&HCougar, JOYX, 0,AXMAP2(LIST(0,10,100),	CHAIN(EXEC("LockAxis(&HCougar, JOYX, 1);"),D(ModDelay),UP+DX31,EXEC("TrimDXAxis(DX_XROT_AXIS, SET(0));LockAxis(&Throttle, SCX, 0);")),
+//																	CHAIN(DOWN+DX31,D(ModDelay),EXEC("LockAxis(&HCougar, JOYX, 0);LockAxis(&Throttle, SCX, 1);"))	)	);
+//				KeyAxis(&HCougar, JOYY, 0,AXMAP2(LIST(0,10,100),	CHAIN(EXEC("LockAxis(&HCougar, JOYY, 1);"),D(ModDelay),UP+DX32,EXEC("TrimDXAxis(DX_YROT_AXIS, SET(0));LockAxis(&Throttle, SCY, 0);")),
+//																	CHAIN(DOWN+DX32,D(ModDelay),EXEC("LockAxis(&HCougar, JOYY, 0);LockAxis(&Throttle, SCY, 1);"))	)	);
+//				}
+//			else
+//				{
+//				KeyAxis(&HCougar, JOYX, 0,AXMAP2(LIST(0,10,100),	CHAIN(EXEC("LockAxis(&HCougar, JOYX, 1);"),D(ModDelay),UP+DX31,EXEC("TrimDXAxis(DX_XROT_AXIS, SET(0));LockAxis(&HCougar, IN_POSITION_AXIS_SLIDER2, 0);")),	
+//																	CHAIN(DOWN+DX31,D(ModDelay),EXEC("LockAxis(&HCougar, JOYX, 0);LockAxis(&HCougar, IN_POSITION_AXIS_SLIDER2, 1);"))	)	);
+//				KeyAxis(&HCougar, JOYY, 0,AXMAP2(LIST(0,10,100),	CHAIN(EXEC("LockAxis(&HCougar, JOYY, 1);"),D(ModDelay),UP+DX32,EXEC("TrimDXAxis(DX_YROT_AXIS, SET(0));LockAxis(&HCougar, RDR_Y, 0);")),	
+//																	CHAIN(DOWN+DX32,D(ModDelay),EXEC("LockAxis(&HCougar, JOYY, 0);LockAxis(&HCougar, RDR_Y, 1);"))	)	);
+//				}
+//			}
+//		else if (m > 2)	//does both digital and analog (higher digital threshold).  for FC3.
+//			{
+//			if (WarthogThrottle > 0)
+//				{
+//				KeyAxis(&HCougar, JOYX, 0,AXMAP2(LIST(0,10,90,100), CHAIN(EXEC("LockAxis(&HCougar, JOYX, 1);"),D(ModDelay),UP+DX31,EXEC("TrimDXAxis(DX_XROT_AXIS, SET(0));LockAxis(&Throttle, SCX, 0);")),
+//																	CHAIN(DOWN+DX31,EXEC("Cougar_ToeBrake_L = 0; Cougar_ToeBrakeDXCheck(0,Cougar_ToeBrake_R);"),D(ModDelay),EXEC("LockAxis(&HCougar, JOYX, 0);LockAxis(&Throttle, SCX, 1);")),
+//																	EXEC("Cougar_ToeBrake_L = 1; Cougar_ToeBrakeDXCheck(1,Cougar_ToeBrake_R);")	)	);
+//				KeyAxis(&HCougar, JOYY, 0,AXMAP2(LIST(0,10,90,100),	CHAIN(EXEC("LockAxis(&HCougar, JOYY, 1);"),D(ModDelay),UP+DX32,EXEC("TrimDXAxis(DX_YROT_AXIS, SET(0));LockAxis(&Throttle, SCY, 0);")),
+//																	CHAIN(DOWN+DX32,EXEC("Cougar_ToeBrake_R = 0; Cougar_ToeBrakeDXCheck(Cougar_ToeBrake_L,0);"),D(ModDelay),EXEC("LockAxis(&HCougar, JOYY, 0);LockAxis(&Throttle, SCY, 1);")),
+//																	EXEC("Cougar_ToeBrake_R = 1; Cougar_ToeBrakeDXCheck(Cougar_ToeBrake_L,1);")	)	);
+//				}
+//			else
+//				{
+//				KeyAxis(&HCougar, JOYX, 0,AXMAP2(LIST(0,10,90,100),	CHAIN(EXEC("LockAxis(&HCougar, JOYX, 1);"),D(ModDelay),UP+DX31,EXEC("TrimDXAxis(DX_XROT_AXIS, SET(0));LockAxis(&HCougar, IN_POSITION_AXIS_SLIDER2, 0);")),
+//																	CHAIN(DOWN+DX31,EXEC("Cougar_ToeBrake_L = 0; Cougar_ToeBrakeDXCheck(0,Cougar_ToeBrake_R);"),D(ModDelay),EXEC("LockAxis(&HCougar, JOYX, 0);LockAxis(&HCougar, IN_POSITION_AXIS_SLIDER2, 1);")),
+//																	EXEC("Cougar_ToeBrake_L = 1; Cougar_ToeBrakeDXCheck(1,Cougar_ToeBrake_R);")	)	);
+//				KeyAxis(&HCougar, JOYY, 0,AXMAP2(LIST(0,10,90,100),	CHAIN(EXEC("LockAxis(&HCougar, JOYY, 1);"),D(ModDelay),UP+DX32,EXEC("TrimDXAxis(DX_YROT_AXIS, SET(0));LockAxis(&HCougar, RDR_Y, 0);")),
+//																	CHAIN(DOWN+DX32,EXEC("Cougar_ToeBrake_R = 0; Cougar_ToeBrakeDXCheck(Cougar_ToeBrake_L,0);"),D(ModDelay),EXEC("LockAxis(&HCougar, JOYY, 0);LockAxis(&HCougar, RDR_Y, 1);")),
+//																	EXEC("Cougar_ToeBrake_R = 1; Cougar_ToeBrakeDXCheck(Cougar_ToeBrake_L,1);")	)	);
+//				}
+//																		
+//			}	
+//		else if (m < 0)	//does digital only
+//			{
+//			KeyAxis(&HCougar, JOYX, 0,AXMAP2(LIST(0,50,100),	CHAIN(  UP+DX31,EXEC("Cougar_ToeBrake_L = 0; Cougar_ToeBrakeDXCheck(0,Cougar_ToeBrake_R);")),
+//																CHAIN(DOWN+DX31,EXEC("Cougar_ToeBrake_L = 1; Cougar_ToeBrakeDXCheck(1,Cougar_ToeBrake_R);"))	)	);
+//			KeyAxis(&HCougar, JOYY, 0,AXMAP2(LIST(0,50,100),	CHAIN(  UP+DX32,EXEC("Cougar_ToeBrake_R = 0; Cougar_ToeBrakeDXCheck(Cougar_ToeBrake_L,0);")),
+//																CHAIN(DOWN+DX32,EXEC("Cougar_ToeBrake_R = 1; Cougar_ToeBrakeDXCheck(Cougar_ToeBrake_L,1);"))	)	);
+//			}	
+//		else if (WH_Use_TQS > 0) Digital_Microstick_Init(Digital_TDC, ProfID);
+//		else	//m = 1 for standard analog axes
+//			{
+//			KeyAxis(&HCougar, JOYX, 0, AXMAP2 (0));
+//			KeyAxis(&HCougar, JOYY, 0, AXMAP2 (0));
+//			}			
+//		}
+	
+//	else	//kills axes
+if (WarthogThrottle > 1)
+		{
+		MapAxis(&HCougar, JOYX, 0, AXIS_NORMAL, MAP_ABSOLUTE);
+		MapAxis(&HCougar, JOYY, 0, AXIS_NORMAL, MAP_ABSOLUTE);	
+		if (WH_Use_TQS > 0) Digital_Microstick_Init(Digital_TDC, ProfID);
+		else
+			{
+			KeyAxis(&HCougar, JOYX, 0, AXMAP2 (0));
+			KeyAxis(&HCougar, JOYY, 0, AXMAP2 (0));		
+			}
+		}
+//	}
+}
+
+int	Cougar_ToeBrakeDXCheck(int ltoe, int rtoe, int gear=1)
+{
+if ((gear > 0) & (ltoe+rtoe > 0)) ActKey(KEYON+DX29);	//if ((gear > 0) & (ltoe*rtoe)) ActKey(KEYON+CHAIN(DX31,DX32));
+else ActKey(DX29);	//ActKey(CHAIN(DX31,DX32));
+if (Script_Debug) printf("Cougar Toe Brake Check:\xa   Left Toe  = %i\xa   Right Toe = %i\xa   Gear State = %i\xa   Brake State = %i\xa",ltoe,rtoe,gear,ltoe*rtoe*gear);	//for test purposes
+}
+
+int LockTDC(int lock)	//added to force lock (or more likely unlock) of TDC axes (SC/microstick).
+{
+if (WarthogThrottle > 0)
+	{
+	LockAxis(&Throttle, SCX, lock);
+	LockAxis(&Throttle, SCY, lock);
+	}
+else
+	{
+	LockAxis(&HCougar, IN_POSITION_AXIS_SLIDER2, lock);
+	LockAxis(&HCougar, RDR_Y, lock);
+	}
+}
+
+//===================================
+//		Aircraft Swap Routine
+//===================================
+
+int MFD_Init(int prof = 0)		//made separate subroutine in 0.33, added prof argument in 0.36 to allow custom MFD settings.
+{
+int rosb20i;
+//int rosb20ti;
+int rosb20o;
+
+//LOSB1 for NS430
+if ((NS430_Enabled) & (MFD_Count < 3))
+		LOSB01I		=	TEMPO(NS430_Toggle,						EXEC("DCS_AcftSel();"),		SwapTempo);	//added in 2.21 for NS430
+else if (Scratchpad_Enabled)
+		LOSB01I		=	TEMPO(Scratchpad_Hotkey,				EXEC("DCS_AcftSel();"),		SwapTempo);	//added in 2.28 for DCS Scratchpad plugin
+else 	LOSB01I		=	TEMPO(CHAIN(DX31,D(ModDelay),DX1),		EXEC("DCS_AcftSel();"),		SwapTempo);
+
+if (Script_Debug) printf("   Enabling Aircraft Modules...");
+
+//Enables Aircraft Swap
+		if 		(	(prof == 2510) | (prof == 1050)	)	//A-10C and BS2 dont use NS430
+							MapKeyIO(&LMFD, OSB01,		TEMPO(CHAIN(DX31,D(ModDelay),DX1),		EXEC("DCS_AcftSel();"),		SwapTempo),					//No unshifted TEMPO for BS2 or A10C or AJS-37
+														CHAIN(DX31,D(ModDelay),DX1)	);		
+		else if (prof == 2537)	//No TEMPO for LOSB1
+							MapKeyIO(&LMFD, OSB01,		LOSB01I,	CHAIN(DX31,D(ModDelay),DX1)	);
+		
+		else if (prof == 2021)	//MiG-21
+			{
+			if (	((NS430_Enabled) & (MFD_Count < 3))	|	(Scratchpad_Enabled)	)		
+							MapKeyIO(&LMFD, OSB01,		LOSB01I,	EXEC("MiG21_WepsMM_Cycle(2);")	);	
+			else			MapKeyIO(&LMFD, OSB01,		TEMPO(0,	EXEC("DCS_AcftSel();"),		SwapTempo),					//Use only for array cycle in MiG-21
+														EXEC("MiG21_WepsMM_Cycle(2);")	);
+			}			
+		else if ((prof == 3009) | (prof == 3090))	//add other warbirds or acft where Master Arm lights LLED1 (not Fw190A8)
+			{
+			if (	((NS430_Enabled) & (MFD_Count < 3))	|	(Scratchpad_Enabled)	)
+							MapKeyIO(&LMFD, OSB01,		LOSB01I,
+														TEMPO(CHAIN(DX_LOSB01, 		EXEC("if (AirBrkFlash > -1) Lights_LLED1(0);")),	CHAIN(DX30,DX_LOSB01,  EXEC("if (AirBrkFlash > -1) Lights_LLED1(1);")), DefTempo)	);	//for Bf109 and Fw190 Master Arm
+			else			MapKeyIO(&LMFD, OSB01,		TEMPO(CHAIN(DX_LOSB01, 		EXEC("if (AirBrkFlash > -1) Lights_LLED1(1);")),	EXEC("DCS_AcftSel();"),		SwapTempo),
+														TEMPO(CHAIN(DX_LOSB01, 		EXEC("if (AirBrkFlash > -1) Lights_LLED1(0);")),	CHAIN(DX30,DX_LOSB01,  EXEC("if (AirBrkFlash > -1) Lights_LLED1(1);")), DefTempo)	);	//for Bf109 and Fw190 Master Arm
+			}
+
+		else if (	(prof == 2039)|(prof == 2040)	)	//L-39
+							MapKeyIO(&LMFD, OSB01,		LOSB01I,
+														TEMPO(EXEC("L39_Cpt_Lts_Cycle(-1);"),	L39_Cpt_Lts_Off, DefTempo)	);	//L-39 uses unshifted TEMPO Long to secure cockpit lighting
+		else if (prof == 2019)		//MiG-19 reassigns NS430/Scratchpad
+							MapKeyIO(&LMFD, OSB01,		TEMPO(MiG21_ButtonCap_Close,			EXEC("DCS_AcftSel();"),		SwapTempo),
+														TEMPO(CHAIN(DX31,D(ModDelay),DX1),		CHAIN(DX30,DX31,D(ModDelay),DX1), DefTempo)	);	//normally a TEMPO for NVG use			
+		else if ((prof == 2508))	//Harrier  uses LOSB1 for OSB/UFC function
+							MapKeyIO(&LMFD, OSB01,		TEMPO(AV8_UFC_TOO,		EXEC("DCS_AcftSel();"),		SwapTempo),
+														TEMPO(CHAIN(DX31,D(ModDelay),DX1),		AV8_UFC_TMR, DefTempo)	);
+		else if ((prof == 2514))	//Tomcat  uses LOSB1 for ACM function (tomcat currently doesn't use NS430, but will put on RMFD when avail)
+							MapKeyIO(&LMFD, OSB01,		TEMPO(NVG_Toggle,		EXEC("DCS_AcftSel();"),		SwapTempo),
+														TEMPO(CHAIN(DX31,D(ModDelay),DX1),		CHAIN(DX30,DX31,D(ModDelay),DX1), DefTempo)	);
+		else if ((prof == 2518) | (prof == 2615))	//Hornet & F-15E  uses LOSB1 for OSB/UFC function (hornet doesn't use NS430)
+				{
+				if (	(	(MFD_Count > 3) | ((MFD_Count > 2) & (UFC_MFD1_Suppress_F15E > 0))	)	&	(prof == 2615)	)	//Force TEMPO Off for UFC
+					{
+					if (	(MFD_Count > 3) | ((MFD_Count > 2) & (UFC_MFD1_Suppress_F15E > 1))	)	//suppress extreme, perhaps functions later
+							MapKeyIO(&LMFD, OSB01,		TEMPO(NVG_Toggle,		EXEC("DCS_AcftSel();"),		SwapTempo),
+														CHAIN(DX31,D(ModDelay),DX1));									//suppress UFC, keep nvg.  No /O tempo
+					else	MapKeyIO(&LMFD, OSB01,		TEMPO(AV8_UFC_TMR,		EXEC("DCS_AcftSel();"),		SwapTempo),
+														CHAIN(DX31,D(ModDelay),DX1));									//shifted UFC.  no /O tempo, move nvg to LOSB03
+					}		
+				else		MapKeyIO(&LMFD, OSB01,		TEMPO(NVG_Toggle,		EXEC("DCS_AcftSel();"),		SwapTempo),
+														TEMPO(CHAIN(DX31,D(ModDelay),DX1),	AV8_UFC_TMR, 	SwTempo));	//default for F/A-18 and F-15E
+				}
+//		else if ( ((prof == 1008) | (prof == 1501))	& (	((NS430_Enabled) & (MFD_Count < 3))	|	(Scratchpad_Enabled)	)	)	//Mi8 or Huey uses /I for secondary function and TEMPO Long for NS430/Scratchpad
+//			{
+//			if ((NS430_Enabled) & (MFD_Count < 3))		
+//							MapKeyIO(&LMFD, OSB01,		TEMPO(CHAIN(DX31,D(ModDelay),DX1),		EXEC("DCS_AcftSel();"),		SwapTempo),
+//														TEMPO(CHAIN(DX31,D(ModDelay),DX1),		NS430_Toggle,				DefTempo)	);	
+//			else			MapKeyIO(&LMFD, OSB01,		TEMPO(CHAIN(DX31,D(ModDelay),DX1),		EXEC("DCS_AcftSel();"),		SwapTempo),
+//														TEMPO(CHAIN(DX31,D(ModDelay),DX1),		PULSE+Scratchpad_Hotkey,	DefTempo)	);	
+//			}
+							
+		else if ((prof == 2551))	//P-51 remaps NS430 because LOSB1 is a covered switch
+							MapKeyIO(&LMFD, OSB01,		TEMPO(DX_LOSB01,		EXEC("DCS_AcftSel();"),	SwapTempo),
+														TEMPO(DX_LOSB01,		CHAIN(DX30,DX_LOSB01), 	DefTempo)	);	//normally a TEMPO for NVG use											
+		else if (prof == 999)		//CA
+			{
+			if (Scratchpad_Enabled)
+							MapKeyIO(&LMFD, OSB01,		TEMPO(Scratchpad_Hotkey,				EXEC("DCS_AcftSel();"),		SwapTempo),
+														TEMPO(USB_F1,							JumpInAcft, DefTempo)	);	//shift for scratchpad, long for jump in vehicle, short for F1	
+			else			MapKeyIO(&LMFD, OSB01,		TEMPO(JumpInAcft,						EXEC("DCS_AcftSel();"),		SwapTempo),
+														TEMPO(USB_F1,							JumpInAcft, DefTempo)	);	//long/shift for jump in vehicle, short for F1	
+			}
+		else if (prof == 998)		//AWACS
+			{
+			if (Scratchpad_Enabled)
+//							MapKeyIO(&LMFD, OSB01,		TEMPO(Scratchpad_Hotkey,				EXEC("DCS_AcftSel();"),		SwapTempo),
+//														TEMPO(EXEC("AWACS_Cycle_Rdo(1,1);"),	USB_F10,					DefTempo)	);
+							MapKeyIOUMD(&LMFD, OSB01,	0,0,
+														TEMPO(CHAIN(UP+USB_RIGHTALT,D(ModDelay),Scratchpad_Hotkey),			EXEC("DCS_AcftSel();"),		SwapTempo),
+														TEMPO(EXEC("AWACS_Cycle_Rdo(1,1);"),								MapView,					DefTempo),
+														0,TEMPO(CHAIN(UP+USB_RIGHTALT,D(ModDelay),Scratchpad_Hotkey),		EXEC("DCS_AcftSel();"),		SwapTempo));
+
+			else			
+//							MapKeyIO(&LMFD, OSB01,		TEMPO(USB_F10,							EXEC("DCS_AcftSel();"),		SwapTempo),
+//														TEMPO(EXEC("AWACS_Cycle_Rdo(1,1);"),	USB_F10, 					DefTempo)	);
+							MapKeyIOUMD(&LMFD, OSB01,	0,0,
+														TEMPO(CHAIN(UP+USB_RIGHTALT,D(ModDelay),MapView),					EXEC("DCS_AcftSel();"),		SwapTempo),
+														TEMPO(EXEC("AWACS_Cycle_Rdo(1,1);"),								MapView, 					DefTempo),
+														0,TEMPO(CHAIN(UP+USB_RIGHTALT,D(ModDelay),MapView),					EXEC("DCS_AcftSel();"),		SwapTempo)	);							
+														
+			
+			
+			}		
+		else if ((prof == 2501) | (prof == 2601))
+							MapKeyIO(&LMFD, OSB01,		LOSB01I,
+														TEMPO(	CHAIN(DX_LOSB01,EXEC("C101_MA_Set(0);")),
+																CHAIN(DX30,DX_LOSB01,EXEC("C101_MA_Set(1);")), DefTempo)	);	//normally a TEMPO for NVG use
+														
+		else if (prof == 2117)		//JF-17 or anything that remaps OSB01 to KB_LOSB01
+							MapKeyIO(&LMFD, OSB01,		LOSB01I,
+														TEMPO(KB_LOSB01,		CHAIN(DX30,D(ModDelay),KB_LOSB01),	DefTempo)	);	//normally a TEMPO for NVG use, OAP for JF17
+		else				MapKeyIO(&LMFD, OSB01,		LOSB01I,
+														TEMPO(DX_LOSB01,		CHAIN(DX30,DX_LOSB01),	DefTempo)	);	//normally a TEMPO for NVG use
+	
+	
+
+//LMFD 20 global for Kneeboard Fix/Long Toggle/Mark Shortcut
+if 		(prof == 2510)	MapKeyIO(&LMFD,	OSB20,	TEMPO(CHAIN(EXEC("if (GraceFlag == 1) PlayWavSel(ProfID,0);"),DX_LOSB20), KB_Toggle, DefTempo),	DX_LOSB20	);
+//else if (prof == 2508)	MapKeyIO(&LMFD,	OSB20,	TEMPO(		EXEC("if (GraceFlag == 1) PlayWavSel(ProfID,0); else ActKey(KEYON+PULSE+KB_Posit);"),	KB_Shortcut_Mark, DefTempo),	TEMPO(CHAIN(DX31,D(ModDelay),DX20), CHAIN(DX30,DX31,D(ModDelay),DX20), DefTempo)	); //no /i chain since XOR between WAV and KB Mark
+else if ((prof == 2508) | (prof == 2514) | (prof == 2518) | (prof == 2516) | (prof == 2117) | (prof == 1564))	//added Apache in 2.64
+						MapKeyIO(&LMFD,	OSB20,	TEMPO(		EXEC("if (GraceFlag == 1) PlayWavSel(ProfID,0); else ActKey(KEYON+PULSE+CHAIN(DX31,D(ModDelay),DX24));"),	KB_Shortcut_Mark, DefTempo),
+												TEMPO(DX_LOSB20, KB_Toggle, DefTempo)	); //no /i chain since XOR between WAV and KB Mark
+
+else if (	(prof == 2615) 	)	//added F-15E in 2.67, need to remove shortcut and replace with map display, unshifted long for UFC
+		{
+		if (	(	(MFD_Count > 3) | ((MFD_Count > 2) & (UFC_MFD1_Suppress_F15E > 0))	)	&	(prof == 2615)	)	//Force TEMPO Off for UFC
+			{
+			if (	(MFD_Count > 3) | ((MFD_Count > 2) & (UFC_MFD1_Suppress_F15E > 1))	)	//suppress extreme, perhaps functions later
+						MapKeyIO(&LMFD,	OSB20,	TEMPO(		EXEC("if (GraceFlag == 1) PlayWavSel(ProfID,0); else ActKey(KEYON+PULSE+CHAIN(DX31,D(ModDelay),DX24));"),	KB_Toggle, DefTempo),
+												DX_LOSB20); //no /o tempo and KB TEMPO /I suppressing UFC.  no /i chain since XOR between WAV and KB Toggle, KB_Shortcut_Mark to be manually inserted on LOSB19
+			else		MapKeyIO(&LMFD,	OSB20,	TEMPO(		EXEC("if (GraceFlag == 1) PlayWavSel(ProfID,0); else ActKey(KEYON+PULSE+F15E_UFC1);"),	CHAIN(DX31,D(ModDelay),DX24), DefTempo),
+												DX_LOSB20); //no /o tempo, and UFC set to /i.  Chain set to TEMPO Long outside EXEC, KB Toggle moved to LOSB18
+			}
+		else			MapKeyIO(&LMFD,	OSB20,	TEMPO(		EXEC("if (GraceFlag == 1) PlayWavSel(ProfID,0); else ActKey(KEYON+PULSE+CHAIN(DX31,D(ModDelay),DX24));"),	KB_Toggle, DefTempo),
+												TEMPO(DX_LOSB20, F15E_UFC1, SwTempo)	); //no /i chain since XOR between WAV and KB Toggle, KB_Shortcut_Mark to be manually inserted on LOSB19
+		}										
+//else if (prof == 999)	MapKeyIO(&LMFD,	OSB20,	CHAIN(EXEC("if (GraceFlag == 1) PlayWavSel(ProfID,0);"),DX26),	TEMPO(CA_IR_View, DX26, DefTempo)	);	//DX26 for NVG
+else if (prof == 998)	
+						MapKeyIOUMD	(&LMFD,	OSB20,	DX24,DX24,
+													CHAIN(EXEC("if (GraceFlag == 1) PlayWavSel(ProfID,0);"),REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX24));")),	CHAIN(DX29,D(ModDelay),DX24),
+													0,CHAIN(EXEC("if (GraceFlag == 1) PlayWavSel(ProfID,0);"),REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX24));"))	);
+						
+else					MapKeyIO	(&LMFD,	OSB20,	TEMPO(CHAIN(EXEC("if (GraceFlag == 1) PlayWavSel(ProfID,0);"),DX31,D(ModDelay),DX24),	KB_Shortcut_Mark, DefTempo),	TEMPO(CHAIN(DX31,D(ModDelay),DX24), CHAIN(DX30,DX31,D(ModDelay),DX24), DefTempo)	);
+
+
+if (prof == 998)
+						MapKeyRIOUMD(&LMFD,OSB20,	0,0,
+													EXEC("DeferCall(ModDelay,&Grace_Flag,1); DeferCall(DoubleTap+ModDelay,&Grace_Flag,0);"),0,
+													0,EXEC("DeferCall(ModDelay,&Grace_Flag,1); DeferCall(DoubleTap+ModDelay,&Grace_Flag,0);"));
+else					MapKeyRIO	(&LMFD,OSB20,	EXEC("DeferCall(ModDelay,&Grace_Flag,1); DeferCall(DoubleTap+ModDelay,&Grace_Flag,0);"),	0);
+
+//LMFD GAIN for kneeboard pages/NVG intensity
+
+if 		(prof == 2510)		//A-10C specific Kneeboard Implementation (NVG elsewhere)
+		{
+		MapKeyIO(&LMFD,	GAINU,	TEMPO(KB_Page_Prev,KB_Shortcut_Prev, DefTempo),	KB_LGAINU);
+		MapKeyIO(&LMFD,	GAIND,	TEMPO(KB_Page_Next,KB_Shortcut_Next, DefTempo),	KB_LGAIND);
+		}
+else if (prof == 2508)		//AV-8B specific Backlighting implementation (NVG elsewhere)
+		{
+		MapKeyIO(&LMFD,	GAINU,	TEMPO(KB_LGAINU,CHAIN(AV8_LMFD_Day,  EXEC("LMFD_Power(2,1);"),D(LED_Delay),EXEC("WHT_Power_Check(2, RMFD_Pwr_State);")), DefTempo),	TEMPO(KB_Page_Prev, KB_Shortcut_Prev, DefTempo)	);
+		MapKeyIO(&LMFD,	GAIND,	TEMPO(KB_LGAIND,CHAIN(AV8_LMFD_Night,EXEC("LMFD_Power(1,1);"),D(LED_Delay),EXEC("WHT_Power_Check(1, RMFD_Pwr_State);")), DefTempo),	TEMPO(KB_Page_Next, KB_Shortcut_Next, DefTempo)	);
+		}
+else if ((prof == 2516)	 | (prof == 2117) | (prof == 2615))	//F-15E, F-16 and JF-17 use /I for LGAIN (NVG elsewhere)
+		{
+		MapKeyIO(&LMFD,	GAINU,	KB_LGAINU,	TEMPO(KB_Page_Prev, KB_Shortcut_Prev, DefTempo)	);
+		MapKeyIO(&LMFD,	GAIND,	KB_LGAIND,	TEMPO(KB_Page_Next, KB_Shortcut_Next, DefTempo)	);
+		}
+else if (prof == 2518)		//F/A-18 specific Backlighting implementation (NVG elsewhere)
+		{
+		MapKeyIO(&LMFD,	GAINU,	TEMPO(KB_LGAINU,REXEC(6, DoubleTap, "LMFD_Power(LMFD_Pwr_State+1,1);")	, DefTempo),	TEMPO(KB_Page_Prev, KB_Shortcut_Prev, DefTempo)	);
+		MapKeyIO(&LMFD,	GAIND,	TEMPO(KB_LGAIND,REXEC(6, DoubleTap, "LMFD_Power(LMFD_Pwr_State-1,1);")	, DefTempo),	TEMPO(KB_Page_Next, KB_Shortcut_Next, DefTempo)	);
+		}
+else if (prof == 998)		//AWACS
+		{
+		MapKey	(&LMFD,	GAINU,	EXEC("AWACS_Cycle_Rdo(-1);"));
+		MapKey	(&LMFD,	GAIND,	EXEC("AWACS_Cycle_Rdo(11);"));
+		MapKeyR	(&LMFD,	GAINU,	EXEC("DeferCall(5*LED_Delay,&AWACS_LED,SRS_AWACS_Cur);"));	
+		MapKeyR	(&LMFD,	GAIND,	EXEC("DeferCall(5*LED_Delay,&AWACS_LED,SRS_AWACS_Cur);"));
+		}
+else if (NVG_Capable == 2)	//profiles with "modified" NVG capability, e.g. FC3 and F-86
+		{
+		MapKeyIO(&LMFD,	GAINU,	FC3_NVG_Gain_Incr,	TEMPO(KB_LGAINU,CHAIN(DX30,KB_LGAINU), DefTempo));		//unshifted tempo added in 0.60 for KB Page/NVG Gain (visor for MiG-21)
+		MapKeyIO(&LMFD,	GAIND,	FC3_NVG_Gain_Decr,	TEMPO(KB_LGAIND,CHAIN(DX30,KB_LGAIND), DefTempo));
+		}
+else if (NVG_Capable == 1)	//profiles with native NVG capability, e.g. UH-1, P-51D
+		{
+		MapKeyIO(&LMFD,	GAINU,	NVG_Gain_Incr,		TEMPO(KB_LGAINU,CHAIN(DX30,KB_LGAINU), DefTempo));		//unshifted tempo added in 0.60 for KB Page/NVG Gain (visor for MiG-21)
+		MapKeyIO(&LMFD,	GAIND,	NVG_Gain_Decr,		TEMPO(KB_LGAIND,CHAIN(DX30,KB_LGAIND), DefTempo));
+		}
+else 	//profiles without NVGs; currently MiG-21, Fw190, Bf109, unmodded F86, unmodded FC3, M20000C.  
+		{
+		MapKeyIO(&LMFD,	GAINU,	KB_LGAINU,	TEMPO(KB_LGAINU,CHAIN(DX30,KB_LGAINU), DefTempo));		//unshifted tempo added in 0.60 for KB Page/NVG Gain (visor for MiG-21)
+		MapKeyIO(&LMFD,	GAIND,	KB_LGAIND,	TEMPO(KB_LGAIND,CHAIN(DX30,KB_LGAIND), DefTempo));
+		}
+
+//ROSB20	//hornet, awacs, mirage, f86, ka50, mi8, bf109, sa342, a-4, fc3 own routine.  ajs37 tbd
+
+//Map Rdo_Ovly
+if ((TrackIR < 2) & (Overlay_Enable_SRS > 1))	//DX for 2D overlay
+	Rdo_Ovly	=	Rdo_Ovly_DX;		
+else											//Keyboard for in-game
+	Rdo_Ovly	=	Rdo_Ovly_KB;
+
+if ((prof != 998) & 																										//AWACS
+	(prof != 2117) &																										//JF-17
+	(prof != 2510) & 																										//A-10C
+	(prof != 2518) & 	(prof != 2615)	&																					//F/A-18C & F-15E
+	(prof != 2520) & 																										//Mirage 2000C
+	(prof != 2586) & 																										//F-86
+	(prof != 1050) & 																										//Ka-50
+	(prof != 1008) & 																										//Mi-8
+	(prof != 3009) & 																										//Bf109 (was 3509 which is spitfire, likely typo and not a bad comment)
+	(prof != 1542) & 	(prof != 1543) &																					//SA342
+	(prof != 2504) &																										//A-4E
+	(prof != 2509) & (prof != 2515) & (prof != 2011) & (prof != 2027) & (prof != 2029) & (prof != 2033) & (prof != 2025))	//FC3
+	{
+	if (prof == 2021)	//mig21 (longtempo)
+			rosb20o	=	TEMPO(DX_ROSB20,	CHAIN(DX30,DX_ROSB20),	LongTempo);
+	
+	else if (	(prof == 3547)	)	//P-47 (VHF Radio Off)
+			rosb20o	=	EXEC("Cycle_RdoChannel(4,1);");
+
+	else if (	(prof == 2514) | (prof == 2508) | (prof == 3509) | (prof == 2019) | (prof == 3551)	)	//uses either NS430 or Scratchpad for S3+ROSB20
+		{
+		if ((NS430_Enabled) & (MFD_Count < 3))
+				rosb20o	=	TEMPO(DX_ROSB20,	NS430_Toggle,		DefTempo);
+		else if (Scratchpad_Enabled)		
+				rosb20o	=	TEMPO(DX_ROSB20,	Scratchpad_Hotkey,	DefTempo);
+		else	rosb20o	=	DX_ROSB20;	
+		}
+
+	else if (	(prof == 2516) | (prof == 2501) | (prof == 2601) | (prof == 2505) | (prof == 3509) | (prof == 3609)	)	// /O tempo
+			rosb20o	=	DX_ROSB20T;
+	else	rosb20o	=	DX_ROSB20;
+	//l39,mig15,uh1,dx/ca
+	
+	// /I
+	if (	(prof == 2514) | (prof == 2508) | (prof == 3509) | (prof == 2019) | (prof == 3551)	)	//uses either NS430 or Scratchpad for S3+ROSB20
+		{
+		if ((NS430_Enabled) & (MFD_Count < 3))
+				rosb20i	=	NS430_Toggle;
+		else if (Scratchpad_Enabled)		
+				rosb20i	=	Scratchpad_Hotkey;
+		else	rosb20i	=	DX_ROSB20;	
+		}		
+	//else if (prof == 2021)	//mig21 (longtempo)
+	//		rosb20i	=	DX_ROSB20);
+	else 	rosb20i	=	DX_ROSB20;		
+
+			
+	//a10c (poss own, poss integrate)
+	//		if (Scratchpad_Enabled)
+	//			MapKeyIO(&RMFD,	OSB20,	TEMPO(DX_ROSB20,	Scratchpad_Hotkey,	DefTempo),	
+	//									DX_ROSB20);
+	//		else
+	//			MapKey(&RMFD,	OSB20,	DX_ROSB20);
+	//ajs37
+	//MapKeyIO(&RMFD,	OSB20,	TEMPO(EXEC("AJS37_DataCart_Set(5);"), EXEC("AJS37_DataCart_Set(5,0);")),	USB_5);
+	
+	if ((TARS > 0) & (Overlay_Enable_SRS > 0))	rosb20i = TEMPO(rosb20i, PULSE+Rdo_Ovly, 		DefTempo);
+	//else	rosb20i	=	rosb20ti;
+	
+	MapKeyIO(&RMFD,	OSB20,	rosb20i,rosb20o);
+	}
+	
+Init_Run=0;
+if (Script_Debug) printf("Done\xa");
+
+
+
+
+
+if 		(prof == 2021)	MiG21_MFD_Init();
+else if (prof == 1050)	BS2_MFD_Init();
+else if ((prof == 2025) | (prof == 2011) | (prof == 2027) | (prof == 2033) | (prof == 2029) | (prof == 2509) | (prof == 2515))
+											FC3_MFD_Init(prof);
+else if (prof == 2505)						F5E_MFD_Init();
+else if (prof == 2510)						A10C_MFD_Init();
+else if ((prof == 3551) | (prof == 3547))	P51D_MFD_Init(prof);								//updated in 2.47
+//else if (prof == 3516)						I16_MFD_Init();
+else if (prof == 1501)						UH1_MFD_Init();
+else if (prof == 2586)						F86_MFD_Init();
+else if ((prof == 1008) | (prof == 1024))	Mi8_MFD_Init(prof);
+else if ((prof == 3090) | (prof == 3190))	Fw190_MFD_Init(prof);								//A8 added in 2.40
+else if (prof == 3009)						Bf109_MFD_Init();
+else if (prof == 2015)						MiG15_MFD_Init();
+else if (prof == 2019)						MiG19_MFD_Init();
+else if (prof == 2117)						JF17_MFD_Init();									//added in 2.43
+else if ((prof == 2039) | (prof == 2040))	L39_MFD_Init(prof);
+else if (prof == 2520)						M2000C_MFD_Init(GearDn_Ind_Default);				//GearDn_Ind_Default argument added in 1.66
+else if ((prof == 1541) | (prof == 1542))	SA342_MFD_Init(prof);
+else if ((prof == 3509)	)					Spit_MFD_Init(prof);								//added in 1.66
+else if ((prof == 3606)	)					Mosquito_MFD_Init(prof);							//added in 2.61
+else if ((prof == 2537)	)					AJS37_MFD_Init(prof);								//added in 1.67
+//else if (prof == 2512)						Hawk_MFD_Init();									//added in 1.69
+else if (prof == 2508)						AV8B_MFD_Init();									//added in 2.00
+else if (prof == 2516)						F16C_MFD_Init();									//added in 2.41
+else if ((prof == 2518) | (prof == 2615))	FA18C_MFD_Init(prof);								//added in 2.20, updated in 2.67
+else if (prof == 2604)						A4EC_MFD_Init();									//added in 2.26
+else if ((prof == 2501) | (prof == 2601))	C101_MFD_Init(prof);								//added in 2.28
+else if (prof == 998)						AWACS_MFD_Init();									//added in 2.29
+else if (prof == 2514)						F14_MFD_Init(CurrentStation,GearDn_Ind_Default);	//added in 2.31	
+else if (prof == 1564)						AH64_MFD_Init(prof);								//added in 2.64
+//else if (prof == 3052)						Yak52_MFD_Init();									//added in 2.45
+//else if (prof == 3502)						CE2_MFD_Init();										//added in 2.45
+//else if ((prof > 3999) & (prof < 5000))		IL2GB_MFD_Init(prof);								//added in 2.40
+//else if (prof == 5000)						EliteD_MFD_Init();									//added in 2.40
+
+else										DX_MFD_Init();
+}
+
+
+
+
+int Gear_Ind_Init(int state, int fixed = 0, int helo = 0, int led = 1)		//Routine to set initial landing gear indicator state on LMFD.  Default based on parameters in DCS World.tmc.  Fixed added in 0.60, led added in 2.05 to prevent led if < 0
+{
+if (Script_Debug) printf("Setting Landing Gear Indication...");
+if (fixed != 0)	//added in 1.40
+	{
+	if (fixed > 0) GearState = 1;	//gearstate down (Mi-8)
+	else GearState = 0;				//gearstate up (UH-1)
+	}
+else GearState = state;
+if (fixed != 0) 	DeferCall(LED_Delay,&Lights_LLED2,0);
+else if (led < 0)
+	{
+	if (state) DeferCall(2500,&PlayWav,"geardn.wav");
+	else DeferCall(2500,&PlayWav,"gearup.wav");
+	}
+else DeferCall(LED_Delay,&Lights_LLED2,state);
+if ((helo > 0) | (fixed != 0))	SetANTRudder(RudderPedals,1,RevANTRudder,fixed);	//forces ANT as rudder of selected (fixed != 0 changed in 1.40 to allow for fixed = -1)
+else SetANTRudder(RudderPedals,state,RevANTRudder);	
+
+if (Script_Debug) printf("Set!\xa");
+}
+
+int SetANTRudder(int rudder = 0,int state = 0, int rev = 0, int led = 1)		//added in 0.53 for ANT as rudder. rudder = RudderPedals, state = gearstate, rev = RevANTRudder, led added in 1.40 (0 if fixed gear < 0 (e.g. UH-1))
+{
+	if 	(rudder == 2)		//ANT Elev as rudder										
+		{
+		if (state > 0)
+			{
+			if (led < 0) led = 0;	//forces LED off if skids aircraft (e.g. UH-1)
+			if (rev > 0) 	MapAxis(&HCougar, RDR_X, DX_ZROT_AXIS, AXIS_REVERSED, MAP_ABSOLUTE);
+			else			MapAxis(&HCougar, RDR_X, DX_ZROT_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);		
+			Lights_LLED1(led);
+			}
+		else 
+			{
+			MapAxis(&HCougar, RDR_X, DX_XROT_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
+			Lights_LLED1(0);
+			}
+		}
+}
+
+//************************************************
+//	Digital Throttle (Startup/Shutdown) Routines
+//************************************************
+
+int SetDigitalThrottle(int engines)
+{
+int minidle;
+int maxidle;
+int pastidle;
+
+minidle = 100-IdleDetentLow;
+maxidle = 100-IdleDetentHigh;
+pastidle= 100-(IdleDetentHigh+20);
+
+if (Script_Debug) printf(" minidle = %i\xa maxidle = %i\xa pastidle = %i\xa",minidle,maxidle,pastidle);	//for test purposes
+
+//Check to see if Engine Start/Stop routines are enabled.
+if	(	(	(WarthogThrottle == 0) | ((WarthogThrottle > 1) & (engines < 2))	) 	&	 (IdleDetentLow > 0)	)
+	{
+	DigThr1_Shutdown	=	EXEC("ThrAbsPosit = 0; DeferCall(ThrottleShutdownDelay,&ThrottleEngineShutdown,1);");	//forces delay to see if throttle remains aft of idle.  Added in 1.33
+	DigThr2_Shutdown	=	EXEC("ThrAbsPosit = 0; DeferCall(ThrottleShutdownDelay,&ThrottleEngineShutdown,2);");	//forces delay to see if throttle remains aft of idle.	Added in 1.33
+	DigThr1_Startup		=	EXEC("ThrAbsPosit = 1; EngineStartSingle(Eng_Start_x, Starter_Ind_x, GearState);");		// if (ProfID == 2586) F86_Map_AirBrake(GearState,0);");					//	Flight Idle nominally at 12.5%.  Actual detent nominally stops at 10.6%
+	DigThr2_Startup		=	EXEC("ThrAbsPosit = 1; EngineStartLR(Eng_Start_x, Starter_Ind_x, GearState);");			//	Flight Idle nominally at 12.5%.  Actual detent nominally stops at 10.6%
+	DigThr_Neutral		=	EXEC("ThrAbsPosit = 2; FuelCutOff = 0; FlightIdle = 0;");								//	sets FuelCutOff and FlightIdle to 0 once throttle in use (nominally 22.5% throttle setting); Added ThrAbsPosit in 1.33 for shutdown delay
+
+	if (engines == 2505)	//F-5 specific
+		{
+		printf("         Initializing F-5E TQS Specific Throttle Startup/Shutdown Routine...\xa");	
+		DigThr2_Startup = EXEC("ThrAbsPosit = 1; FlightIdle = 1; FuelCutOff = 0;");		// just applies logical values; actual start is performed by MFD.  startup still throttle.
+		KeyAxis(&HCougar, THROTTLE, 0, AXMAP2(LIST(0,pastidle,maxidle,minidle,100),DigThr_Neutral,DigThr2_Startup,0,DigThr2_Shutdown));	//HCougar Throttle orientation is opposite Warthog
+		printf("Done!\xa");
+		}
+	else if (engines == 3509)	//Spitfire specific for U/C Indicator
+		{
+		printf("         Initializing Spitfire Throttle Actuation of U/C Indicator...\xa");	
+		DigThr2_Startup = EXEC("if ((ThrAbsPosit == 0) & (FuelCutOff == 1)) {Spit_UC_Indicator_Set(1);ThrAbsPosit = 1;FuelCutOff = 0;FlightIdle = 1;}");		// applies logical values and sets U/C Indicator On
+		DigThr2_Shutdown = EXEC("ThrAbsPosit = 0; FlightIdle = 0; FuelCutOff = 1;Spit_UC_Indicator_Set(0);");		// applies logical values and sets U/C Indicator On
+		KeyAxis(&HCougar, THROTTLE, 0, AXMAP2(LIST(0,pastidle,maxidle,minidle,100),DigThr_Neutral,DigThr2_Startup,0,DigThr2_Shutdown));	//HCougar Throttle orientation is opposite Warthog
+		printf("Done!\xa");
+		}
+	else if (engines == 2537)	//AJS-37
+		{
+		printf("         Initializing AJS-37 Throttle...");
+		KeyAxis(&HCougar, THROTTLE, 0, AXMAP2(LIST(0,pastidle,100),EXEC("AJS37_NAV_Warn(1);"),EXEC("AJS37_NAV_Warn(0);")));	//pastidle warn on, otherwise off
+		}
+	else if ((engines == 2518) | (engines == 2615))	//F-15E or F/A-18
+		{
+		printf("         Initializing F-15E/F-18C Throttle...");
+		if (S4Brake_USN > 0) 
+				KeyAxis(&HCougar, THROTTLE, 0, AXMAP2(LIST(0,30,100),EXEC("AB_L_On = 1;AB_R_On = 1;ActKey(DX29);ActKey(DX31);ActKey(DX32);"),EXEC("AB_L_On = 0;AB_R_On = 0;ActKey(DX4);")));	//pastidle warn on, otherwise off
+		else	KeyAxis(&HCougar, THROTTLE, 0, AXMAP2(1, 0));
+		}
+//	else if (engines == 5000) EliteD_Throttle_Map(0); obsolete
+	else if (engines > 1)
+		{
+		printf("         Initializing Throttle Twin Engine Start/Shutdown Routines..."); //printf("IdleDetentHigh = %i...",IdleDetentHigh);	//for test purposes
+		KeyAxis(&HCougar, THROTTLE, 0, AXMAP2(LIST(0,pastidle,maxidle,minidle,100),DigThr_Neutral,DigThr2_Startup,0,DigThr2_Shutdown));	//HCougar Throttle orientation is opposite Warthog
+		printf("Done!\xa");
+		}
+	else if (engines < 1)																					//	e.g. Engine with separate fuel flow/mixture lever
+		{
+		printf("         Throttle Engine Startup/Shutdown Bypassed.\xa");											
+		KeyAxis(&HCougar, THROTTLE, 0, AXMAP2(1, 0));
+		}
+	else	//single engine
+		{
+		printf("         Initializing Throttle Single Engine Start/Shutdown Routines...");
+		KeyAxis(&HCougar, THROTTLE, 0, AXMAP2(LIST(0,pastidle,maxidle,minidle,100),DigThr_Neutral,DigThr1_Startup,0,DigThr1_Shutdown));	//HCougar Throttle orientation is opposite Warthog	
+		printf("Done!\xa");
+		}
+	}
+else	//bypass
+		{
+		KeyAxis(&HCougar, THROTTLE, 0, AXMAP2(1, 0));		
+		printf("         Throttle Engine Startup/Shutdown Disabled.\xa");	
+		}	
+	
+//End Engine Start/Stop
+}
+
+
+int SetDigitalThrottle_WH(int thr, int prof = 0, int ablo = 65, int abhi = 66, int ablol = 65, int abhil = 66)	//was 95/98thr = 0: left throttle, thr = 1: right throttle, thr = 2: both throttles, negative for clear mapping, abhi/ablo AB detents (set high as default if no physical detent).  abhil/ablol added in 1.68
+{
+//Check to see if Engine Start/Stop routines are enabled.
+if	(	(WarthogThrottle > 0) 	)	
+	{
+	
+//init: set values based on Profile	
+	
+	if ((prof == 3551) | (prof == 3516)	|	(prof == 3547))	//P-47/51 because it works as 2 axis with 1 linear and the other with WEP
+		{
+		DigThr_ABLoL=	0;	//nothing special on the prop axis
+		DigThr_ABHi =	CHAIN(WEP_DX,EXEC("AB_R_On = 1;Lights_WHT1(1);"));		//WEP; LED added in 1.61, AB_R_On added in 2.49
+		DigThr_ABHiL= 	0;
+		DigThr_ABLo	=	EXEC("AB_R_On = 0;if ((!ProfID == 3547)	|	((!P47D_WI_Lock) & (!Throttle[SC]))	) Lights_WHT1(0);");	//added in 2.49
+		//else				DigThr_ABLo	=	EXEC("AB_R_On = 0;Lights_WHT1(0);");	//added in 1.40 for WH digital AB Detent; LED added in 1.61, AB_R_On added in 2.49
+		}
+	else if ((prof == 3606))	//Mossie because it's twin engine with LEDs 1-5 already in use.  Use for any twin where you don't want to use LEDs for AB.
+		{
+		DigThr_ABLoL=	EXEC("AB_L_On = 0;");	//added in 1.40 for WH digital AB Detent; LED added in 1.61; AB_x_On added in 2.20 for F/A-18
+		DigThr_ABHi	=	EXEC("AB_R_On = 1;");
+		DigThr_ABHiL=	EXEC("AB_L_On = 1;");
+		DigThr_ABLo	=	EXEC("AB_R_On = 0;");	//added in 1.40 for WH digital AB Detent; LED added in 1.61
+		}
+//	else if (prof == 5000)
+//		{
+//		if  ((WH_AB_Detent_Enabled) | (AB_Throttle_EliteD))
+//			{
+//			DigThr_ABLoL=	0;	//nothing special on the left axis
+//			DigThr_ABHiL= 	0;
+//			DigThr_ABHi =	REXEC(6,AB_Delay_EliteD,"if (AirBrkFlash > -1) Lights_WHT1(1);ActKey(KEYON+PULSE+CHAIN(DOWN+ED_Afterburner_DX,D(AB_Delay_EliteD-1000),UP+ED_Afterburner_DX));");
+//			DigThr_ABLo	=	CHAIN(UP+ED_Afterburner_DX,EXEC("if (AirBrkFlash > -1) Lights_WHT1(0);")	);	//added in 1.40 for WH digital AB Detent; LED added in 1.61	
+//			//DigThr_ABHi =	CHAIN(DOWN+ED_Afterburner_DX,	EXEC("Lights_WHT1(1);"));		
+//			//DigThr_ABLo	=	CHAIN(UP+ED_Afterburner_DX,		EXEC("Lights_WHT1(0);"));			
+//			}
+//		else
+//			{
+//			DigThr_ABLoL=	0;	//no afterburner on axis (button only)
+//			DigThr_ABHi =	0;
+//			DigThr_ABHiL= 	0;
+//			DigThr_ABLo	=	0;
+//			}
+//		}
+	else
+		{
+		DigThr_ABLoL=	EXEC("AB_L_On = 0;Lights_WHT2(0);");	//added in 1.40 for WH digital AB Detent; LED added in 1.61; AB_x_On added in 2.20 for F/A-18
+		DigThr_ABHi	=	EXEC("AB_R_On = 1;Lights_WHT1(1);");
+		DigThr_ABHiL=	EXEC("AB_L_On = 1;Lights_WHT2(1);");
+		DigThr_ABLo	=	EXEC("AB_R_On = 0;Lights_WHT1(0);");	//added in 1.40 for WH digital AB Detent; LED added in 1.61
+		}	
+
+	
+	
+
+//map throttle axes
+	printf("         Setting Digital Throttle...");
+	if (thr > 0)	//right throttle
+		{
+		printf("Right...");
+			if (ProfID == 2537)
+					{
+					printf("AJS37...");
+					DigThr_ABHi	=	EXEC("Lights_WHT3(1);AJS37_NAV_Warn(1);");	//warning that not in NAV mode
+					DigThr_ABLo	=	EXEC("Lights_WHT3(0);AJS37_NAV_Warn(0);");	//flashLLED1 cancels Nav alert
+					KeyAxis(&Throttle, THR_RIGHT, 0, AXMAP2(LIST(0,ablo,abhi,WH_AB2_AJS37-1,WH_AB2_AJS37,WH_AB3_AJS37-1,WH_AB3_AJS37,100),DigThr_ABLo,0,DigThr_ABHi, EXEC("Lights_WHT2(0);"), EXEC("Lights_WHT2(1);"), EXEC("Lights_WHT1(0);"), EXEC("Lights_WHT1(1);"))	);	//ABx+1 and 0 to allow for AB zone to clear (allows cancel on way back).			
+					}			
+			else	KeyAxis(&Throttle, THR_RIGHT, 0, AXMAP2(LIST(0,ablo,abhi,100),DigThr_ABLo,0,DigThr_ABHi)	);
+			if (Script_Debug > 0) printf("\xa ablo = %i\xa abhi = %i\xa",ablo,abhi);	//for test purposes
+		printf("Done!\xa");
+		if (thr == 1)	KeyAxis(&Throttle,	THR_LEFT,	0,	AXMAP2(1,0));					//zero out unmapped throttle
+		}
+	if (thr >= 2)		//changed from 0 or 2 in 1.61 to add L values
+		{
+		printf("Left...");
+				KeyAxis(&Throttle, THR_LEFT,  0, AXMAP2(LIST(0,ablol,abhil,100),DigThr_ABLoL,0,DigThr_ABHiL)	);
+		printf("Done!\xa");
+		}
+	else if (thr == 0)	//original L throttle only (uses top LED as AB)
+		{
+			printf("Left (as single)...");
+				KeyAxis(&Throttle, THR_LEFT, 0, AXMAP2(LIST(0,ablol,abhil,100),DigThr_ABLo,0,DigThr_ABHi)	);
+				KeyAxis(&Throttle, THR_RIGHT,0,	AXMAP2(1,0));								//zero out unmapped throttle
+			printf("Done!\xa");
+		}
+		
+	else if (thr < 0)	//no digital mapping, negative value
+		{
+//		if ((ProfID == 2508) & (WH_LED_AV8B == 1) )	//AV-8B
+//			{
+//			printf("AV-8B");
+//			if ((WH_AB_Detent_Enabled > 0) & (WH_100_AV8B > ablo) & (!WH_Throttle_Detent_AV8))
+//				{
+//				WH_100_AV8B = WH_100_AV8B-(100-ablo);
+//				WH_101_AV8B = WH_101_AV8B-(100-ablo);
+//				WH_102_AV8B = WH_102_AV8B-(100-ablo);
+//				WH_103_AV8B = WH_103_AV8B-(100-ablo);
+//				WH_104_AV8B = WH_104_AV8B-(100-ablo);
+//				
+//				printf("...AB Detent");
+//				if (Script_Debug) printf("\xa AbLo = %i\xa 100 = %i\xa 101 = %i\xa 102 = %i\xa 103 = %i\xa 104 = %i\xa",ablo,WH_100_AV8B,WH_101_AV8B,WH_102_AV8B,WH_103_AV8B,WH_104_AV8B);
+//				}
+//			KeyAxis(&Throttle,	THR_LEFT,	0,	AXMAP2(1,0));					//zero out unmapped throttle
+//			KeyAxis(&Throttle,	THR_RIGHT,	0,	AXMAP2(LIST(	0,WH_100_AV8B,WH_101_AV8B,WH_102_AV8B,WH_103_AV8B,WH_104_AV8B,100),
+//													EXEC("Lights_WH_SlideU(0,LED_Delay,0);	if (Script_Debug) Print_Value(100);"),
+//													EXEC("Lights_WH_SlideU(1,LED_Delay,0);	if (Script_Debug) Print_Value(101);"),
+//													EXEC("Lights_WH_SlideU(2,LED_Delay,0);	if (Script_Debug) Print_Value(102);"),
+//													EXEC("Lights_WH_SlideU(3,LED_Delay,0);	if (Script_Debug) Print_Value(103);"),
+//													EXEC("Lights_WH_SlideU(4,LED_Delay,0);	if (Script_Debug) Print_Value(104);"),
+//													EXEC("Lights_WH_SlideU(5,LED_Delay,0);	if (Script_Debug) Print_Value(105);"))	);										
+//			printf("\xa");
+//			}
+//		else
+//			{
+			KeyAxis(&Throttle,	THR_LEFT,	0,	AXMAP2(1,0));					//zero out unmapped throttle
+			KeyAxis(&Throttle,	THR_RIGHT,	0,	AXMAP2(1,0));					//zero out unmapped throttle
+			printf("None.\xa");
+//			}
+		}
+	}
+}
+
+
+//----------------------------------
+//			Backlighting
+//----------------------------------
+
+//MFD Backlighting
+
+int LMFD_Power(int pwr = 2, int key = 0, int force = 0)	//key added in 1.61 to prevent actkey for acft other than A-10C, force performs lighting even if Adjust Backlighting == 0
+{
+if (pwr < 0) pwr = 0;
+if (pwr > 2) pwr = 2;
+if (Script_Debug) printf("LMFD Power: %i\xa was %i\xa",pwr,LMFD_Pwr_State);
+if (key) ActKey(KEYON+PULSE+X(LMFD_Pwr,pwr));			//changed back to pulse in 0.37, forced for sync
+if (LMFD_Pwr_State != pwr)								//condition to prevent LED usage if not required added in 2.24 for rexec
+	{
+	if ((Adjust_Backlighting > 0) | (force)) MFD_Backlight(&LMFD,X(MFD_Lt,pwr));	//Note: MFD_Lt is for Light, not Left.  Array is common to LMFD/RMFD/WHT
+	LMFD_Pwr_State = pwr;
+	if ((Adjust_Backlighting > 0) | (force)) WHT_Power_Check(LMFD_Pwr_State,RMFD_Pwr_State);	//WHT_Pwr_Set(3);	//added in 1.61 for WHT, power check instead of set to cut middleman
+	}
+}
+
+int RMFD_Power(int pwr = 2, int key = 0, int force = 0)	//key added in 1.61 to prevent actkey for acft other than A-10C, force performs lighting even if Adjust Backlighting == 0
+{
+if (pwr < 0) pwr = 0;
+if (pwr > 2) pwr = 2;
+if (Script_Debug) printf("RMFD Power: %i\xa was %i\xa",pwr,RMFD_Pwr_State);
+if (key) ActKey(KEYON+PULSE+X(RMFD_Pwr,pwr));			//changed back to pulse in 0.37, forced for sync
+if (RMFD_Pwr_State != pwr)								//condition to prevent LED usage if not required added in 2.24 for rexec
+	{
+	if ((Adjust_Backlighting > 0) | (force)) MFD_Backlight(&RMFD,X(MFD_Lt,pwr));	//Note: MFD_Lt is for Light, not Left.  Array is common to LMFD/RMFD/WHT, force performs lighting even if Adjust Backlighting == 0
+	RMFD_Pwr_State = pwr;
+	if ((Adjust_Backlighting > 0) | (force)) WHT_Power_Check(LMFD_Pwr_State,RMFD_Pwr_State);	//WHT_Pwr_Set(3);	//added in 1.61 for WHT, power check instead of set to cut middleman
+	}
+}
+
+int LMFD_Power_F(int pwr)	//force "force" for defercall
+{
+LMFD_Power(pwr,0,1);
+}
+int RMFD_Power_F(int pwr)	//force "force" for defercall
+{
+RMFD_Power(pwr,0,1);
+}
+
+//Warthog Backlighting
+int WHT_Power(int pwr = 2, int force = 0)	//base routine; added in 1.61 for Warthog Throttle, force performs lighting even if Adjust Backlighting == 0
+{
+if (Script_Debug) printf("WHT_Power(%i,%i)\xa",pwr,force);
+if (pwr < 0) pwr = 0;
+if (pwr > 2) pwr = 2;
+if (Script_Debug) printf(" pwr = %i\xa",pwr);
+if (	(WarthogThrottle > 0) & ((Adjust_Backlighting > 0) | (force))	) 
+	{
+	WHT_Backlight(X(MFD_Lt,pwr));	//Note: MFD_Lt is for Light, not Left.  Array is common to LMFD/RMFD/WHT
+	if (Script_Debug) printf("WHT_Backlight(X(MFD_LT,%i)\xa",pwr);
+	}
+}
+int WHT_Power_F(int pwr)	//force "force" for defercall
+{
+WHT_Power(pwr,1);
+}
+
+int WHT_Power_Check(int lpwr, int rpwr)	//Sets WHT backlight to highest of MFD settings
+{
+int wpwr;
+if (Script_Debug) printf("WHT_Power_Check(%i,%i)\xa",lpwr,rpwr);
+
+if (lpwr < rpwr) wpwr = rpwr;	//takes the greater power
+else wpwr = lpwr;
+if (Script_Debug) printf(" wpwr = %i\xa",wpwr);
+if (wpwr < 1) wpwr = 1;		//forces 0 for throttle shutdown and no APU
+WHT_Power(wpwr);
+if (Script_Debug) printf(" WHT_Power(%i)\xa",wpwr);
+}
+
+int WHT_Pwr_Set(int pwr)	//Catch all routine for WHT
+{
+if ((pwr < 0) | (pwr > 2)) WHT_Power_Check(LMFD_Pwr_State,RMFD_Pwr_State);	//out of bounds forces MFD check with a min value of 1
+else WHT_Power(pwr);
+}
+
+int MFD_WHT_Power(int pwr = 2, int delay = 50, int force = 0) //timed routine for powering up/down all 3 sources
+{
+if (force)
+	{
+	LMFD_Power_F(pwr);
+	DeferCall(delay,&RMFD_Power_F,pwr);
+	if (WarthogThrottle > 0) DeferCall(2*delay,&WHT_Power_F,pwr);	//condition allows routine use w/ Cougar
+	}
+else
+	{
+	LMFD_Power(pwr);
+	DeferCall(delay,&RMFD_Power,pwr);
+	if (WarthogThrottle > 0) DeferCall(2*delay,&WHT_Power,pwr);	//condition allows routine use w/ Cougar
+	}
+}
+int D_MFDWHT_Pwr(int pwr)	//for DeferCall
+{
+MFD_WHT_Power(pwr,LED_Delay);
+}
+
+int	VRZoom_Set(int vz)
+{
+if (VRZoom != 2) VRZoom = vz;	//changes value if not enabled (2)
+}
+int	VRZoom_Init(int hold = 0)	
+{
+if (VRZoom == 2)		//enabled
+	{
+	//if (!hold)	
+	ActKey(VR_Zoom);
+	VRZoom = 0;
+	}
+else if (VRZoom == 1)	//set to enable
+	{
+	if ((VRTrimDefault > 0) & (!hold)) ActKey(DX30);
+	DeferCall(KBDelay,&ActKey,KEYON+VR_Zoom);
+	VRZoom = 2;
+	}
+	
+else VRZoom = 0;		//set to cancel
+if (Script_Debug > 0) printf("VRZoom = %i\xa",VRZoom);
+}

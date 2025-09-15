@@ -1,0 +1,800 @@
+//===========================================================================
+//		DCS World F-86F Sabre for HOTAS Cougar/Warthog and Cougar MFDs
+//					by Don "Home Fries" Heumphreus
+//						last updated: 27OCT2021
+//
+//	Change Log:
+//	1.28	Initial Release
+//	1.29	Updated airbrake mapping for new type (analog now type 3)
+//			Moved MFD mappings from DCS_Init
+//	1.32	Added MFD Functionality
+//			Updated Startup routine; removed F86_Map_Airbrake() for F86_Map_S2()
+//			Added discrete switch routines for 3 position switches.
+//	1.33	Updated to allow NWS/Analog braking
+//	1.34	DX1 added to TG1 command (removed from TriggerZoom)
+//	1.35	Added default Brake Out indication if GearState Down (for cold start)
+//			Updated WheelBrakeFull argument for new DiffBraking() routine
+//	1.50	Added Warthog Compatibility
+//	1.53	Adjusted for new 2.0 module selection
+//	1.56	Enabled WAV files for aircraft selection
+//	1.61	Added Warthog Lighting init
+//	1.66	Added MapKeyR for ROSB13-14 for compatibilty with Spitfire
+//	1.69	Updated CommState_Off() call
+//	2.02	Set FkeyPress=1 on init to prevent Commswitch activation on profile load
+//	2.05	Updated NVG_Capable to F86_Custom_LUA instead of 2*F86_Custom_LUA (allowing for default NVG commands)
+//	2.10	Improved VAICOM/SRS Compatibility
+//	2.21	Added NS430 compatibility
+//	2.28	Replaced F86_Nav_Lt_Sw_xx_DX with keyboard subs for SRS deconfliction
+//			Switched Target Range assignments
+//	2.29	Added MFDisplay module selection
+//			Replaced 4 MFD Led functions with Lights_Four()
+//	2.34b	Fixed F86_Map_S2() to include Warthog
+//	2.43	Removed SnapViews for VR
+//	2.44	Added VR and Spyglass Zoom to VR
+//	2.46	Added SRS Overlay to ROSB20
+//	2.49a	Revised S1 VR Zoom to be in line with new S1 convention
+//			Corrected CSL/R and T4/5 orientation for Wingspan/Radar Sweep
+//	2.50b	Removed duplicate MapKeyR(0) mappings to free stack space.
+//	2.51	Removed Script_Debug print commands to free stack space.
+//	2.63	Added WHIdle_Enabled parameter to WH Idle commands
+//
+//
+//============================================================================
+
+
+
+
+int DCS_F86(int led, int sp)
+{
+
+
+printf("DCS F-86F Sabre\xa");
+
+
+if (WarthogStick > 0)
+	{
+	MapKeyR(&Joystick,	S2,	EXEC("DCS_F86_Init();"));
+	}
+else
+	{
+	MapKeyR(&HCougar,	S2,	EXEC("DCS_F86_Init();"));
+	}
+if (sp > 0)	PlayWav("f86f.wav");
+if (led > 0)
+	{
+	//should see 0 * * 0 to indicate that P-51D has been selected.
+	Lights_Four(0,1,1,0,	ProfileSwapDelay+LED_Delay);
+//	DeferCall(ProfileSwapDelay+LED_Delay,&Lights_RLED1,1);	//Changed to Binary 6 in 1.28
+//	DeferCall(ProfileSwapDelay+2*LED_Delay,&Lights_RLED2,0);
+//	DeferCall(ProfileSwapDelay+4*LED_Delay,&Lights_LLED2,1);
+//	DeferCall(ProfileSwapDelay+3*LED_Delay,&Lights_LLED1,0);
+	//Lights_LMFD(1);
+	}
+}
+
+int	F86_Nav_Light_Sw_Curr;	//added in 1.32 for discrete switch logic
+int F86_Engine_Ice_Sw_Curr;
+int F86_Land_Light_Sw_Curr;
+//int	F86_Starter_State;	//added in 1.40 for LDGH assignment
+int	F86_Battery_Switch_Cur;	//added in 1.40 for EOR switch logic
+int	F86_Weapon_Cur;			//added in 1.40
+int	F86_Sight_Funct_Array;	//added in 1.40
+int	F86_Sight_Funct_Cur;	//added in 1.40
+
+
+int	SetMenu_F86()
+{
+Set_Acft_Array_Cur(2586);
+}
+
+
+int DCS_F86_Init()
+{
+Determine_Differential_Braking(DiffBraking_Enabled,CougarToeBrakes);
+
+//Declare Values
+FkeyPress			=	1;	//added in 2.02 to prevent Commswitch key activation on profile load.
+GraceFlag			=	0;
+Eng_Start_x			=	IdleDetentLow;
+Eng_Stop_x			=	IdleDetentLow;
+Starter_Ind_x		=	Starter_Ind_F86;
+MFD_Eng_Start		=	0;
+ProfID				=	2586;
+FixedGear			=	0;
+Helicopter			=	0;
+T6WheelBrake		=	1;
+BrakeOnCycleTime	=	Airbrake_Out_F86;
+BrakeOffCycleTime	=	Airbrake_In_F86;
+GearCycleTimeUp		=	Gear_Retract_F86;
+GearCycleTimeDn		=	Gear_Deploy_F86;
+TriggerZoomEnabled	=	1;
+S4AnalogBrake		=	JoyAsAnalogBrake;		//added in 1.33
+AnalogParkingBrake	=	JoyYParkingBrake;	//added in 1.33
+S4asNWS				=	NWSwithBrake;			//added in 1.33 for analog braking with NWS engaged
+S3holdNWS 			= 	1;	//added in 2.05
+XYAxisTrim			=	0;	//added in 1.34
+DMS_SnapView		=	0;	//added in 1.34
+WheelBrakeFull		=	1;	//added in 1.35
+ToeBrakesAvailable	=	1;	//added in 1.40
+NVG_Capable			=	F86_Custom_LUA;	//added in 1.40; NVG capability depends on whether custom LUA is installed. changed from 2* in 2.05
+AB_Capable			=	0;	//added in 1.61
+//BrakeOffCycleTime 	= 	1500;
+F86_Sight_Funct_Cur = 	1;	//default to gun
+Adjust_Backlighting	=	0;	//added in 1.62
+NS430_Enabled		=	NS430_Installed*NS430_Enabled_F86;	//added in 2.21
+CrewCount			=	1;
+StationChangeModifier	=	0;
+WH_Use_TQS			=	0;	//added in 2.43
+Analog_TDC			=	1;	//added in 2.43
+EngineCount			=	1;	//added in 2.43
+Airbrake_Type_Cur	=	3;	//added in 2.43
+Airbrake_Swap		=	0;	//added in 2.43
+CommInitType		=	1;	//0 for none/custom, 1 for single channel (P-51), 2 for simple (dual channel), 3 for complex (3 channel).  added in 2.43
+StnCheckDisabled	=	2;	//added in 2.43.  Forced for single seat
+CurrentStation 		=	1;	//moved here in 2.43
+
+
+F86_Sight_Funct_Array = SEQ(F86_Sight_Funct_Rkt,
+							F86_Sight_Funct_Gun,
+							F86_Sight_Funct_Bomb);
+
+
+printf("Done\xa Execute DCS F-86F Sabre Config (Profile v%i.%i):\xa",MajorVersion,MinorVersion);
+PlayWavSel(ProfID,abs(Init_Run - 1),DCSFP_Enabled,MFDisplayEnabled);	//added in 1.61, DCSFP added in 2.05, MFDisplay added in 2.29
+Pause_TrackIR(0);
+AnalogBrakePoll(0);	//added in 1.23
+AirBrake_Init(AirBrkFlash);	//moved to individual modules in 1.22
+MFD_Init(ProfID);
+	printf("   Map HOTAS Cougar for DCS F-86F Sabre Config:\xa");
+	DCS_Axis_Init(ProfID,EngineCount,Analog_TDC);
+
+
+			printf("         Shift Commands: S3 momentary...");
+			if (WarthogStick > 0)
+				{
+				if (WarthogThrottle > 0) 	SetShiftButton(&Joystick, S3, &Throttle, 0, 0);
+				else						SetShiftButton(&Joystick, S3, &HCougar, 0, 0);
+				//MapKey	(&Joystick, S3, BTN_S3P);		
+				MapKeyR	(&Joystick, S3, BTN_S3R);	
+				}				
+			else
+				{
+				SetShiftButton(&HCougar, S3, &HCougar, 0, 0);
+				//MapKey	(&HCougar, S3, BTN_S3P);	//dynamic mapping with NWS	
+				MapKeyR	(&HCougar, S3, BTN_S3R);		
+				}				
+			printf("Done!\xa");
+			if (WarthogStick > 0)
+				{
+				printf("         Warthog Stick Buttons...");	
+				MapKeyIO(&Joystick, TG1, BTN_TG1PI_TGZ, BTN_TG1PO_TGZ);
+				MapKeyRIO(&Joystick,TG1, BTN_TG1RI_TGZ, BTN_TG1RO_TGZ);
+
+				MapKey	(&Joystick, TG2,BTN_TG2);
+//				MapKeyR	(&Joystick, TG2,0);
+				if (TrackIR < 2)
+						MapKeyIO(&Joystick, S1, Std_SnapView2, 	DX5);
+				else	MapKeyIO(&Joystick, S1, DX5,			VR_Zoom);
+				//S2 covered in F86_Map_S2()
+				MapKeyR	(&Joystick,	S2, 0);
+				MapKeyIO(&Joystick, S4, BTN_S4PI,	BTN_S4PO);
+				MapKeyR	(&Joystick, S4, BTN_S4R);
+				}
+			else
+				{
+				printf("         Cougar Stick Buttons...");	
+				MapKeyIO(&HCougar, TG1, BTN_TG1PI_TGZ, BTN_TG1PO_TGZ);
+				MapKeyRIO(&HCougar,TG1, BTN_TG1RI_TGZ, BTN_TG1RO_TGZ);
+
+				MapKey	(&HCougar, TG2,BTN_TG2);
+//				MapKeyR	(&HCougar, TG2,0);
+				if (TrackIR < 2)
+						MapKeyIO(&HCougar, S1, Std_SnapView2, 	DX5);
+				else	MapKeyIO(&HCougar, S1, DX5,				VR_Zoom);
+				//S2 covered in F86_Map_S2()
+				MapKeyR	(&HCougar,	S2, 0);
+				MapKeyIO(&HCougar, S4, BTN_S4PI,	BTN_S4PO);
+				MapKeyR	(&HCougar, S4, BTN_S4R);
+				}
+			printf("Done!\xa");	
+						
+			H1_Init(TrackIR, PadlockEnabled, ProfID);	//moved to individual routines in 1.27 for trim reset removal on helos
+			CommState_Off(1,ProfID,1,0,1);	//sets hats 2-4 to DX functions	
+			
+			P51D_CommState_Init(ProfID,1,0);									//Set Comms routine (DX21 plus whatever options selected)
+			if (WarthogThrottle > 0)
+				{
+				printf("         Warthog Throttle Buttons\xa");	
+				MapKeyIO(&Throttle, MSL,	0,TEMPO(	EXEC("if (!MSPCheck) ActKey(KEYON+PULSE+F86_UHF_Freq_Decr_DX);"),
+														REXEC(6,Switch_Delay,"if (!MSPCheck) ActKey(KEYON+PULSE+F86_UHF_Freq_Decr_DX);"),
+														DefTempo)	);	//Frequency change (long for repeat)
+				MapKeyRIO(&Throttle,MSL,	0,EXEC("StopAutoRepeat(6);"));	
+				MapKeyIO(&Throttle, MSR,	0,TEMPO(	EXEC("if (!MSPCheck) ActKey(KEYON+PULSE+F86_UHF_Freq_Incr_DX);"),
+														REXEC(6,Switch_Delay,"if (!MSPCheck) ActKey(KEYON+PULSE+F86_UHF_Freq_Incr_DX);"),
+														DefTempo)	);	//Frequency change
+				MapKeyRIO(&Throttle,MSR,	0,EXEC("StopAutoRepeat(6);"));	
+				
+				MapKey	(&Throttle,	CSU,	K14_Range_Decr);	//Tgt Range adjust	
+				MapKey	(&Throttle,	CSD,	K14_Range_Incr);
+				MapKey 	(&Throttle,	CSL,	K14_Wingspan_Incr);	//DX22);	//set for wingspan, /I for radar sweep
+				MapKey 	(&Throttle,	CSR,	K14_Wingspan_Decr);	//DX23);
+				
+				MapKey	(&Throttle,	SC,		DX24);	//electrical cage, /I for mechanical cage
+//				MapKeyR	(&Throttle,	SC,		0);
+				
+				MapKey	(&Throttle,	PSF,	PULSE+F86_Nav_Lts_Steady);		//Nav Steady
+				MapKey	(&Throttle,	PSM,	TEMPO(0,PULSE+F86_Nav_Lts_Off,DoubleTap));	//Nav Off
+				MapKey	(&Throttle,	PSB,	PULSE+F86_Nav_Lts_Flash);		//Nav Flash
+
+				MapKeyIO(&Throttle,	CHB,	TEMPO(DX25,Gear_Up,GearUpTempo),	TEMPO(PULSE+F86_Rocket_Salvo_CCW,	REXEC(6, Switch_Delay, "ActKey(KEYON+PULSE+F86_Rocket_Salvo_CCW);"),	DefTempo)	);	//F86_Rkt_Depr_Decr_DX	);	// /O Rocket Salvo as of 1.69 /I Throttle Idle back 1 incr
+				MapKeyRIO(&Throttle,CHF,	0,	EXEC("StopAutoRepeat(6);"));	//Added in 1.69
+				MapKeyRIO(&Throttle,CHB,	0,	EXEC("StopAutoRepeat(6);"));	//Added in 1.69
+								
+				MapKeyIO(&Throttle,	LTB,	DX24,DX5);	// /I mechanical cage, /O Tgt select
+//				MapKeyR	(&Throttle,	LTB, 	0);			
+			
+			if (WHIdle_Enabled > 0)
+				{
+				MapKeyIO(&Throttle,	IDLERON,	0,	PULSE+CHAIN(DX30,D(ModDelay),DX25)	);
+				MapKeyIO(&Throttle,	IDLEROFF,	0,	PULSE+CHAIN(DX30,D(ModDelay),DX26, EXEC("F86_StarterTimer(0);"))	);
+//				MapKey	(&Throttle,	IDLELON,	0);	//zeroed out since single throttle
+//				MapKey	(&Throttle,	IDLELOFF,	0);
+				}
+
+				printf("...Base Switches\xa");				
+				TriggerZoom_MapGearDn(TriggerZoom_state, ProfID,0,1);	//MapKeyIO(&HCougar, T8, PULSE+DX26, );			//done in TriggerZoom_MapGearDn(), see if duplicate
+				
+				MapKeyIO(&Throttle,	FLAPU,	0,	PULSE+Flaps_Up);
+				MapKeyIO(&Throttle,	FLAPD,	0,	PULSE+Flaps_Dn);
+				MapKeyIO(&Throttle, FLAPM,	0,	TEMPO(0,PULSE+F86_Flaps_Off, DoubleTap));	
+
+				F86_Map_LDGH(0);	//MapKeyIO(&Throttle,	LDGH,	TEMPO(0,EXEC("EjectCheckLDGH(ProfID);"), DefTempo),	0);	//covered in F86_LDGH_Map()
+				MapKeyIO(&Throttle,	APENG,	CHAIN(DX31,D(ModDelay),DX11),	CHAIN(DX31,D(ModDelay),DX10));	// /O Fuel Tank Jett, /I Full Jett (based on switch)
+				
+				MapKey	(&Throttle,	APPAT,	PULSE+F86_Land_Lt_Sw_Ext);	
+				MapKey	(&Throttle,	APAH,	TEMPO(0,	PULSE+F86_Land_Lt_Sw_Off, DoubleTap));
+				MapKey	(&Throttle,	APALT,	PULSE+F86_Land_Lt_Sw_Retr);
+				
+				MapKey	(&Throttle,	EFLNORM,	PULSE+F86_Emer_Fuel_On);	//Emergency Fuel Switch
+//				MapKeyR	(&Throttle,	EFLNORM,	0);
+				MapKey	(&Throttle,	EFLOVER,	PULSE+F86_Emer_Fuel_Off);	
+				MapKey	(&Throttle,	EFRNORM,	PULSE+F86_Eng_Master_On);	//Engine Master
+				MapKey	(&Throttle,	EFROVER,	PULSE+F86_Eng_Master_Off);
+//				MapKeyR	(&Throttle,	EFROVER,	0);
+				
+				MapKey	(&Throttle,	EORIGN,		CHAIN(F86_AirStart_Sw,EXEC("Grace_Flag(1);"))	);
+				MapKeyR	(&Throttle,	EORIGN,		EXEC("DeferCall(500,&Grace_Flag,0);")	);	//grace flag prevents cover triggering on NORM
+				MapKeyIO(&Throttle,	EORNORM,	0,	EXEC("if (!GraceFlag) ActKey(KEYON+PULSE+F86_AirStart_Sw_Cover_Open);")	);
+				MapKeyIO(&Throttle,	EORMOTOR,	0,	PULSE+F86_AirStart_Sw_Cover_Close);
+				MapKeyIO(&Throttle,	EOLIGN,		0,										CHAIN(F86_Starter,EXEC("F86_Battery_Switch_Set(0,0); Grace_Flag(1); F86_StarterTimer(0);"))	);
+				MapKeyRIO(&Throttle,EOLIGN,		0,										EXEC("DeferCall(5000,&Grace_Flag,0);")	);
+				MapKeyIO(&Throttle,	EOLNORM,	CHAIN(PULSE+F86_Battery_Off,EXEC("F86_StarterTimer(0);")),	TEMPO(0,CHAIN(PULSE+F86_Battery_Off,EXEC("F86_StarterTimer(0);")),DoubleTap)	);
+				MapKeyIO(&Throttle,	EOLMOTOR,	PULSE+F86_Battery_On,	CHAIN(PULSE+F86_Battery_On, EXEC("if (GraceFlag) F86_StarterTimer(PreStarter_Ind_F86); Grace_Flag(0);"))	);
+				
+				MapKey	(&Throttle,	APUON,	PULSE+F86_Gun_Heat_On);	//Gun Heater	
+				MapKey	(&Throttle,	APUOFF,	PULSE+F86_Gun_Heat_Off);
+				
+				MapKey	(&Throttle,	RDRNRM,	PULSE+F86_Nav_Lts_Dim);	//Ext Lights Brt/Dim
+				MapKey	(&Throttle,	RDRDIS,	PULSE+F86_Nav_Lts_Brt);
+				MapKey	(&Throttle,	EACON,	PULSE+F86_Pitot_Heat_On);	//Pitot Heat
+				MapKey	(&Throttle,	EACOFF,	PULSE+F86_Pitot_Heat_Off);
+				}
+			else
+				{
+				printf("         TQS Buttons\xa");	
+				//MapKey	(&HCougar, T2, CHAIN(DOWN+DX30,Gear_Flaps_Dn));		//taken care of in TriggerZoom_MapGearDn()
+				MapKeyR	(&HCougar, T2, CHAIN(D(KBDelay),UP+DX30));					//cancels default CommState light and DX30 for gear/flaps
+				MapKey	(&HCougar, T3, CHAIN(DOWN+DX30,Gear_Flaps_Up));		//Gear/Flaps with DX30 so S3 needs not be used
+				MapKeyR	(&HCougar, T3, CHAIN(D(KBDelay),UP+DX30));					//cancels default PTT light and DX30 for gear/flaps
+				
+				MapKey	(&HCougar, T5, K14_Wingspan_Incr);	//DX22);	//set for wingspan, /I for radar sweep
+				MapKey	(&HCougar, T4, K14_Wingspan_Decr);	//DX23);
+				MapKeyR	(&HCougar, T4, 0);
+				MapKeyR	(&HCougar, T5, 0);	
+					
+				P51DMapT6(GearDn_Ind_Default, ProfID);	//used for aux braking with FFB stick.
+				}
+			Airbrake_Map_Set(Airbrake_Type_Cur,Airbrake_Swap,0);
+			F86_DF_Init(WarthogThrottle);	
+				
+			printf("...Done!\xa");
+	printf("   HOTAS Cougar Mapping Complete.\xa\xa");	
+
+//F86_MFD_Init();
+
+
+TriggerZoom_state  = 0;		//reset TriggerZoom
+FlapState=0;				//future implementation
+//Lights_ALL(0);				//Says Init complete
+	if (Adjust_Backlighting > 0) Backlight_Max_Init(0);	//placeholder until routine added
+	else Backlight_Max_Init(0);
+	DeferCall(4*LED_Delay,&Lights_RLED1,0);
+	//DeferCall(4*LED_Delay,&Lights_LLED2,0);
+	if (WarthogThrottle > 0) DeferCall(5*LED_Delay,&WHT_Lights_Dn_D,0);
+	
+ActKey(DX1);				//just in case DX1 lingers from trigger activation
+if (Init_Run == 0) Gear_Ind_Init(GearDn_Ind_Default,FixedGear,Helicopter,AirBrkFlash);
+//else	
+//	{
+	F86_Map_S2(GearDn_Ind_Default);							//covered in Gear_Ind_Init()
+	//F86_Map_AirBrake(GearDn_Ind_Default, FuelCutOff);		//obsolete in 1.32
+	S3_NWS(GearDn_Ind_Default); 							//covered in Gear_Ind_Init();
+	F86_Array_Value_Init(GearDn_Ind_Default);
+//	}
+if (GearDn_Ind_Default > 0) Map_Cougar_ToeBrakes(ToeBrakesAvailable);//added in 1.40;
+else	Map_Cougar_ToeBrakes(0);
+
+printf("\xa DCS F-86F Sabre Init Complete!\xa");	
+Set_Acft_Array_Cur(ProfID);
+}
+
+int	F86_DF_Init(int wh)
+{
+if (wh > 0)
+	{
+	MapKey	(&Throttle,	BSF,	CHAIN(PULSE+F86_Weapon_Sel_Msl,			EXEC("F86_Weapon_Sel(3,0);"))	);
+	MapKeyR	(&Throttle,	BSF,	0);	
+	MapKey	(&Throttle,	BSB,	CHAIN(PULSE+F86_Weapon_Sel_Cam,			EXEC("F86_Weapon_Sel(1,0);"))	);
+	MapKeyR	(&Throttle,	BSB,	0);	
+	MapKeyIO(&Throttle,	BSM,	TEMPO(0,CHAIN(PULSE+F86_Weapon_Sel_Off, EXEC("F86_Weapon_Sel( 0, 0);")),DoubleTap),
+								TEMPO(0,CHAIN(PULSE+F86_Weapon_Sel_Gun, EXEC("F86_Weapon_Sel( 2, 0);")),DoubleTap));	
+	}
+else
+	{
+	MapKey	(&HCougar, T7,	PULSE+DX25);			//Throttle Back When Shifted with S1 or holding starter		
+	MapKeyIO(&HCougar, T8, 	CHAIN(PULSE+DX26, EXEC("F86_StarterTimer(0);")),PULSE+DX26);			//Throttle Fwd when shifted 	
+	MapKeyR	(&HCougar, T7, 0);
+	MapKeyR	(&HCougar, T8, 0);
+	MapKeyIO(&HCougar, DFM, 0, PULSE+F86_Flaps_Off);	
+	}
+}
+
+int F86_MFD_Init()
+{
+int rosb20i;
+//===================================
+//		Standard MFD Buttons
+//===================================
+
+	printf("   Map Cougar Left  MFD (DX31)...");	
+//LOSB 1 in Init
+					MapKey	(&LMFD, OSB02,	CHAIN(DX31,D(ModDelay),DX2));
+					MapKey	(&LMFD, OSB03,	CHAIN(DX31,D(ModDelay),DX3));
+					MapKey	(&LMFD,	OSB04,	CHAIN(DX31,D(ModDelay),DX4));
+//					MapKeyR	(&LMFD,	OSB04,	0);	//for A-10C and F-5E					
+					MapKey	(&LMFD, OSB05,	CHAIN(DX31,D(ModDelay),DX5));
+//					MapKeyR	(&LMFD,	OSB05,	0);	//For F-5E
+//LOSB 6-11
+					MapKey	(&LMFD,	OSB06,	CHAIN(DX31,D(ModDelay),DX6));
+					MapKey	(&LMFD,	OSB07,	CHAIN(DX31,D(ModDelay),DX7));
+//					MapKeyR	(&LMFD,	OSB07,	0);	//for Bf109
+					MapKey	(&LMFD,	OSB08,	CHAIN(DX31,D(ModDelay),DX8));
+					MapKey	(&LMFD,	OSB09,	CHAIN(DX31,D(ModDelay),DX9));
+					MapKey	(&LMFD,	OSB10,	CHAIN(DX31,D(ModDelay),DX10));
+					MapKey	(&LMFD,	OSB11,	CHAIN(DX31,D(ModDelay),DX11));
+//LOSB 12-15 (Gun Selecter)			
+					MapKeyIO(&LMFD,	OSB12,	CHAIN(DX31,D(ModDelay),PULSE+DX12),	TEMPO(CHAIN(DX31,D(ModDelay),DX12), CHAIN(DX30,DX31,D(ModDelay),DX12), DefTempo)	);
+					MapKeyIO(&LMFD,	OSB13,	CHAIN(DX31,D(ModDelay),PULSE+DX13),	TEMPO(CHAIN(DX31,D(ModDelay),DX13), CHAIN(DX30,DX31,D(ModDelay),DX13), DefTempo)	);
+					MapKeyIO(&LMFD,	OSB14,	CHAIN(DX31,D(ModDelay),PULSE+DX14),	TEMPO(CHAIN(DX31,D(ModDelay),DX14), CHAIN(DX30,DX31,D(ModDelay),DX14), DefTempo)	);
+					MapKeyIO(&LMFD,	OSB15,	CHAIN(DX31,D(ModDelay),PULSE+DX15),	TEMPO(CHAIN(DX31,D(ModDelay),DX15), CHAIN(DX30,DX31,D(ModDelay),DX15), DefTempo)	);					
+//LOSB 16-19
+					MapKey	(&LMFD,	OSB16,	CHAIN(DX31,D(ModDelay),DX16));
+					MapKey	(&LMFD,	OSB17,	CHAIN(DX31,D(ModDelay),DX17));
+					MapKey	(&LMFD,	OSB18,	CHAIN(DX31,D(ModDelay),DX18));
+					MapKeyIO(&LMFD,	OSB19,	Canopy_Toggle,	TEMPO(0, Canopy_Toggle, DefTempo));	//set to macro in 1.33 to allow for NWS analog braking
+
+//LMFD 20 in Init
+
+//Left Rocker Switches
+//SYM
+		MapKey	(&LMFD,	SYMU,	DX14);	// /I target altitude /O index altitude
+		MapKey	(&LMFD,	SYMD,	DX12);
+
+//CON
+		MapKey	(&LMFD,	CONU,	KB_LCONU);
+		MapKey	(&LMFD,	COND,	KB_LCOND);
+
+//BRT  done in F86_Map_Triple_Switches_MFD()
+
+
+//GAIN in Init
+
+	printf("Done!\xa");
+
+	printf("   Map Cougar Right MFD (DX32)...");
+
+//ROSB 1-10 at first part of routine
+		MapKey	(&RMFD,	OSB01,	CHAIN(DX32,D(ModDelay),DX1));
+		MapKey	(&RMFD,	OSB02,	CHAIN(DX32,D(ModDelay),DX2));
+		MapKey	(&RMFD,	OSB03,	CHAIN(DX32,D(ModDelay),DX3));
+		MapKey	(&RMFD,	OSB04,	CHAIN(DX32,D(ModDelay),DX4));
+		MapKey	(&RMFD,	OSB05,	CHAIN(DX32,D(ModDelay),DX5));
+//		MapKeyR	(&RMFD,	OSB05,	0);
+		MapKey	(&RMFD,	OSB06,	CHAIN(DX32,D(ModDelay),DX6));
+		MapKeyIO(&RMFD,	OSB07,	CHAIN(F86_Battery_Off,EXEC("Grace_Flag(0); F86_StarterTimer(0);")),
+								TEMPO(	CHAIN(F86_Battery_On,EXEC("if (GraceFlag) F86_StarterTimer(PreStarter_Ind_F86); Grace_Flag(0);")	),
+										CHAIN(F86_Starter,EXEC("Grace_Flag(1); F86_StarterTimer(0);")),	DefTempo));	
+		MapKeyRIO(&RMFD,OSB07,	0,	EXEC("DeferCall(5000,&Grace_Flag,0);")	); 
+		MapKey	(&RMFD,	OSB08,	CHAIN(DX32,D(ModDelay),DX8));
+		MapKeyIO(&RMFD,	OSB09,	CHAIN(DX32,D(ModDelay),DX9),	TEMPO(CHAIN(DX32,D(ModDelay),DX9),CHAIN(DX30,DX32,D(ModDelay),DX9),	DefTempo));
+		MapKey	(&RMFD,	OSB10,	CHAIN(DX32,D(ModDelay),DX10));	
+//ROSB 11-15
+		MapKeyIO(&RMFD,	OSB11,	PULSE+F86_Bomb_Fuse_Off,	TEMPO(CHAIN(DX32,D(ModDelay),DX11), CHAIN(DX30,DX32,D(ModDelay),DX11), DefTempo)	);	//Bomb Fuse Sw
+		MapKey	(&RMFD,	OSB12,	CHAIN(DX32,D(ModDelay),DX12));
+		MapKeyIO(&RMFD,	OSB13,	CHAIN(DX32,D(ModDelay),PULSE+DX13),	TEMPO(CHAIN(DX32,D(ModDelay),DX13), CHAIN(DX30,DX32,D(ModDelay),DX13), DefTempo)	);	//Dem Sw All/Off
+		MapKey	(&RMFD,	OSB14,	CHAIN(DX32,D(ModDelay),DX14));
+		
+		if (UseDiscrete_F86 > 0) 
+				MapKeyIO(&RMFD,	OSB15,	CHAIN(DX32,D(ModDelay),PULSE+DX15),	TEMPO(CHAIN(DX32,D(ModDelay),DX15), CHAIN(DX30,DX32,D(ModDelay),DX15), DefTempo)	);	//Auto/Man Rel
+		else 	MapKey	(&RMFD,	OSB15,	F86_Bomb_Rel_Toggle);
+
+//		MapKeyR	(&RMFD,	OSB13,	0);	//for Spitfire Engine Start	
+//		MapKeyR	(&RMFD,	OSB14,	0);	//for Spitfire Engine Start	
+//ROSB 16-20
+		MapKeyIO(&RMFD,	OSB16,	PULSE+F86_Rkt_Fuse_Off,	TEMPO(CHAIN(DX32,D(ModDelay),DX16), CHAIN(DX30,DX32,D(ModDelay),DX16), DefTempo)	);	//Rocket Fuse Sw
+		MapKey	(&RMFD,	OSB17,	CHAIN(DX32,D(ModDelay),DX17));
+		MapKeyIO(&RMFD,	OSB18,	CHAIN(DX32,D(ModDelay),DX18),	TEMPO(CHAIN(DX32,D(ModDelay),DX18), CHAIN(DX30,DX32,D(ModDelay),DX18), DefTempo)	);	//Rocket Auto/Man Covered Switch
+		MapKeyIO(&RMFD,	OSB19,	F86_Rkt_Sel_Sw_Up,				TEMPO(CHAIN(DX32,D(ModDelay),DX18), F86_Rkt_Sel_Sw_Up, DefTempo)	);	//DX18 and macro set in 1.33 to use DX19 as NWS with analog braking
+		
+		if ((TARS > 0) & (Overlay_Enable_SRS > 0))
+				MapKeyIO(&RMFD,	OSB20,	TEMPO(EXEC("F86_Sight_Funct_Cycle(-1);"),Rdo_Ovly,DefTempo),	EXEC("F86_Sight_Funct_Cycle(3);"));
+		else	MapKeyIO(&RMFD,	OSB20,	EXEC("F86_Sight_Funct_Cycle(-1);"),	EXEC("F86_Sight_Funct_Cycle(3);"));
+		//CHAIN(DX32,D(ModDelay),DX20));
+
+
+//Right Rocker Switches
+
+//SYM done in F86_Map_Triple_Switches_MFD()
+//CON done in F86_Map_Triple_Switches_MFD()
+
+
+		
+//BRT
+	MapKey	(&RMFD,	BRTU,	F86_UHF_Freq_Decr_DX);
+	MapKey	(&RMFD,	BRTD,	F86_UHF_Freq_Incr_DX);
+
+//GAIN
+	MapKeyIO(&RMFD,	GAINU,	KB_RGAINU,	TEMPO(KB_RGAINU, CHAIN(DX30,KB_RGAINU), DefTempo)	);	//Variable Sight Selector Dial
+	MapKeyIO(&RMFD,	GAIND,	KB_RGAIND,	TEMPO(KB_RGAIND, CHAIN(DX30,KB_RGAIND), DefTempo)	);
+
+	F86_Map_Triple_Switches_MFD(UseDiscrete_F86);	//added in 1.32
+	
+	printf("Done!\xa");	
+}
+
+
+
+//****3 Position Discrete Switch Macros***
+
+int	F86_Array_Value_Init(int gear)
+{
+if (gear)
+	{
+	F86_Nav_Light_Sw_Curr=1;	//note: 1 is "off" for 3 position switches with off in center
+	AirBrakePos = 100;			//sets airbrake position out if gear down (assume cold start)
+	}
+else 
+	{
+	F86_Nav_Light_Sw_Curr=2;
+	AirBrakePos = 0;
+	}
+	AirbrakeLEDState = gear;	//assigns Airbrake state to gear (out if down, in if up)
+	DeferCall(LED_Delay, &Lights_LLED1, gear);	//assigns LED to airbrake steady state
+F86_Land_Light_Sw_Curr=1;
+F86_Engine_Ice_Sw_Curr=1;
+}
+
+int F86_Map_Triple_Switches_MFD(int enable)
+{
+if (enable)
+		{
+		MapKeyIO(&RMFD,	CONU,	F86_Nav_Lts_Off,
+								TEMPO(F86_Nav_Lts_Steady, 		F86_Nav_Lts_Off, 		DefTempo)	);	//Nav Lights 3 position Sw
+		MapKeyIO(&RMFD,	COND,	F86_Nav_Lts_Off,
+								TEMPO(F86_Nav_Lts_Flash, 		F86_Nav_Lts_Off, 		DefTempo)	);
+
+
+		
+		if (WarthogThrottle > 0)
+			{
+			MapKeyIO(&LMFD,	BRTU,	F86_Engine_Ice_Sw_Retr,
+									TEMPO(F86_Engine_Ice_Sw_Ext, 	F86_Engine_Ice_Sw_Retr,	DefTempo)	);			//Engine Ice Sw 3 position 	only
+			MapKeyIO(&LMFD,	BRTD,	F86_Engine_Ice_Sw_Retr,
+									TEMPO(F86_Engine_Ice_Sw_Ice,	F86_Engine_Ice_Sw_Retr,	DefTempo)	);
+			
+			MapKeyIO(&RMFD,	SYMU,	F86_Weapon_Sel_Lt,EXEC("F86_Weapon_Sel(-1, Switch_Delay);")	);	//_DX removed from /I macros
+			MapKeyIO(&RMFD,	SYMD,	F86_Weapon_Sel_Rt,EXEC("F86_Weapon_Sel( 4, Switch_Delay);")	);
+			}
+		else
+			{
+			MapKeyIO(&LMFD,	BRTU,	TEMPO(F86_Land_Lt_Sw_Ext, 		F86_Land_Lt_Sw_Off, 	DefTempo),	//Ldg Lights 3 position Sw
+									TEMPO(F86_Engine_Ice_Sw_Ext, 	F86_Engine_Ice_Sw_Retr,	DefTempo)	);			//Engine Ice Sw 3 position 	
+			MapKeyIO(&LMFD,	BRTD,	TEMPO(F86_Land_Lt_Sw_Retr, 		F86_Land_Lt_Sw_Off, 	DefTempo),	
+									TEMPO(F86_Engine_Ice_Sw_Ice,	F86_Engine_Ice_Sw_Retr, DefTempo)	);
+			
+			MapKeyIO(&RMFD,	SYMU,	F86_Weapon_Sel_Lt,F86_Weapon_Sel_Lt_DX);	//no need for discrete state w/o Boat switch
+			MapKeyIO(&RMFD,	SYMD,	F86_Weapon_Sel_Rt,F86_Weapon_Sel_Rt_DX);
+			}
+
+		}
+else if (WarthogThrottle > 0)	//forces sequential use of arrays because of base switches
+		{
+		MapKey	(&RMFD,	CONU,	EXEC("F86_Nav_Light_Sw_Set(3);")	);	//forced toggle since PS is used for Nav lts
+		MapKey	(&RMFD,	COND,	EXEC("F86_Nav_Light_Sw_Set(-1);")	);
+		
+		MapKey	(&LMFD,	BRTU,	F86_Engine_Ice_Sw_Up);	
+		MapKey	(&LMFD,	BRTD,	F86_Engine_Ice_Sw_Dn);
+		
+		MapKeyIO(&RMFD,	SYMU,	F86_Weapon_Sel_Lt,EXEC("F86_Weapon_Sel(-1, Switch_Delay);")	);
+		MapKeyIO(&RMFD,	SYMD,	F86_Weapon_Sel_Rt,EXEC("F86_Weapon_Sel( 4, Switch_Delay);")	);
+		}
+else	//TQS
+		{
+		MapKey	(&RMFD,	CONU,	F86_Nav_Lt_Sw_Up);	//Nav Lights 3 position Sw
+		MapKey	(&RMFD,	COND,	F86_Nav_Lt_Sw_Dn);
+		
+		MapKey	(&LMFD,	BRTU,	F86_Land_Lt_Sw_Up);	//Landing Lights 3 position Sw; will also double for anti-ice when shifted
+		MapKey	(&LMFD,	BRTD,	F86_Land_Lt_Sw_Dn);
+		
+		MapKey	(&RMFD,	SYMU,	F86_Weapon_Sel_Lt);
+		MapKey	(&RMFD,	SYMD,	F86_Weapon_Sel_Rt);
+		}
+//	MapKeyR	(&RMFD,	SYMU,	0);	//added in 1.61 to account for context sensitive R in M2000C
+//	MapKeyR	(&RMFD,	SYMD,	0);
+//	MapKeyR	(&RMFD,	CONU,	0);	//added in 1.24 to account for context sensitive R in UH-1
+//	MapKeyR	(&RMFD,	COND,	0);
+}
+
+int F86_Nav_Light_Sw_Set(int posit, int delay = 200, int index=2, int time = 0)	//obsolete w/ discrete switches.  posit is desired switch position, delay is time between switch inputs, index is max size of array (0-2 for 3 sw. positions), time is elapsed and should start at 0
+{
+if (	(posit < 0)	|	((posit==0) & (F86_Nav_Light_Sw_Curr == 0))	)
+	{
+	ActKey(KEYON+PULSE+F86_Nav_Lt_Sw_Dn);
+	if (F86_Nav_Light_Sw_Curr > 0) F86_Nav_Light_Sw_Curr = (F86_Nav_Light_Sw_Curr-1);
+	}
+else if (	(posit > index)	|	((posit==index) & (F86_Nav_Light_Sw_Curr == index))	)
+	{
+	ActKey(KEYON+PULSE+F86_Nav_Lt_Sw_Up);
+	if (F86_Nav_Light_Sw_Curr < index) F86_Nav_Light_Sw_Curr = (F86_Nav_Light_Sw_Curr+1);	
+	}
+else
+	{
+	while (F86_Nav_Light_Sw_Curr != posit)					//do loop with if/then based on </>
+		{
+		if (F86_Nav_Light_Sw_Curr > posit)					
+			{
+			if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+F86_Nav_Lt_Sw_Dn);	
+			F86_Nav_Light_Sw_Curr = (F86_Nav_Light_Sw_Curr-1);
+			if (F86_Nav_Light_Sw_Curr < 0) F86_Nav_Light_Sw_Curr = 0;
+			}
+		else if (F86_Nav_Light_Sw_Curr < posit)
+			{
+			if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+F86_Nav_Lt_Sw_Up);	
+			F86_Nav_Light_Sw_Curr = (F86_Nav_Light_Sw_Curr+1);
+			if (F86_Nav_Light_Sw_Curr > index) F86_Nav_Light_Sw_Curr = index;
+			}
+		time = time + delay;
+		}
+	}
+}
+
+int F86_Landing_Light_Sw_Set(int posit, int delay = 200, int index=2, int time = 0)	//now used only with cougar; posit is desired switch position, delay is time between switch inputs, index is max size of array (0-2 for 3 sw. positions), time is elapsed and should start at 0
+{
+if (	(posit < 0)	|	((posit==0) & (F86_Land_Light_Sw_Curr == 0))	)
+	{
+	ActKey(KEYON+PULSE+F86_Land_Lt_Sw_Dn_DX);
+	if (F86_Land_Light_Sw_Curr > 0) F86_Land_Light_Sw_Curr = (F86_Land_Light_Sw_Curr-1);
+	}
+else if (	(posit > index)	|	((posit==index) & (F86_Land_Light_Sw_Curr == index))	)
+	{
+	ActKey(KEYON+PULSE+F86_Land_Lt_Sw_Up_DX);
+	if (F86_Land_Light_Sw_Curr < index) F86_Land_Light_Sw_Curr = (F86_Land_Light_Sw_Curr+1);	
+	}
+else
+	{
+	while (F86_Land_Light_Sw_Curr != posit)					//do loop with if/then based on </>
+		{
+		if (F86_Land_Light_Sw_Curr > posit)					
+			{
+			if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+F86_Land_Lt_Sw_Dn_DX);	
+			F86_Land_Light_Sw_Curr = (F86_Land_Light_Sw_Curr-1);
+			if (F86_Land_Light_Sw_Curr < 0) F86_Land_Light_Sw_Curr = 0;
+			}
+		else if (F86_Land_Light_Sw_Curr < posit)
+			{
+			if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+F86_Land_Lt_Sw_Up_DX);	
+			F86_Land_Light_Sw_Curr = (F86_Land_Light_Sw_Curr+1);
+			if (F86_Land_Light_Sw_Curr > index) F86_Land_Light_Sw_Curr = index;
+			}
+		time = time + delay;
+		}
+	}
+}
+
+int F86_Engine_Ice_Sw_Set(int posit, int delay = 200, int index=2, int time = 0)	//posit is desired switch position, delay is time between switch inputs, index is max size of array (0-2 for 3 sw. positions), time is elapsed and should start at 0
+{
+if (	(posit < 0)	|	((posit==0) & (F86_Engine_Ice_Sw_Curr == 0))	)
+	{
+	ActKey(KEYON+PULSE+F86_Engine_Ice_Sw_Dn);
+	if (F86_Engine_Ice_Sw_Curr > 0) F86_Engine_Ice_Sw_Curr = (F86_Engine_Ice_Sw_Curr-1);
+	}
+else if (	(posit > index)	|	((posit==index) & (F86_Engine_Ice_Sw_Curr == index))	)
+	{
+	ActKey(KEYON+PULSE+F86_Engine_Ice_Sw_Up);
+	if (F86_Engine_Ice_Sw_Curr < index) F86_Engine_Ice_Sw_Curr = (F86_Engine_Ice_Sw_Curr+1);	
+	}
+else
+	{
+	while (F86_Engine_Ice_Sw_Curr != posit)					//do loop with if/then based on </>
+		{
+		if (F86_Engine_Ice_Sw_Curr > posit)					
+			{
+			if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+F86_Engine_Ice_Sw_Dn);	
+			F86_Engine_Ice_Sw_Curr = (F86_Engine_Ice_Sw_Curr-1);
+			if (F86_Engine_Ice_Sw_Curr < 0) F86_Engine_Ice_Sw_Curr = 0;
+			}
+		else if (F86_Engine_Ice_Sw_Curr < posit)
+			{
+			if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+F86_Engine_Ice_Sw_Up);	
+			F86_Engine_Ice_Sw_Curr = (F86_Engine_Ice_Sw_Curr+1);
+			if (F86_Engine_Ice_Sw_Curr > index) F86_Engine_Ice_Sw_Curr = index;
+			}
+		time = time + delay;
+		}
+	}
+}
+
+
+
+int F86_StarterTimer(int time = 0, int prof = 2586)
+{
+if (time > 0)  				//makes sure the feature is even enabled
+	{
+	if (AirBrkFlash > 0)
+		{
+		Lights_RLED1(0);
+		DeferCall(LED_Delay,&flashRLED1,1);
+		DeferCall(time+LED_Delay,&flashRLED1,0);
+		}
+	else if (AirBrkFlash > -1)
+		{
+		Lights_RLED1(1);
+		DeferCall(time,&Lights_RLED1,0);
+		}
+	if (prof == 2586)
+		{
+		F86_Map_LDGH(1);
+		DeferCall(time,&F86_Map_LDGH,0);
+		}
+	}
+
+else
+	{
+	if (AirBrkFlash > 0)		flashRLED1(0,0);
+	else if (AirBrkFlash > -1)	Lights_RLED1(0);	//call routine on button release to force light off
+	//F86_Starter_State = 0;
+	if (prof == 2586)	F86_Map_LDGH(0);	
+	}	
+}
+
+//int	F86_Starter_State_Set(int state = 0)	//added in 1.40 for use with DeferCall
+//{
+//F86_Starter_State = state;
+//}
+
+int	F86_Map_LDGH(int state)
+{
+if (WarthogThrottle > 0)
+	{
+	if (state)	MapKeyIO(&Throttle,	LDGH,	TEMPO(0,EXEC("EjectCheckLDGH(ProfID);"), DefTempo),	TEMPO(CHAIN(DX31,D(ModDelay), DX17), CHAIN(DX32,D(ModDelay), DX8), DefTempo)	);	//I Long Eject/Toggle Gearstate, /O short horn long stop starter
+	else		MapKeyIO(&Throttle,	LDGH,	TEMPO(0,EXEC("EjectCheckLDGH(ProfID);"), DefTempo),	CHAIN(DX31,D(ModDelay), DX17)	);	//I Long Eject/Toggle Gearstate, /O horn
+	}
+}
+
+int	F86_Battery_Switch_Set(int posit, int kb=1)	//obsolete with discrete positions
+{
+//if (Script_Debug) printf("Pre:\xa Battery Switch Posit = %i\xa posit = %i\xa",F86_Battery_Switch_Cur,posit);	//for test purposes
+if (posit < 0) posit = abs(F86_Battery_Switch_Cur-1);	//forces toggle
+if ((posit != F86_Battery_Switch_Cur) & (kb)) ActKey(KEYON+PULSE+F86_Battery);	//must be off-state and kb enabled
+F86_Battery_Switch_Cur = posit;
+//if (Script_Debug) printf("Post:\xa Battery Switch Posit = %i\xa posit = %i\xa\xa",F86_Battery_Switch_Cur,posit);	//for test purposes
+}
+
+int F86_Map_AirBrake(int gear, int fco = 0)	//fco is virtual Fuel Cutoff Throttle position (because variable only toggled with S3);  Function obsolete in 1.32 with new control mappings.
+{
+if (gear)	
+	{
+	if (IdleDetentLow > 0)	//idle detent must be used for this to work
+		{
+		if (fco)	//throttle behind detent
+			{
+			MapKeyIO(&HCougar,	T9,		PULSE+Engine_Single_Stop,	F86_Starter);
+			MapKeyRIO(&HCougar,	T9,		0,	CHAIN(D(Switch_Delay),F86_Battery));
+			MapKey	(&HCougar,	T10,	PULSE+Engine_Single_Start);
+			MapKeyR	(&HCougar,	T10,	0);
+			}
+		else	Airbrake_Map_Set(3,0,0); 			//throttle fwd of detent; Analog-Pulse airbrake without Swap
+		}
+	else	//idle detent not used
+		{
+		MapKeyIO(&HCougar,	T9,		TEMPO(PULSE+Engine_Single_Stop, F86_Starter, DefTempo),	Analog_AirbrakeOn);
+		MapKeyRIO(&HCougar,	T9,		CHAIN(D(400),F86_Battery),								Analog_AirbrakeStop);
+		MapKeyIO(&HCougar,	T10,	PULSE+Engine_Single_Start,								Analog_AirbrakeOff);
+		MapKeyRIO(&HCougar,	T10,	0,														Analog_AirbrakeStop);
+		}
+	}
+else	Airbrake_Map_Set(3,0,0); 	//in the air; Analog-Pulse airbrake without Swap
+}
+
+int F86_Map_S2(int gear)
+{
+if (WarthogThrottle > 0)
+	{
+	if (WarthogStick > 0)	MapKey	(&Joystick,	S2,	DX2);
+	else					MapKey	(&HCougar,	S2,	DX2);
+	}
+else if (WarthogStick > 0)	MapKeyIO(&Joystick, S2, CHAIN(DX31,DX32),	DX2);	//S3+S2 allows for Dogfight to cycle engine throttle
+else
+	{
+	if (gear)				MapKeyIO(&HCougar, S2, CHAIN(DX31,DX32),	DX2);	//S3+S2 allows for Dogfight to cycle engine throttle
+	else					MapKey	(&HCougar, S2, DX2);
+	}
+}
+
+int	F86_Weapon_Sel(int posit, int delay = 200, int index=4, int time=0)
+{
+if (	(posit > index-1) | (posit < 0)	)
+	{
+	if (posit > index-1) 
+		{
+		posit = (F86_Weapon_Cur+1);					//no out of bounds
+		if (posit > index-1) 
+			{
+			posit = index-1;
+			ActKey(KEYON+PULSE+F86_Weapon_Sel_Rt);	//added for non-loop cycling for sync
+			}
+		}
+	else if (posit < 0)
+		{
+		posit = (F86_Weapon_Cur-1);				//no out of bounds
+		if (posit < 0) 
+			{
+			posit = 0;
+			ActKey(KEYON+PULSE+F86_Weapon_Sel_Lt);	//added for non-loop cycling for sync
+			}
+		}
+	}
+while (F86_Weapon_Cur != posit)					//do loop with if/then based on </>
+	{
+	if (F86_Weapon_Cur > posit)					
+		{
+		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+F86_Weapon_Sel_Lt);	
+		F86_Weapon_Cur = (F86_Weapon_Cur-1);
+		if (F86_Weapon_Cur < 0) F86_Weapon_Cur = 0;
+		}
+	else if (Fw190_Fueltank_Cur < posit)
+		{
+		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+F86_Weapon_Sel_Rt);	
+		F86_Weapon_Cur = (F86_Weapon_Cur+1);
+		if (F86_Weapon_Cur > index-1) F86_Weapon_Cur = index-1;
+		}
+	time = time + delay;
+	}
+}
+
+int	F86_Sight_Funct_Cycle(int posit, int loop = 1, int index = 3)		//posit is array position, index is max array size(starting with 1); not currently in use
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)	F86_Sight_Funct_Cur = (F86_Sight_Funct_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)	F86_Sight_Funct_Cur = (F86_Sight_Funct_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (F86_Sight_Funct_Cur < index-1))	F86_Sight_Funct_Cur = (F86_Sight_Funct_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (F86_Sight_Funct_Cur > 0))			F86_Sight_Funct_Cur = (F86_Sight_Funct_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				F86_Sight_Funct_Cur = posit;										//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(F86_Sight_Funct_Array,F86_Sight_Funct_Cur));
+}
+

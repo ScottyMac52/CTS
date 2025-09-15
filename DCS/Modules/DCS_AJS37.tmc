@@ -1,0 +1,1148 @@
+//================================================================================
+//		DCS World Standard DirectX for HOTAS Cougar/Warthog and Cougar MFDs
+//					by Don "Home Fries" Heumphreus
+//						last updated: 28DEC2021
+//
+//	Change Log:
+//	1.67	Initial Release
+//	1.68	Fixed Landing gear bug
+//			Applied WHT LEDs for master mode and LLED2 for Master Arm On (Unsafe)
+//			Added warning if not in NAV+ when in AB and gear down (taking off).  currently in DCS_Init digital throttle wh.
+//	1.69	Updated CommState_Off() call
+//			Added DX discrete switch assignments and replaced DX buttons with key macros
+//			Moved AJS37-specific GearStateInd() to AJS37_Array_Init()
+//	1.70	Removed MapKeyR TG1 condition (now forces release command)
+//			Updated mappings for DCSW 1.5.7 lua files
+//	1.71	Added Data Cartridge selection functionality
+//	1.72	Added Nav Light Toggle for non-FF users
+//	2.02	Set FkeyPress=1 on init to prevent Commswitch activation on profile load
+//	2.05	Updated for additional data cartridge entry
+//	2.10	Improved VAICOM/SRS Compatibility
+//	2.21	Added NS430 compatibility
+//	2.23	Added AJS37_Throttle_Off to IDLERON
+//	2.24	Switched Countermeasure Int and Kont positions on H4 to match in-cockpit switch
+//	2.29	Added MFDisplay module selection
+//			Replaced 4 MFD Led functions with Lights_Four()
+//	2.33	Swapped U22 Mode and Band on RMFD
+//	2.43	Removed Snapviews for VR, replaced with CxK37 mode switch
+//	2.44	Added Rudder Trim, VR and Spyglass Zoom to VR
+//			Updated CM switch commands on S3+H4U/D and removed from S3+H4P
+//	2.46	Added SRS Overlay to ROSB07
+//	2.47	Remapped TG2 to Space, DX6 to S1 to incorporate autopilot disconnect on S4.
+//			Fixed CM Int on Warthog stick
+//	2.50b	Removed duplicate MapKeyR(0) mappings to free stack space.
+//	2.52	Set to NVG Capable, added NVG toggle to S3+LOSB02.
+//	2.53	Added ATT/HOJD Autopilot to S3+H2L/R Long
+//	2.56	Added A/P buttons to H2 Long
+//	2.63	Added WHIdle_Enabled parameter to WH Idle commands
+//	2.63a	Added AJS37_Rdr_Elev_Ctr to S3+SC Short (Radar Memory Long)
+//			Reversed doppler land/sea polarity (APU and LOSB11) for new control scheme
+//			Removed discrete datacarts from B1-x, disabled AJS37_DataCart_Set()
+//			Disabled AJS37_WepSel_Cycle() and AJS37_WepInt_Cycle()
+//
+//
+//================================================================================
+
+//TODO:
+//	Add Nav warning to Cougar - Implemented
+//	Insert Nav Warning cnx on gear up	- Implemented
+//	Apply Nav Warning/cnx to mode select led routine or matrix - Implemented Exclusive activation on AB1, else off
+//	concept: create separate flash/cnx routines for cougar and wht and call them in throttle/mode cycle routines.  currently in DCS_Init.tmc (SetDigitalThrottle_WH line 1210) - Implemented
+//	consider using LEDs 4 and 5 to display master mode.
+		//5 solid NAV
+		//4 solid Attack
+		//4+5 solid Recon
+		//4s+5f land vis
+		//4f+5s land nav
+//	concept: LLED2 flash when safety off.  flash 500.  GearCycle for cycling gear to prevent overlap (e.g. !gearstate and !gearcycle) - Implemented		
+
+//DX Buttons: 5,8,9,10,12,13,14,15,16,17,18; 
+
+int	AJS37_Mode_Array;
+int	AJS37_Mode_Cur;
+int	AJS37_AS_Array;
+int	AJS37_AS_Cur;
+int	AJS37_U22_Mod_Array;
+int	AJS37_U22_Mod_Cur;
+int	AJS37_U22_Band_Array;
+int	AJS37_U22_Band_Cur;
+int	AJS37_CM_Mod_Array;
+int	AJS37_CM_Mod_Cur;
+int	AJS37_CM_S_Mod_Array;
+int	AJS37_CM_S_Mod_Cur;
+int	AJS37_RWR_Array;
+int	AJS37_RWR_Cur;
+int	AJS37_CK37_Sw_Array;
+int	AJS37_CK37_Sw_Cur;
+//int	AJS37_WepSel_Array;	//disabled in 2.63a
+//int	AJS37_WepSel_Cur;
+//int	AJS37_WepInt_Array;
+//int	AJS37_WepInt_Cur;
+//int	AJS37_DataCart_Cur;	//added in 1.71, disabled in 2.63a
+
+int DCS_AJS37(int led, int sp, int prof = 2537)
+{
+printf("DCS AJS-37 Viggen\xa");
+
+if (WarthogStick > 0)	MapKeyR(&Joystick,	S2, EXEC("DCS_AJS37_Init();"));
+else					MapKeyR(&HCougar,	S2, EXEC("DCS_AJS37_Init();"));
+
+if (sp > 0)	PlayWav("ajs37.wav");
+if (led > 0)
+	{
+	Lights_Four(0,1,1,1,	ProfileSwapDelay+LED_Delay);
+	}
+}
+
+int	SetMenu_AJS37()
+{
+Set_Acft_Array_Cur(2537);
+}
+
+
+
+
+
+
+int DCS_AJS37_Init(int prof = 2537)
+{
+Determine_Differential_Braking(DiffBraking_Enabled,CougarToeBrakes);
+
+FkeyPress				=	1;	//added in 2.02 to prevent Commswitch key activation on profile load.
+GraceFlag				=	0;
+Eng_Start_x				=	0;	//Eng_Start_DX;
+Eng_Stop_x				=	0;	//Eng_Stop_DX;
+Starter_Ind_x			=	Starter_Ind_AJS37;
+MFD_Eng_Start			=	0;
+ProfID					=	prof;
+FixedGear				=	0;
+Helicopter				=	0;
+T6WheelBrake			=	0;
+TriggerZoomEnabled		=	0;
+GearCycleTimeDn			=	Gear_Deploy_AJS37;
+GearCycleTimeUp			=	Gear_Retract_AJS37;
+BrakeOnCycleTime		=	Airbrake_Out_AJS37;
+BrakeOffCycleTime		=	Airbrake_In_AJS37;
+WheelBrakeFull			=	1;	
+ToeBrakesAvailable		=	2;	//added in 1.40, constant in dcs world.tmc TBI
+NVG_Capable				=	1;	//added in 1.40, set to 1 in 2.52
+AB_Capable				=	1;	//added in 1.61
+Adjust_Backlighting		=	0;	//added in 1.62
+S4asNWS					=	0;	//added in 1.33
+S3holdNWS 				= 	0;	//added in 2.05
+NS430_Enabled			=	NS430_Installed*NS430_Enabled_AJS37;	//added in 2.21
+CrewCount				=	1;
+StationChangeModifier	=	0;
+WH_Use_TQS				=	0;	//added in 2.43
+Analog_TDC				=	1;	//added in 2.43
+EngineCount				=	1;	//added in 2.43
+Airbrake_Type_Cur		=	1;	//added in 2.43
+CommInitType			=	2;	//0 for none/custom, 1 for single channel (P-51), 2 for simple (dual channel), 3 for complex (3 channel).  added in 2.43
+StnCheckDisabled		=	2;	//added in 2.43.  Forced for single seat
+CurrentStation 			=	1;	//moved here in 2.43
+
+
+AJS37_Mode_Array	=	SEQ(	EXEC("DeferCall(LongTempo,&AJS37_Mode_FK_Sel,1);"),		//updated to sub in 1.71
+								AJS37_Mode_BER,
+								CHAIN(AJS37_Mode_NAV,	EXEC("AJS37_NAV_Warn(0);")),	//added in 1.68
+								AJS37_Mode_ANF,
+								AJS37_Mode_SPA,
+								AJS37_Mode_LANDNAV,
+								AJS37_Mode_LANDPO
+								);
+AJS37_AS_Array		=	SEQ(	AJS37_Rdr_AS0,
+								AJS37_Rdr_AS1,
+								AJS37_Rdr_AS2,
+								AJS37_Rdr_AS3,
+								AJS37_Rdr_AS4,
+								AJS37_Rdr_AS5,
+								AJS37_Rdr_AS6,
+								AJS37_Rdr_AS7
+								);
+AJS37_U22_Mod_Array	=	SEQ(	AJS37_U22_Mod_0,
+								AJS37_U22_Mod_A,
+								AJS37_U22_Mod_B,
+								AJS37_U22_Mod_D,
+								AJS37_U22_Mod_E
+								);
+AJS37_U22_Band_Array=	SEQ(	AJS37_U22_Band_F,
+								AJS37_U22_Band_G,
+								AJS37_U22_Band_H,
+								AJS37_U22_Band_J,
+								AJS37_U22_Band_K
+								);
+AJS37_CM_Mod_Array	=	SEQ(	AJS37_Countermeasure_ModA,
+								AJS37_Countermeasure_Mod0,
+								AJS37_Countermeasure_Mod1,
+								AJS37_Countermeasure_Mod2,
+								AJS37_Countermeasure_Mod3
+								);
+								
+AJS37_CM_S_Mod_Array=	SEQ(	AJS37_Countermeasure_S_Mod0,
+								AJS37_Countermeasure_S_Mod4
+								);
+
+AJS37_RWR_Array		=	SEQ(	AJS37_RWR_Off,
+								AJS37_RWR_Light,
+								AJS37_RWR_LightSound
+								);
+//AJS37_WepSel_Array	=	SEQ(	AJS37_WepSel_0_PLAN,
+//								AJS37_WepSel_1_RB75,
+//								AJS37_WepSel_2_LUFT,
+//								AJS37_WepSel_3_AKAN,
+//								AJS37_WepSel_4_ATTACK,
+//								AJS37_WepSel_5_IRRB
+//								);
+
+//AJS37_WepInt_Array 	=	SEQ(	AJS37_WepInt_00_VA,		//obsolete in 2.63a
+//								AJS37_WepInt_01_RAKT,
+//								AJS37_WepInt_02_HO,
+//								AJS37_WepInt_03_10m,
+//								AJS37_WepInt_04_15m,
+//								AJS37_WepInt_05_20m,
+//								AJS37_WepInt_06_25m,
+//								AJS37_WepInt_07_30m,
+//								AJS37_WepInt_08_40m,
+//								AJS37_WepInt_09_50m,
+//								AJS37_WepInt_10_60m
+//								);
+
+AJS37_CK37_Sw_Array	=	SEQ(	AJS37_CK37_0_IDNR,
+								AJS37_CK37_1_TAKT,
+								AJS37_CK37_2_TID,
+								AJS37_CK37_3_VIND,
+								AJS37_CK37_4_BANA,
+								AJS37_CK37_5_REF,
+								AJS37_CK37_6_POS
+								);
+
+
+printf("Done\xa Execute DCS AJS-37 Viggen Config (Profile v%i.%i):\xa",MajorVersion,MinorVersion);
+PlayWavSel(ProfID,abs(Init_Run - 1),DCSFP_Enabled,MFDisplayEnabled);	//added in 1.61, DCSFP added in 2.05, MFDisplay added in 2.29
+Pause_TrackIR(0);
+AirBrake_Init(AirBrkFlash);	//moved to individual modules in 1.22 
+MFD_Init(ProfID);
+	printf("   Map HOTAS for DCS AJS-37 Viggen Config:\xa");
+	DCS_Axis_Init(ProfID,EngineCount,Analog_TDC);
+if (WarthogStick > 0)
+	{
+		printf("      Warthog Stick Button Mapping:\xa");
+			printf("         Shift Commands: S3  momentary...");
+				if (WarthogThrottle > 0) SetShiftButton(&Joystick, S3, &Throttle, 0, 0);
+				else	SetShiftButton(&Joystick, S3, &HCougar, 0, 0);
+				MapKey	(&Joystick, S3, BTN_S3P);		//DX3 short, long(er) for modifier and eject check, moved here in 0.53, removed S4 and changed argument to "RudderPedals"
+				MapKeyR	(&Joystick, S3, BTN_S3R);		//added in 0.53 to release "RudderPedals" argument in S3Shifted
+			printf("...Done!\xa");	
+			printf("         Cougar Stick Buttons...");	
+				
+				MapKey	(&Joystick, TG1, DX1);
+				
+				//if (AJS37_Custom_LUA > 0) MapKeyR	(&Joystick, TG1, 0);	//condition disabled in 1.70
+				//else MapKeyR	(&Joystick,	TG1, PULSE+AJS37_T0);
+				MapKeyR	(&Joystick,	TG1, PULSE+AJS37_T0);					//release forced in 1.70 until 2-stage trigger actions implemented by default	
+
+				MapKey	(&Joystick, TG2, Weapon_Fire);	//used as TV fix, was DX6);
+//				MapKeyR	(&Joystick, TG2, 0);
+				MapKey	(&Joystick, S1, DX6);	//TEMPO(AJS37_RadarFilter_Dn,AJS37_RadarFilter_Up,DefTempo),	DX4);	
+				MapKey	(&Joystick, S2, DX2);
+				MapKeyR	(&Joystick,	S2, 0);
+				MapKeyIO(&Joystick, S4, EXEC("S3S4Shifted();"), EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,0);"));	//Chain allows DX4 and wheelbrakes; diffbraking added in 0.24, DX30 removed, DX4 moved to Diffbraking in 0.32
+				MapKeyRIO(&Joystick, S4, 0, EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,1);"));
+				//AJS37_WHS_Init(ProfID);
+			printf("...Done!\xa");	
+	}
+else
+	{
+		printf("      Button Mapping:\xa");
+			printf("         Shift Commands: S3  momentary...");
+				SetShiftButton(&HCougar, S3, &HCougar, 0, 0);
+				MapKey	(&HCougar, S3, BTN_S3P);		//DX3 short, long(er) for modifier and eject check, moved here in 0.53, removed S4 and changed argument to "RudderPedals"
+				MapKeyR	(&HCougar, S3, BTN_S3R);		//added in 0.53 to release "RudderPedals" argument in S3Shifted
+			printf("...Done!\xa");	
+			printf("         Cougar Stick Buttons...");	
+				
+				MapKey	(&HCougar, 	TG1, DX1);
+				MapKeyR	(&HCougar,	TG1, PULSE+AJS37_T0);				//Release Nav mode
+
+				MapKey(&HCougar, TG2, Weapon_Fire);	//used as TV fix, was DX6);
+//				MapKeyR(&HCougar, TG2, 0);
+				MapKey(&HCougar, S1, DX6);		//TEMPO(AJS37_RadarFilter_Dn,AJS37_RadarFilter_Up,DefTempo),	DX4);	
+				MapKey(&HCougar, S2, DX2);
+				MapKeyR	(&HCougar,	S2, 0);
+				//MapKey(&HCougar, S3, CHAIN(DX30,TEMPO(DX3, EXEC("S3S4Shifted(0);"), ModTempo)));		//moved to DCS_Init in 0.53
+				MapKeyIO(&HCougar, S4, EXEC("S3S4Shifted();"), EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,0);"));	//Chain allows DX4 and wheelbrakes; diffbraking added in 0.24, DX30 removed, DX4 moved to Diffbraking in 0.32
+				MapKeyRIO(&HCougar, S4, 0, EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,1);"));
+				//AJS37_HCS_Init(ProfID);
+			printf("...Done!\xa");	
+	}
+	
+			H1_Init(TrackIR, PadlockEnabled, ProfID, XYAxisTrim);	//moved to individual routines in 1.27 for trim reset removal on helos, added XYAxisTrim in 1.34
+			CommState_Off(1,ProfID,1,0,1);		//sets hats 2-4 to functions
+if (WarthogThrottle > 0)
+	{
+			printf("         Throttle Buttons...");	
+				MapKeyIO(&Throttle, SC, TEMPO(AJS37_Rdr_Elev_Ctr,AJS37_Rdr_Memory,DefTempo),	AJS37_IR_Uncage);	//AIM-9 Uncage
+//				MapKeyR	(&Throttle, SC, 0);							//Added in 0.51 to prevent P-51D CommState Release.
+
+				MapKeyIO(&Throttle, CSR,	EXEC("AJS37_Mode_Cycle(8);"),	AJS37_Radar_MKR_Incr_DX);
+				MapKeyIO(&Throttle, CSL,	EXEC("AJS37_Mode_Cycle(-1);"),	AJS37_Radar_MKR_Decr_DX);
+				MapKeyIO(&Throttle, CSU,	EXEC("AJS37_AS_Cycle(8);"),		AJS37_Rdr_Elev_Up);
+				MapKeyIO(&Throttle, CSD,	EXEC("AJS37_AS_Cycle(-1);"),	AJS37_Rdr_Elev_Dn);
+
+				MapKeyIO(&Throttle, LTB,	AJS37_AutoThrottle_AOA,	AJS37_AutoThrottle_Discon_AA);	//changed from DX24 to keystrokes in 2.34
+//				MapKeyR	(&Throttle, LTB,	0);
+
+
+				MapKeyIO(&Throttle,	LDGH,	EXEC("EjectCheckLDGH(ProfID);"),	AJS37_MasterCaution);
+				MapKeyIO(&Throttle,	APENG,	AJS37_Roll_Trim_Neutral,	AJS37_Airstart);
+				
+				MapKeyIO(&Throttle,	CHF,	TEMPO(0,EXEC("AJS37_Gear_Map(1,1);"),GearDnTempo),		AJS37_Radar_Rng_Incr);
+				MapKeyIO(&Throttle,	CHB,	TEMPO(0,EXEC("AJS37_Gear_Map(0,1);"),GearUpTempo),		AJS37_Radar_Rng_Decr);
+//				MapKeyR	(&Throttle,	CHF,	0);	//Added for F-86 in 1.69
+//				MapKeyR	(&Throttle,	CHB,	0);	//Added for F-86 in 1.69				
+			
+				MapKey	(&Throttle,	IDLELON,	0);	//CHAIN(PULSE+Engine_Left_Stop, EXEC("Engine_Shutdown_Ind(1, Engine_Shutdown_Ind_Time, 1);")));
+				MapKey	(&Throttle,	IDLELOFF,	0);	//CHAIN(PULSE+Engine_Left_Start, EXEC("Engine_Start_Ind(1, Starter_Ind_x, 1);")));
+				//IDLER covered based on AJS37_Custom_LUA
+				
+				//MapKeyIO(&Throttle,	APAH,		0,	PULSE+AJS37_Thrust_Rev_Off); moved to custom lua for man fuel regulator light
+				MapKeyIO(&Throttle,	APALT,		0,	PULSE+AJS37_Thrust_Rev_On);
+								
+				MapKeyIO(&Throttle,	EOLIGN,		EXEC("AJS37_RWR_Cycle(2);IgnLState = 1;"),	EXEC("if (!IgnLState){AJS37_RWR_Cycle(2); Grace_Flag(1); IgnLState = 1;}")	);
+				MapKeyIO(&Throttle,	EOLNORM,	0,											EXEC("if (!IgnLState) AJS37_RWR_Cycle(1);")	);
+				MapKey	(&Throttle,	EOLMOTOR,												EXEC("AJS37_RWR_Cycle(0); IgnLState = 0;")	);	
+				MapKeyRIO(&Throttle,EOLIGN,		EXEC("IgnLState = 1;"),	EXEC("if ((IgnLState) & (!GraceFlag)) IgnLState = 0; else Grace_Flag(0);")	);
+				
+//				if (AJS37_Custom_LUA > 0)	//UP+DX to force release if DOWN+DX in MFD
+//					{
+					if (WHIdle_Enabled > 0)
+					{
+					MapKeyIO(&Throttle,	IDLERON,	DX11, 	CHAIN(DX11,EXEC("AJS37_Mode_LED_WH(0,AirBrkFlash,LED_Delay,1,1);"))	);
+					MapKeyIO(&Throttle,	IDLEROFF,	0,		EXEC("AJS37_Mode_LED_WH(AJS37_Mode_Cur,AirBrkFlash,LED_Delay,1);"));
+					}
+					
+					MapKey	(&Throttle,	APPAT,		CHAIN(DX5,EXEC("Lights_RLED2(1);"))	);	//Man Fuel Regulator
+					MapKeyIO(&Throttle,	APAH,		0,	CHAIN(PULSE+AJS37_Thrust_Rev_Off,EXEC("Lights_RLED2(0);"))	);
+					
+					MapKeyIO(&Throttle,	EORIGN,		CHAIN(UP+DX15,D(ModDelay),DOWN+DX17),		CHAIN(UP+DX15,D(ModDelay),DOWN+DX17,EXEC("if (!IgnRState){ Grace_Flag(1); IgnRState = 1;}"))	);	//Flare only
+					MapKeyIO(&Throttle,	EORNORM,	0,											EXEC("if (!IgnRState) ActKey(DX17);ActKey(DX15);")	);			
+					MapKey	(&Throttle,	EORMOTOR,												CHAIN(UP+DX17,D(ModDelay),DX15,EXEC(" IgnRState = 0;"))	);		//Chaff Only
+					MapKeyRIO(&Throttle,EORIGN,		EXEC("IgnRState = 1;"),	EXEC("if ((IgnRState) & (!GraceFlag)) IgnRState = 0; else Grace_Flag(0);")	);
+						
+//					MapKey	(&Throttle,	EFLNORM,	DX12);		//Pulse Length	//changed from radar to weps in 1.70
+//					MapKey	(&Throttle,	EFLOVER,	UP+DX12);
+//					MapKey	(&Throttle,	EFRNORM,	DX14);		//0,	PULSE+AJS37_Rdr_LOG);		
+//					MapKey	(&Throttle,	EFROVER,	UP+DX14);	//0,	PULSE+AJS37_Rdr_LIN);
+
+//					MapKey	(&Throttle,	EACON,		DX8);	//Passive Mode		//changed to radar in 1.70
+//					MapKey	(&Throttle,	EACOFF,		UP+DX8);
+//					MapKey	(&Throttle,	RDRNRM,		UP+DX10);	//RadAlt
+//					MapKey	(&Throttle,	RDRDIS,		DX10);
+					
+					MapKey	(&Throttle,	EFLNORM,	DX9);		//Weapon Release Mode
+					MapKey	(&Throttle,	EFLOVER,	UP+DX9);
+					MapKey	(&Throttle,	EFRNORM,	DX10);				
+					MapKey	(&Throttle,	EFROVER,	UP+DX10);	//VALB/Std (was RadAlt)
+
+					MapKey	(&Throttle,	EACON,		DX12);		//pulse length
+					MapKey	(&Throttle,	EACOFF,		UP+DX12);
+					MapKey	(&Throttle,	RDRNRM,		DX14);		//log/lin
+					MapKey	(&Throttle,	RDRDIS,		UP+DX14);		
+
+					MapKeyIO(&Throttle,	FLAPU,		PULSE+AJS37_Canopy_Close,	DX16);	//DX16 AFK
+					MapKeyIO(&Throttle,	FLAPD,		PULSE+AJS37_Canopy_Open,	DX16);
+//					MapKeyR	(&Throttle, FLAPU,		0);	//UP+DX16);
+					
+					MapKey	(&Throttle,	APUON,		DX18);	//DX18 Doppler Toggle
+					MapKey	(&Throttle,	APUOFF,		UP+DX18);
+					
+					MapKey	(&Throttle,	PSF,	DX13);	//Obstacle Mode
+					MapKey	(&Throttle,	PSB,	DX8);	//Passive Mode
+//					MapKey	(&Throttle,	PSM,	0);
+//					}
+//				else
+//					{
+//					MapKeyIO(&Throttle,	IDLERON,	0,	PULSE+AJS37_Throttle_Off);
+//					MapKeyIO(&Throttle,	IDLEROFF,	0,	PULSE+AJS37_Idle);
+//
+//					MapKeyIO(&Throttle,	APPAT,		0,	PULSE+AJS37_Thrust_Rev_Off);
+//					MapKeyIO(&Throttle,	APAH,		0,	PULSE+AJS37_Thrust_Rev_Off);
+//					
+//					MapKey	(&Throttle,	EORIGN,		0);
+//					MapKey	(&Throttle,	EORNORM,	0);	
+//					MapKey	(&Throttle,	EORMOTOR,	0);	
+//					MapKeyR	(&Throttle,	EORIGN,		0);
+//				
+//					MapKey	(&Throttle,	EFLNORM,	0);	
+//					MapKey	(&Throttle,	EFLOVER,	0);	
+//					//MapKeyIO(&Throttle,	EFRNORM,	0,	PULSE+AJS37_Rdr_LOG);
+//					//MapKeyIO(&Throttle,	EFROVER,	0,	PULSE+AJS37_Rdr_LIN);
+//					MapKey	(&Throttle,	EFRNORM,	0);
+//					MapKey	(&Throttle,	EFROVER,	0);
+//					
+//					MapKeyIO(&Throttle,	FLAPU,		PULSE+AJS37_Canopy_Close,	PULSE+Autothrottle);
+//					MapKeyIO(&Throttle,	FLAPD,		PULSE+AJS37_Canopy_Open,	0);
+//					MapKeyRIO(&Throttle,FLAPU,		0,	PULSE+Autothrottle);
+//					
+//					MapKeyIO(&Throttle,	APUON,		0,	PULSE+AJS37_Doppler_Toggle);
+//					MapKeyIO(&Throttle,	APUOFF,		0,	PULSE+AJS37_Doppler_Toggle);
+//					
+//					MapKeyIO(&Throttle,	EACON,		0,	PULSE+AJS37_Rdr_Pass);
+//					MapKeyIO(&Throttle,	EACOFF,		0,	PULSE+AJS37_Rdr_Pass);
+//					//MapKeyIO(&Throttle,	RDRNRM,		0,	PULSE+AJS37_RadAlt);
+//					//MapKeyIO(&Throttle,	RDRDIS,		0,	PULSE+AJS37_RadAlt);
+//					MapKeyIO(&Throttle,	RDRNRM,		0,	PULSE+AJS37_Rdr_LOG);
+//					MapKeyIO(&Throttle,	RDRDIS,		0,	PULSE+AJS37_Rdr_LIN);
+//					
+//					MapKeyIO(&Throttle,	PSF,	0,	PULSE+AJS37_Rdr_ObstacleMode);
+//					MapKeyIO(&Throttle,	PSB,	0,	PULSE+AJS37_Rdr_ObstacleMode);
+//					MapKeyIO(&Throttle,	PSM,	0,	TEMPO(0,PULSE+AJS37_Rdr_ObstacleMode, DoubleTap));
+//					}
+//				MapKeyR	(&Throttle,	EFLNORM,	0);
+//				MapKeyR	(&Throttle,	EFRNORM,	0);
+				
+//				MapKeyR	(&Throttle,	FLAPD,	0);
+//				MapKey	(&Throttle,	FLAPM,	0);	//,	TEMPO(0,0, DoubleTap));
+	AJS37_Switch_Sync(ProfID);
+	}
+else
+	{
+			printf("         TQS Buttons...");	
+				MapKeyIO(&HCougar, T1, AJS37_AutoThrottle_AOA, AJS37_Rdr_Memory);
+//				MapKeyR	(&HCougar, T1, 0);							//Added in 0.51 to prevent P-51D CommState Release.
+
+				MapKeyIO(&HCougar, T6, TEMPO(AJS37_IR_Uncage, EXEC("EjectCheckT6(ProfID);"), DefTempo),AJS37_AutoThrottle_Discon_AA);	
+//				MapKeyR	(&HCougar, T6, 0);
+	}
+		AJS37_Gear_Map(GearDn_Ind_Default);	
+		Simple_Comm_Init(ProfID,1,0);			//Set Comms routine (DX21, PTTLED, and simple commmenu (\)
+		
+		Global_DF_Init(WarthogThrottle,ProfID);
+		printf("...Done!\xa");	
+	printf("   HOTAS Mapping Complete.\xa");			
+
+
+
+Airbrake_Map_Set(Airbrake_Type_Cur,0);		//moved to main in 1.68
+FlapState=0;				//for future implementation
+TriggerZoom_state  = 0;		//reset TriggerZoom
+ActKey(DX1);				//just in case DX1 lingers from trigger activation
+//Lights_ALL(0);				//Says Init Complete
+	
+	DeferCall(LED_Delay,&Lights_RLED2,0);	//Number changed in 1.28
+	DeferCall(2*LED_Delay,&Lights_LLED1,0);
+	DeferCall(3*LED_Delay,&Lights_RLED1,0);
+	DeferCall(4*LED_Delay,&Backlight_Max_Init,0);
+	if (WarthogThrottle > 0) DeferCall(7*LED_Delay,&WHT_Lights_Dn_D,0);
+
+//if (Init_Run == 0) Gear_Ind_Init(GearDn_Ind_Default,FixedGear,Helicopter,AirBrkFlash);	
+Eject_Init(ProfID,0);
+
+if (GearDn_Ind_Default > 0) Map_Cougar_ToeBrakes(ToeBrakesAvailable);//added in 1.40;
+else	Map_Cougar_ToeBrakes(0);
+
+printf(" AJS-37 Config Complete!\xa");	
+Set_Acft_Array_Cur(ProfID);
+}
+
+
+//Note: Dogfight Init global DX25/26
+
+int AJS37_Array_Init(int gear)
+{
+AJS37_Mode_LED_Init(0);	//Zeroes out LED
+if (gear)
+	{
+	AJS37_Mode_Cur = 1;	//set to BER
+	AJS37_CK37_Sw_Cur = 0;	//ID/NR
+	}
+else 
+	{
+	AJS37_Mode_Cur = 2;	//set to NAV
+	AJS37_CK37_Sw_Cur = 6; //POS
+	}
+AJS37_AS_Cur = 0;	//set to AS0
+AJS37_U22_Mod_Cur = 0;
+AJS37_U22_Band_Cur = 0;
+AJS37_CM_Mod_Cur = 3;	//mode 2
+AJS37_CM_S_Mod_Cur = 0;
+AJS37_RWR_Cur = 2;	//lights/sound
+//AJS37_WepSel_Cur = 0;	//PLAN	//obsolete in 2.63a
+//AJS37_WepInt_Cur = 4;	//15m
+//AJS37_DataCart_Cur = 0;	//added in 1.71, obsolete in 2.63a
+
+ActKey(DX14);	//releases Landing Light
+ActKey(DX9);	//releases emer lighting
+ActKey(DX7);	//Trigger Safe
+
+if (AirBrkFlash < 0) AJS37_GearStateInd(GearDn_Ind_Default);
+else
+	{
+	DeferCall(500+LED_Delay, &AJS37_Mode_LED_Init, AJS37_Mode_Cur);						//added in 1.68
+	DeferCall(500+2*LED_Delay, &AJS37_MasterArm_LED,0);
+	DeferCall(1000+3*LED_Delay, &AJS37_GearStateInd,GearDn_Ind_Default);	//moved here in 1.69
+	}
+}
+
+int AJS37_GearStateInd(int state)	//single variable GearStateInd routine for DeferCall()
+{
+GearStateInd(state,2537,0,0);
+}
+
+int	AJS37_Switch_Sync(int prof = 2537)
+{
+if	(AJS37_Custom_LUA > 0)
+	{
+	if	(Throttle[EACON])		ActKey(KEYON+DX8);	//pulse
+	if	(Throttle[RDRNRM])		ActKey(KEYON+DX10);	//log
+
+	if	(Throttle[APPAT])		{ActKey(KEYON+DX5); if (AirBrkFlash >= 0) Lights_RLED2(1);}
+	else if (AirBrkFlash >= 0) Lights_RLED2(0);
+	//	APALT Key command
+		
+	if	(Throttle[APUOFF])		ActKey(KEYON+DX18);
+	
+	if	(Throttle[EFLNORM])		ActKey(KEYON+DX9);
+	if	(Throttle[EFRNORM])		ActKey(KEYON+DX10);
+	
+	if 	(Throttle[EORMOTOR])	ActKey(KEYON+DX15);	//Chaff
+	//	EOL key commands
+
+	if (Throttle[PSF])			ActKey(KEYON+DX13);	//obstacle mode
+	if (Throttle[PSB])			ActKey(KEYON+DX8);	//Passive Mode
+	
+	if ((Throttle[FLAPU]) | (Throttle[FLAPD]))	ActKey(KEYON+DX16);
+	}
+	
+if (Throttle[BSF])			ActKey(KEYON+DX26);	//radar A switch
+if (Throttle[BSB])			ActKey(KEYON+DX25);
+}
+
+int AJS37_HCS_Init(int prof = 2537, int force = 0)	//force added in 1.69 as passthru to allow for initial TGZ_MapGearDn if TGZ disabled)
+{
+		if (Script_Debug) printf("         Hat2 (TMS)...");	
+			MapKeyIO(&HCougar,	H2U,	AJS37_EP13_Brt_Up,	CHAIN(DOWN+DX7,	EXEC("AJS37_MasterArm_LED(1);"))	);	//wpn safety switch
+			MapKeyIO(&HCougar,	H2D,	AJS37_EP13_Brt_Dn,	TEMPO(CHAIN(UP+DX7,	EXEC("AJS37_MasterArm_LED(0);")),ECM,DefTempo)	);	//AP SPAK
+			MapKeyIO(&HCougar,	H2R,	AJS37_EP13_Cnt_Up,	TEMPO(AJS37_Radar_Rng_Incr,AP_Baro_Alt_Hold_H,DefTempo)	);	//AP HOJD				
+			MapKeyIO(&HCougar,	H2L,	AJS37_EP13_Cnt_Dn,	TEMPO(AJS37_Radar_Rng_Decr,Autopilot,DefTempo)		);	//AP att hold
+		if (Script_Debug) printf("Done!\xa");	
+		if (Script_Debug) printf("         Hat3 (");
+			if (TrackIR < 2)
+				{
+				if (Script_Debug) printf("SnapViews)...");
+				MapKeyIO(&HCougar, 	H3R,	Std_SnapView6,	CHAIN(DX30,D(ModDelay),Shift_SnapView3));	//Force DX30 because of remapped numpad
+				MapKeyIO(&HCougar, 	H3L,	Std_SnapView4,	CHAIN(DX30,D(ModDelay),Shift_SnapView1));	//SnapView1 may become INS Direct Entry 
+				}
+			else
+				{
+				if (Script_Debug) printf("VR - CK37)...");
+				MapKeyIO(&HCougar, 	H3R,	RudderTrimRt_DX,	AJS37_CK37_CW);
+				MapKeyIO(&HCougar, 	H3L,	RudderTrimLt_DX,	AJS37_CK37_CCW);	
+				}
+			AJS37_Gear_Map(GearState);	//Maps H3U/D
+		if (Script_Debug) printf("Done!\xa");	
+		if (Script_Debug) printf("         Hat4 (Special Modes)...");				
+			MapKeyIO(&HCougar,	H4U,	AJS37_CounterMeasure_Kont,	DX19);	//19 for dispense, 
+//			MapKeyR	(&HCougar,	H4U, 	0);			//added to cancel helo trim
+			MapKeyIO(&HCougar,	H4D,	TEMPO(AJS37_CounterMeasure_Int,AJS37_CounterMeasure_Off,DefTempo),	DX19);
+//			MapKeyR	(&HCougar,	H4D,	0);			//added to cancel helo trim
+			MapKeyIO(&HCougar,	H4R,	EXEC("AJS37_CM_S_Mod_Cycle(1);"),	EXEC("AJS37_CM_Mod_Cycle(5);"));	//use for chaff/flare later
+			MapKeyIO(&HCougar,	H4L,	EXEC("AJS37_CM_S_Mod_Cycle(0);"),	EXEC("AJS37_CM_Mod_Cycle(-1);"));
+		if (Script_Debug) printf("Done!\xa");	
+}
+int AJS37_WHS_Init(int prof = 2537, int force = 0)	//force added in 1.69 as passthru to allow for initial TGZ_MapGearDn if TGZ disabled. must force if no wh throttle
+{
+		if (Script_Debug) printf("         Hat2 (TMS)...");	
+			MapKeyIO(&Joystick,	H2U,	AJS37_EP13_Brt_Up,	CHAIN(DOWN+DX7,	EXEC("AJS37_MasterArm_LED(1);"))	);	//wpn safety switch
+			MapKeyIO(&Joystick,	H2D,	AJS37_EP13_Brt_Dn,	TEMPO(CHAIN(UP+DX7,	EXEC("AJS37_MasterArm_LED(0);")),ECM,DefTempo)	);	//AP SPAK
+			MapKeyIO(&Joystick,	H2R,	AJS37_EP13_Cnt_Up,	TEMPO(AJS37_Radar_Rng_Incr,AP_Baro_Alt_Hold_H,DefTempo)	);	//AP HOJD				
+			MapKeyIO(&Joystick,	H2L,	AJS37_EP13_Cnt_Dn,	TEMPO(AJS37_Radar_Rng_Decr,Autopilot,DefTempo)		);	//AP att hold
+		if (Script_Debug) printf("Done!\xa");	
+		if (Script_Debug) printf("         Hat3 (");
+			if (TrackIR < 2)
+				{
+				if (Script_Debug) printf("SnapViews)...");
+				MapKeyIO(&Joystick, 	H3R,	Std_SnapView6,	CHAIN(DX30,D(ModDelay),Shift_SnapView3));		//Force DX30 because of remapped numpad
+				MapKeyIO(&Joystick, 	H3L,	Std_SnapView4,	CHAIN(DX30,D(ModDelay),Shift_SnapView1));		//SnapView1 may become INS Direct Entry	
+				}
+			else
+				{
+				if (Script_Debug) printf("VR - CK37)...");
+				MapKeyIO(&Joystick, 	H3R,	RudderTrimRt_DX,	AJS37_CK37_CW);	
+				MapKeyIO(&Joystick, 	H3L,	RudderTrimLt_DX,	AJS37_CK37_CCW);
+				}
+			if (WarthogThrottle > 0)	//otherwise H3U/D covered in AJS37_Gear_Map(GearState)
+				{
+				//MapKeyIO(&Joystick,	H3D,	EXEC("AJS37_CK37_Sw_Cycle(-1);"),	AJS37_Seat_Down);	//forced as of 1.70
+				//MapKeyIO(&Joystick, 	H3U,	EXEC("AJS37_CK37_Sw_Cycle(8);"),	AJS37_Seat_Up);
+				
+				if (TrackIR < 2)
+					{
+					MapKeyIO(&Joystick,		H3D,	AJS37_CK37_CCW,	AJS37_Seat_Down);	//CW/CCW replaces discrete routine in 2.25
+					MapKeyIO(&Joystick, 	H3U,	AJS37_CK37_CW,	AJS37_Seat_Up);
+					}
+				else
+					{
+					MapKeyIO(&Joystick,		H3D,	VR_Spyglass,	AJS37_Seat_Down);	//CW/CCW replaces discrete routine in 2.25
+					MapKeyIO(&Joystick, 	H3U,	VR_Zoom_kb,		AJS37_Seat_Up);
+					}				
+				}
+			else AJS37_Gear_Map(GearState);				
+		if (Script_Debug) printf("Done!\xa");	
+		if (Script_Debug) printf("         Hat4 (Special Modes)...");				
+//		if (AJS37_Custom_LUA > 0)
+//			{
+//			MapKeyIO(&Joystick,	H4U,	EXEC("AJS37_CM_S_Mod_Cycle(1);"),	CHAIN(UP+DX17,D(ModDelay),DOWN+DX15));
+//			MapKeyIO(&Joystick,	H4D,	EXEC("AJS37_CM_S_Mod_Cycle(0);"),	CHAIN(UP+DX15,D(ModDelay),DOWN+DX17));
+//			MapKeyIO(&Joystick,	H4P,	CHAIN(UP+DX15,D(ModDelay),UP+DX17),	DX19);
+//			}
+//		else
+//			{
+			MapKeyIO(&Joystick,	H4U,	AJS37_CounterMeasure_Kont,	EXEC("AJS37_CM_S_Mod_Cycle(1);")	);
+			MapKeyIO(&Joystick,	H4D,	TEMPO(AJS37_CounterMeasure_Int,AJS37_CounterMeasure_Off,DefTempo),	EXEC("AJS37_CM_S_Mod_Cycle(0);")	);
+			MapKey	(&Joystick,	H4P,	DX19);
+//			}	
+//			MapKeyR	(&Joystick,	H4U, 	0);			//added to cancel helo trim
+//			MapKeyR	(&Joystick,	H4D,	0);			//added to cancel helo trim
+			
+			MapKeyIO(&Joystick,	H4R,	TEMPO(EXEC("AJS37_RWR_Cycle(2);IgnLState = 1;"), EXEC("AJS37_RWR_Cycle(0);IgnLState = 0;"), DefTempo),	EXEC("AJS37_CM_Mod_Cycle(5);"));	//IgnLState to sync with IGN throttle base
+			MapKeyIO(&Joystick,	H4L,	TEMPO(EXEC("AJS37_RWR_Cycle(1);IgnLState = 0;"), EXEC("AJS37_RWR_Cycle(0);IgnLState = 0;"), DefTempo),	EXEC("AJS37_CM_Mod_Cycle(-1);"));
+		if (Script_Debug) printf("Done!\xa");	
+}
+
+int AJS37_MFD_Init(int prof = 2537)
+{
+//===================================
+//		Standard MFD Buttons
+//===================================
+
+	printf("   Map Cougar Left  MFD (DX31)...");	
+//LOSB 1 in Init
+					MapKeyIO(&LMFD, OSB02,	NVG_Toggle,	ECM);	//spak
+					MapKey	(&LMFD, OSB03,	Autopilot);	//att hold
+					MapKey	(&LMFD,	OSB04,	AP_Baro_Alt_Hold_H);
+//					MapKeyR	(&LMFD,	OSB04,	0);	//for A-10C and F-5E				
+					MapKeyIO(&LMFD, OSB05,	AJS37_Caution_Illum_Toggle,	AJS37_MasterCaution);
+//					MapKeyR	(&LMFD,	OSB05,	0);	//For F-5E
+//LOSB 6-10
+					MapKey	(&LMFD,	OSB06,	CHAIN(DX31,D(ModDelay),DX6));	//Hud angle toggle
+					MapKey	(&LMFD,	OSB07,	AJS37_Kontroll);	
+//					MapKeyR	(&LMFD,	OSB07,	0);	//for Bf109
+					MapKey	(&LMFD,	OSB08,	AJS37_Airstart);
+					MapKey	(&LMFD,	OSB09,	AJS37_Altim_Incr);	//_Fast);
+					MapKey	(&LMFD,	OSB10,	AJS37_Altim_Decr);	//_Fast);
+
+//LOSB 11-15
+					//MapKeyIO(&LMFD,	OSB12,	AJS37_Rdr_LOG,	TEMPO(AJS37_Rdr_LIN,	AJS37_Rdr_LOG,	DefTempo));	//log/lin changed to selectable DX in 1.70
+					
+				if (AJS37_Custom_LUA > 0)
+					{
+					MapKeyIO(&LMFD,	OSB11,	DOWN+DX18, TEMPO(UP+DX18,DOWN+DX18,DefTempo));	//doppler
+					MapKeyIO(&LMFD,	OSB12,	DOWN+DX14, TEMPO(UP+DX14,DOWN+DX14,DefTempo));	//log/lin
+					MapKeyIO(&LMFD,	OSB13,	DOWN+DX12,TEMPO(UP+DX12,DOWN+DX12,DefTempo));	//pulse length
+					MapKeyIO(&LMFD,	OSB14,	DOWN+DX8,TEMPO(UP+DX8,DOWN+DX8,DefTempo));	//passive radar
+					MapKeyIO(&LMFD,	OSB15,	DOWN+DX16,TEMPO(UP+DX16,DOWN+DX16,DefTempo));	//autothrottle
+					
+					//MapKeyIO(&LMFD,	OSB18,	DOWN+DX14,TEMPO(UP+DX14,DOWN+DX14,DefTempo));	//landing light	
+					//MapKeyIO(&LMFD,	OSB19,	DOWN+DX9,TEMPO(UP+DX9,DOWN+DX9,DefTempo));		//emer light
+					}
+				else
+					{
+					MapKey	(&LMFD,	OSB11,	AJS37_Doppler_Toggle);	//CHAIN(DX31,D(ModDelay),DX11));	//doppler
+					MapKeyIO(&LMFD,	OSB12,	AJS37_Rdr_LOG,	TEMPO(AJS37_Rdr_LIN,	AJS37_Rdr_LOG,	DefTempo));	//log/lin
+//					MapKey	(&LMFD,	OSB13,	0);	//AJS37_Pulse_Norm,TEMPO(AJS37_Pulse_Short,	AJS37_Pulse_Norm,	DefTempo));	//pulse tbi
+					MapKey	(&LMFD,	OSB14,	AJS37_Rdr_Pass);	//passive radar
+					MapKey	(&LMFD,	OSB15,	Autothrottle);	//CHAIN(DX31,D(ModDelay),DX15));	//autothrottle
+					
+					//MapKey	(&LMFD,	OSB18,	AJS37_TaxiLndLts);
+					//MapKey	(&LMFD,	OSB19,	0);	//CHAIN(DX31,D(ModDelay),DX19));	//emer light tbi					
+					}
+					
+
+
+//LOSB 16-19
+					MapKeyIO(&LMFD,	OSB16,	AJS37_Canopy_Jett,	TEMPO(0, AJS37_Canopy_Jett, LongTempo)	);
+					MapKeyIO(&LMFD,	OSB17,	AJS37_TaxiLndLts_Taxi,	TEMPO(AJS37_TaxiLndLts_Off,AJS37_TaxiLndLts_Taxi,DefTempo));	//taxi light
+					MapKeyIO(&LMFD,	OSB18,	AJS37_TaxiLndLts_On,	TEMPO(AJS37_TaxiLndLts_Off,AJS37_TaxiLndLts_On,  DefTempo));	//landing light	
+					MapKeyIO(&LMFD,	OSB19,	AJS37_EmerLts_On, TEMPO(AJS37_EmerLts_Off,AJS37_EmerLts_On,DefTempo));	//emer light						
+					
+		
+//LMFD 20 in Init
+
+//Left Rocker Switches
+//SYM
+		MapKeyIO(&LMFD,	SYMU,	EXEC("AJS37_Mode_Cycle(8);"),	AJS37_Radar_Rng_Incr);
+		MapKeyIO(&LMFD,	SYMD,	EXEC("AJS37_Mode_Cycle(-1);"),	AJS37_Radar_Rng_Decr);
+
+//CON
+		MapKeyIO(&LMFD,	CONU,	EXEC("AJS37_AS_Cycle(8);"),		AJS37_Radar_MKR_Incr_DX);
+		MapKeyIO(&LMFD,	COND,	EXEC("AJS37_AS_Cycle(-1);"),	AJS37_Radar_MKR_Decr_DX);
+		
+//BRT
+		AJS37_Map_LBRT(GearState);
+
+		
+//GAIN in Init
+
+	printf("Done!\xa");
+
+	printf("   Map Cougar Right MFD (DX32)...");
+
+//ROSB 1-10 in Init
+
+
+//		MapKeyIO(&RMFD,	OSB01,	EXEC("AJS37_DataCart_Set(-1);"),	CHAIN(DX32,D(ModDelay),DX1));	//HUD Declutter
+//		MapKeyIO(&RMFD,	OSB02,	EXEC("AJS37_DataCart_Set(7);"),		CHAIN(DX32,D(ModDelay),DX2));	//Rad/Baro Alt
+		MapKeyIO(&RMFD,	OSB01,	AJS37_DataCart_Decr,	CHAIN(DX32,D(ModDelay),DX1));	//HUD Declutter
+		MapKeyIO(&RMFD,	OSB02,	AJS37_DataCart_Incr,		CHAIN(DX32,D(ModDelay),DX2));	//Rad/Baro Alt
+		MapKeyIO(&RMFD,	OSB03,	AJS37_Wpn_Jett,		TEMPO(AJS37_Wpn_Jett_Cover,		AJS37_Wpn_Jett,		DefTempo)	);
+		MapKeyIO(&RMFD,	OSB04,	AJS37_Fuel_Jett,	TEMPO(AJS37_Fuel_Jett_Cover,	AJS37_Fuel_Jett,	DefTempo)	);
+		
+	if (AJS37_Custom_LUA > 0)
+		{		
+		MapKeyIO(&RMFD,	OSB05,	CHAIN(DOWN+DX5,EXEC("Lights_RLED2(1);")),TEMPO(CHAIN(UP+DX5,EXEC("Lights_RLED2(0);")),CHAIN(DOWN+DX5,EXEC("Lights_RLED2(1);")),DefTempo));	//Manual Fuel Regulator
+		}
+	else
+		{		
+		MapKey	(&RMFD,	OSB05,	AJS37_Man_Fuel_Regulator);
+		}	
+//		MapKeyR	(&RMFD,	OSB05,	0);
+		MapKey	(&RMFD,	OSB06,	USB_6);	//Wpts
+//		MapKeyIO(&RMFD,	OSB06,	TEMPO(EXEC("AJS37_DataCart_Set(6);"), EXEC("AJS37_DataCart_Set(6,0);")), USB_6);	//Wpts
+		
+		if ((TARS > 0) & (Overlay_Enable_SRS > 0))
+				MapKeyIO(&RMFD,	OSB07,	Rdo_Ovly,	USB_7);
+		else	MapKey	(&RMFD,	OSB07,	USB_7);
+//		MapKeyR	(&RMFD,	OSB07,	0);
+		MapKey	(&RMFD,	OSB08,	USB_8);
+		MapKey	(&RMFD,	OSB09,	USB_9);
+		MapKeyIO(&RMFD,	OSB10,	USB_PAGEDOWN, TEMPO(USB_0,USB_PAGEDOWN,DefTempo));	//BX, LMAL
+//		MapKeyIO(&RMFD,	OSB10,	TEMPO(EXEC("AJS37_DataCart_Set(0);"), EXEC("AJS37_DataCart_Set(0,0);")), TEMPO(USB_0,USB_PAGEDOWN,DefTempo));	//BX, LMAL
+
+//ROSB 11-15
+		MapKeyIO(&RMFD,	OSB11,	EXEC("AJS37_CM_S_Mod_Cycle(1);"),	TEMPO(EXEC("AJS37_CM_S_Mod_Cycle(0);"),EXEC("AJS37_CM_S_Mod_Cycle(1);"),DefTempo));
+		MapKeyIO(&RMFD,	OSB12,	DOWN+DX24,	TEMPO(UP+DX24,DOWN+DX24,DefTempo));	//AJS37_PosLts_On,	TEMPO(AJS37_PosLts_Off,CHAIN(DX30,D(ModDelay),AJS37_PosLts_On),DefTempo));	//CHAIN(DX32,D(ModDelay),DX12));
+		MapKeyIO(&RMFD,	OSB13,	AJS37_FormLts_On,	TEMPO(AJS37_FormLts_Off,CHAIN(DX30,D(ModDelay),AJS37_FormLts_On),DefTempo));
+	if (AJS37_Custom_LUA > 0)	
+			MapKeyIO(&RMFD,	OSB14,	AJS37_NavLts_Off,	TEMPO(AJS37_NavLts_Half,CHAIN(DX30,D(ModDelay),AJS37_NavLts_Full),DefTempo));
+	else	MapKey	(&RMFD,	OSB14,	AJS37_NavLts_Full);	//temporary toggle
+		MapKeyIO(&RMFD,	OSB15,	AJS37_AntiColl_On,	TEMPO(AJS37_AntiColl_Off,CHAIN(DX30,D(ModDelay),AJS37_AntiColl_On),DefTempo));
+//		MapKeyR	(&RMFD,	OSB13,	0);	//for Spitfire Engine Start	
+//		MapKeyR	(&RMFD,	OSB14,	0);	//for Spitfire Engine Start		
+//ROSB 16-20
+		MapKeyIO(&RMFD,	OSB16,	USB_PAGEUP, TEMPO(USB_1,USB_PAGEUP,DefTempo));	//wpts, LS
+		MapKey	(&RMFD,	OSB17,	USB_2);	//long to sync w/o keystroke
+		MapKey	(&RMFD,	OSB18,	USB_3);
+		MapKey	(&RMFD,	OSB19,	USB_4);
+		MapKey	(&RMFD,	OSB20,	USB_5);
+
+//		MapKeyIO(&RMFD,	OSB16,	TEMPO(EXEC("AJS37_DataCart_Set(1);"), EXEC("AJS37_DataCart_Set(1,0);")), TEMPO(USB_1,USB_PAGEUP,DefTempo));	//wpts, LS
+//		MapKeyIO(&RMFD,	OSB17,	TEMPO(EXEC("AJS37_DataCart_Set(2);"), EXEC("AJS37_DataCart_Set(2,0);")),	USB_2);	//long to sync w/o keystroke
+//		MapKeyIO(&RMFD,	OSB18,	TEMPO(EXEC("AJS37_DataCart_Set(3);"), EXEC("AJS37_DataCart_Set(3,0);")),	USB_3);
+//		MapKeyIO(&RMFD,	OSB19,	TEMPO(EXEC("AJS37_DataCart_Set(4);"), EXEC("AJS37_DataCart_Set(4,0);")),	USB_4);
+//		MapKeyIO(&RMFD,	OSB20,	TEMPO(EXEC("AJS37_DataCart_Set(5);"), EXEC("AJS37_DataCart_Set(5,0);")),	USB_5);
+
+//Right Rocker Switches
+//SYM
+		MapKeyIO(&RMFD,	SYMU,	AJS37_WepInt_CW,	AJS37_WepSel_CW);
+		MapKeyIO(&RMFD,	SYMD,	AJS37_WepInt_CCW,	AJS37_WepSel_CCW);
+//		MapKeyIO(&RMFD,	SYMU,	EXEC("AJS37_WepInt_Cycle(-1);"),	AJS37_WepSel_CW);	//obsolete 2.63a
+//		MapKeyIO(&RMFD,	SYMD,	EXEC("AJS37_WepInt_Cycle(12);"),	AJS37_WepSel_CCW);	//obsolete 2.63a
+//		MapKeyIO(&RMFD,	SYMU,	EXEC("AJS37_WepSel_Cycle(-1);"),	EXEC("AJS37_WepInt_Cycle(-1);"));	//obsolete
+//		MapKeyIO(&RMFD,	SYMD,	EXEC("AJS37_WepSel_Cycle(7);"),		EXEC("AJS37_WepInt_Cycle(12);"));	//obsolete
+//		MapKeyR	(&RMFD,	SYMU,	0);	//added in 1.61 to account for context sensitive R in M2000C
+//		MapKeyR	(&RMFD,	SYMD,	0);
+		
+//CON
+	if (AJS37_Custom_LUA > 0)
+		{
+		MapKeyIO(&RMFD,	CONU,	EXEC("AJS37_U22_Band_Cycle(6);"),	TEMPO(CHAIN(UP+DX15,D(ModDelay),DOWN+DX17,EXEC("IgnRState = 1;}")),	CHAIN(UP+DX17,D(ModDelay),UP+DX15,EXEC("IgnRState = 0;}")),DefTempo));	//DX17 Flare IgnRState to sync with IGN throttle base
+		MapKeyIO(&RMFD,	COND,	EXEC("AJS37_U22_Band_Cycle(-1);"),	TEMPO(CHAIN(UP+DX17,D(ModDelay),DOWN+DX15,EXEC("IgnRState = 0;}")),	CHAIN(UP+DX17,D(ModDelay),UP+DX15,EXEC("IgnRState = 0;}")),DefTempo));	//DX15 Chaff
+		}
+	else
+		{
+		MapKey	(&RMFD,	CONU,	EXEC("AJS37_U22_Band_Cycle(6);"));	
+		MapKey	(&RMFD,	COND,	EXEC("AJS37_U22_Band_Cycle(-1);"));	
+		}
+
+//		MapKeyR	(&RMFD,	CONU,	0);	//added in 1.24 to account for context sensitive R in UH-1
+//		MapKeyR	(&RMFD,	COND,	0);
+
+//BRT
+		MapKeyIO(&RMFD,	BRTU,	EXEC("AJS37_U22_Mod_Cycle(6);"),	TEMPO(EXEC("AJS37_RWR_Cycle(2);IgnLState = 1;"),	EXEC("AJS37_RWR_Cycle(0);IgnLState = 0;"),DefTempo));	//IgnLState to sync with IGN throttle base
+		MapKeyIO(&RMFD,	BRTD,	EXEC("AJS37_U22_Mod_Cycle(-1);"),	TEMPO(EXEC("AJS37_RWR_Cycle(1);IgnLState = 0;"),	EXEC("AJS37_RWR_Cycle(0);IgnLState = 0;"),DefTempo));	
+		//MapKey	(&RMFD,	BRTU,	EXEC("AJS37_U22_Mod_Cycle(6);"));	//chaff/flare later (tempo long for both, /I for chaff)
+		//MapKey	(&RMFD,	BRTD,	EXEC("AJS37_U22_Mod_Cycle(-1);"));	//chaff/flare later (tempo long for both, /I for flare)
+
+//GAIN
+		MapKeyIO(&RMFD,	GAINU,	KB_RGAINU,	EXEC("AJS37_CK37_Sw_Cycle(8);"));	// /I for volume
+		MapKeyIO(&RMFD,	GAIND,	KB_RGAIND,	EXEC("AJS37_CK37_Sw_Cycle(-1);"));
+
+	printf("Done!\xa");	
+}
+int	AJS37_Gear_Map(int state, int cycle = 0) 	//as of 1.68 used for gear cycle as well as other remaps/LED checks.  cycle  added in 1.70 (default 0 with force in routine mappings)
+{
+AJS37_Map_LBRT(state);
+flashLLED2(0);
+GearCycling = cycle;
+if (state)
+	{	
+	if (MasterArm_Cur)
+		{
+		DeferCall(LED_Delay,&AJS37_NAV_Warn,0);
+		if (cycle)
+			{
+			DeferCall(500+LED_Delay,&ActKey,KEYON+PULSE+Gear_Dn);
+			DeferCall(500+LED_Delay+GearCycleTimeDn,&GearCycling_Set,0);
+			}
+		}
+	else		
+		{
+		if (cycle)
+			{
+			DeferCall(LED_Delay,&ActKey,KEYON+PULSE+Gear_Dn);
+			DeferCall(LED_Delay+GearCycleTimeDn,&GearCycling_Set,0);
+			DeferCall(2*LED_Delay,&AJS37_NAV_Warn,0);
+			}
+		else DeferCall(LED_Delay,&AJS37_NAV_Warn,0);
+		}	
+	if (WarthogStick == 0)			//HOTAS Cougar
+		{	
+		MapKeyIO(&HCougar, 	H3U,	TEMPO(AJS37_Thrust_Rev_Off,	EXEC("AJS37_Gear_Map(0,1);"),GearUpTempo),	AJS37_Seat_Up);	
+		MapKeyIO(&HCougar, 	H3D,	TEMPO(AJS37_Thrust_Rev_On,	EXEC("AJS37_Gear_Map(1,1);"),GearDnTempo),	AJS37_Seat_Down);
+		}
+	else if (WarthogThrottle == 0)	//WH stick, TQS
+		{	
+		MapKeyIO(&Joystick,		H3D,	TEMPO(AJS37_Thrust_Rev_On,	EXEC("AJS37_Gear_Map(1,1);"),	GearDnTempo),	AJS37_Seat_Down);
+		MapKeyIO(&Joystick, 	H3U,	TEMPO(AJS37_Thrust_Rev_Off,	EXEC("AJS37_Gear_Map(0,1);"),	GearUpTempo),	AJS37_Seat_Up);	
+		}
+	}		
+else
+	{
+	if (cycle)
+		{
+		DeferCall(LED_Delay,&ActKey,KEYON+PULSE+Gear_Up);
+		DeferCall(LED_Delay+GearCycleTimeUp,&GearCycling_Set,0);
+		DeferCall(2*LED_Delay,&AJS37_NAV_Warn,0);
+		}
+	else DeferCall(LED_Delay,&AJS37_NAV_Warn,0);
+	
+	if (WarthogStick == 0)			//HOTAS Cougar
+		{	
+		MapKeyIO(&HCougar, 	H3U,	TEMPO(AJS37_Rdr_Elev_Up,	EXEC("AJS37_Gear_Map(0,1);"),GearUpTempo),	AJS37_Seat_Up);	
+		MapKeyIO(&HCougar, 	H3D,	TEMPO(AJS37_Rdr_Elev_Dn,	EXEC("AJS37_Gear_Map(1,1);"),GearDnTempo),	AJS37_Seat_Down);
+		}
+	else if (WarthogThrottle == 0)	//WH stick, TQS
+		{	
+		MapKeyIO(&Joystick,		H3D,	TEMPO(AJS37_Rdr_Elev_Up,	EXEC("AJS37_Gear_Map(1,1);"),	GearDnTempo),	AJS37_Seat_Down);
+		MapKeyIO(&Joystick, 	H3U,	TEMPO(AJS37_Rdr_Elev_Dn,	EXEC("AJS37_Gear_Map(0,1);"),	GearUpTempo),	AJS37_Seat_Up);	
+		}	
+	}
+}
+int	AJS37_Map_LBRT(int state)
+{
+if (state)
+	{
+	MapKeyIO(&LMFD,	BRTU,	AJS37_Thrust_Rev_Off,	TEMPO(KB_LBRTU,	AJS37_Thrust_Rev_Off,	DefTempo));	// /I/long thrust reverser
+	MapKeyIO(&LMFD,	BRTD,	AJS37_Thrust_Rev_On,	TEMPO(KB_LBRTD,	AJS37_Thrust_Rev_On,	DefTempo));	// /I/long thrust reverser
+	}
+else
+	{
+	MapKeyIO(&LMFD,	BRTU,	AJS37_Thrust_Rev_Off,	KB_LBRTU);	// /I thrust reverser
+	MapKeyIO(&LMFD,	BRTD,	AJS37_Thrust_Rev_On,	KB_LBRTD);	// /I thrust reverser
+	}
+}
+
+int	AJS37_AB_LED_Off_WH(int state, int delay = 50)	//LED functions added in 1.68
+{
+	Lights_WHT1(state);
+	DeferCall(delay, &Lights_WHT2, state);
+	DeferCall(2*delay,&Lights_WHT3,state);
+}
+int AJS37_NAV_Warn(int state = 0)
+{
+if (Nav_Warn_AJS37 > 0)
+	{
+	if ((AJS37_Mode_Cur < 2) & (GearState) & (state))
+		{
+		if (AirBrkFlash > 0)		DeferCall(LED_Delay,&flashLLED1,1);	//warning that not in NAV mode
+		else if (AirBrkFlash == 0)	DeferCall(LED_Delay,&Lights_LLED1,1);
+		}
+	else if (	!(Throttle[SPDB]) & !(HCougar[T9])	)
+		{
+		if (AirBrkFlash > 0)		DeferCall(LED_Delay,&flashLLED1,0);	//flashLLED1 cancels Nav alert if airbrake not in use
+		else if (AirBrkFlash == 0)	DeferCall(LED_Delay,&Lights_LLED1,0);
+		}
+//	else DeferCall(LED_Delay,&flashLLED1,0);
+	}
+}
+int AJS37_MasterArm_LED(int state)
+{
+MasterArm_Cur = state;
+if (!GearState)
+	{
+	if (!GearCycling)
+		{
+		if (AirBrkFlash > 0)		flashLLED2(state);
+		else if (AirBrkFlash == 0)	Lights_LLED2(state);
+		}
+	else if (state)
+		{
+		if (AirBrkFlash > 0)		DeferCall(GearCycleTimeUp,&flashLLED2,1);
+		else if (AirBrkFlash == 0)	DeferCall(GearCycleTimeUp,&Lights_LLED2,1);
+		}
+	}
+}
+int	AJS37_Mode_LED_WH(int posit, int led = 1, int delay = 50, int force = 0, int idle = 0)	//idle added in 1.71 to clear WHT1-3
+{
+if (	(WarthogThrottle > 0) & (led) & (	((!Throttle[IDLERON]) & (WHIdle_Enabled > 0)) | (force))	)
+	{
+	if (posit == 1)			flashWHT5(1);	//flash only in BER
+	else if (posit == 0)		DeferCall(delay, &flashWHT5, 0); //delayed no flash in Off mode to close loop
+	else					flashWHT5(0);	//instant no flash in solid modes
+	
+	if (posit == 2) 	DeferCall(500+delay, &Lights_WHT5, 1);	//delay to allow for flash cnx.  Nav
+	else if ((posit == 3) | (posit  == 4))	Lights_WHT5(1);		//no delay since coming from a non-flashing state.  Attack or recon
+	else			Lights_WHT5(0);
+	
+	if (posit > 2)	Lights_WHT4(1);	//4 for Attack or higher
+	else			Lights_WHT4(0);
+	
+	if (idle) WHT_Light_SelI(AJS37_DataCart_Cur, 1, 1, LED_Delay);
+		//{
+		//DeferCall(2*delay, &Lights_WHT3, 0);
+		//DeferCall(3*delay, &Lights_WHT2, 0);
+		//DeferCall(4*delay, &Lights_WHT1, 0);
+		//}
+	}
+}
+int AJS37_Mode_LED_Init(int posit)	//used with default entries for DeferCall
+{
+AJS37_Mode_LED_WH(posit,AirBrkFlash,LED_Delay);
+}
+
+//Array Routines
+int	AJS37_Mode_Cycle(int posit, int loop = 0, int index = 7)			//posit is array position, index is max array size (starting with 1)
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)		AJS37_Mode_Cur = (AJS37_Mode_Cur+1)%index;	//posit > index will cycle by +1
+	else if (posit < 0)	AJS37_Mode_Cur = (AJS37_Mode_Cur+index-1)%index;	//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (AJS37_Mode_Cur < index-1))	AJS37_Mode_Cur = (AJS37_Mode_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (AJS37_Mode_Cur > 0))		AJS37_Mode_Cur = (AJS37_Mode_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				AJS37_Mode_Cur = posit;							//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(AJS37_Mode_Array,AJS37_Mode_Cur));
+if (AJS37_Mode_Cur > 0) AJS37_Mode_LED_WH(AJS37_Mode_Cur,AirBrkFlash,LED_Delay);			//added in 1.68, condition added in 1.71 for tempo
+}
+int AJS37_Mode_FK_Sel(int posit = 1)	//added in 1.71 forces tempo for FK, else BER to prevent inadvertent NAV kill.  argument required for DeferCall.
+{
+if (	((HCougar[S3]) | (Joystick[S3]))		&	((Throttle[CSL]) | (LMFD[SYMD]))	) posit = 0;
+if (!posit) ActKey(KEYON+PULSE+AJS37_Mode_FK);
+else		ActKey(KEYON+PULSE+AJS37_Mode_BER);	//defaults regular minimum standby mode
+AJS37_Mode_Cur = posit;
+if (!posit) AJS37_Mode_LED_WH(posit,LED_Delay);
+}
+
+int	AJS37_AS_Cycle(int posit, int loop = 0, int index = 8)			//posit is array position, index is max array size (starting with 1)
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)		AJS37_AS_Cur = (AJS37_AS_Cur+1)%index;	//posit > index will cycle by +1
+	else if (posit < 0)	AJS37_AS_Cur = (AJS37_AS_Cur+index-1)%index;	//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (AJS37_AS_Cur < index-1))	AJS37_AS_Cur = (AJS37_AS_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (AJS37_AS_Cur > 0))		AJS37_AS_Cur = (AJS37_AS_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				AJS37_AS_Cur = posit;							//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(AJS37_AS_Array,AJS37_AS_Cur));
+}
+
+int	AJS37_U22_Mod_Cycle(int posit, int loop = 0, int index = 5)			//posit is array position, index is max array size (starting with 1)
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)		AJS37_U22_Mod_Cur = (AJS37_U22_Mod_Cur+1)%index;	//posit > index will cycle by +1
+	else if (posit < 0)	AJS37_U22_Mod_Cur = (AJS37_U22_Mod_Cur+index-1)%index;	//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (AJS37_U22_Mod_Cur < index-1))	AJS37_U22_Mod_Cur = (AJS37_U22_Mod_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (AJS37_U22_Mod_Cur > 0))		AJS37_U22_Mod_Cur = (AJS37_U22_Mod_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				AJS37_U22_Mod_Cur = posit;							//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(AJS37_U22_Mod_Array,AJS37_U22_Mod_Cur));
+}
+int	AJS37_U22_Band_Cycle(int posit, int loop = 0, int index = 5)			//posit is array position, index is max array size (starting with 1)
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)		AJS37_U22_Band_Cur = (AJS37_U22_Band_Cur+1)%index;	//posit > index will cycle by +1
+	else if (posit < 0)	AJS37_U22_Band_Cur = (AJS37_U22_Band_Cur+index-1)%index;	//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (AJS37_U22_Band_Cur < index-1))	AJS37_U22_Band_Cur = (AJS37_U22_Band_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (AJS37_U22_Band_Cur > 0))		AJS37_U22_Band_Cur = (AJS37_U22_Band_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				AJS37_U22_Band_Cur = posit;							//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(AJS37_U22_Band_Array,AJS37_U22_Band_Cur));
+}
+int	AJS37_CM_Mod_Cycle(int posit, int loop = 0, int index = 5)			//posit is array position, index is max array size (starting with 1)
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)		AJS37_CM_Mod_Cur = (AJS37_CM_Mod_Cur+1)%index;	//posit > index will cycle by +1
+	else if (posit < 0)	AJS37_CM_Mod_Cur = (AJS37_CM_Mod_Cur+index-1)%index;	//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (AJS37_CM_Mod_Cur < index-1))	AJS37_CM_Mod_Cur = (AJS37_CM_Mod_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (AJS37_CM_Mod_Cur > 0))		AJS37_CM_Mod_Cur = (AJS37_CM_Mod_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				AJS37_CM_Mod_Cur = posit;							//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(AJS37_CM_Mod_Array,AJS37_CM_Mod_Cur));
+}
+int	AJS37_CM_S_Mod_Cycle(int posit, int loop = 0, int index = 2)			//posit is array position, index is max array size (starting with 1)
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)		AJS37_CM_S_Mod_Cur = (AJS37_CM_S_Mod_Cur+1)%index;	//posit > index will cycle by +1
+	else if (posit < 0)	AJS37_CM_S_Mod_Cur = (AJS37_CM_S_Mod_Cur+index-1)%index;	//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (AJS37_CM_S_Mod_Cur < index-1))	AJS37_CM_S_Mod_Cur = (AJS37_CM_S_Mod_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (AJS37_CM_S_Mod_Cur > 0))		AJS37_CM_S_Mod_Cur = (AJS37_CM_S_Mod_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				AJS37_CM_S_Mod_Cur = posit;							//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(AJS37_CM_S_Mod_Array,AJS37_CM_S_Mod_Cur));
+}
+int	AJS37_RWR_Cycle(int posit, int loop = 0, int index = 3)			//posit is array position, index is max array size (starting with 1)
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)		AJS37_RWR_Cur = (AJS37_RWR_Cur+1)%index;	//posit > index will cycle by +1
+	else if (posit < 0)	AJS37_RWR_Cur = (AJS37_RWR_Cur+index-1)%index;	//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (AJS37_RWR_Cur < index-1))	AJS37_RWR_Cur = (AJS37_RWR_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (AJS37_RWR_Cur > 0))		AJS37_RWR_Cur = (AJS37_RWR_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				AJS37_RWR_Cur = posit;							//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(AJS37_RWR_Array,AJS37_RWR_Cur));
+}
+
+int	AJS37_CK37_Sw_Cycle(int posit, int loop = 0, int index = 7)			//posit is array position, index is max array size (starting with 1).  likely obsolete with 2.25
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)		AJS37_CK37_Sw_Cur = (AJS37_CK37_Sw_Cur+1)%index;	//posit > index will cycle by +1
+	else if (posit < 0)	AJS37_CK37_Sw_Cur = (AJS37_CK37_Sw_Cur+index-1)%index;	//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (AJS37_CK37_Sw_Cur < index-1))	AJS37_CK37_Sw_Cur = (AJS37_CK37_Sw_Cur+1)%index;				//posit > index will cycle by +1
+	else if ((posit < 0) & (AJS37_CK37_Sw_Cur > 0))			AJS37_CK37_Sw_Cur = (AJS37_CK37_Sw_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				AJS37_CK37_Sw_Cur = posit;							//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(AJS37_CK37_Sw_Array,AJS37_CK37_Sw_Cur));
+}
+
+
+//***OBSOLETE as of 2.63a***
+
+//int	AJS37_WepSel_Cycle(int posit, int loop = 0, int index = 6)			//posit is array position, index is max array size (starting with 1)
+//{
+//if (		(loop) & ((posit > index-1) | (posit < 0))	)
+//	{
+//	if (posit > index-1)		AJS37_WepSel_Cur = (AJS37_WepSel_Cur+1)%index;	//posit > index will cycle by +1
+//	else if (posit < 0)	AJS37_WepSel_Cur = (AJS37_WepSel_Cur+index-1)%index;	//posit < 0 will cycle by -1 
+//	}
+//else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+//	{
+//	if ((posit > index-1) & (AJS37_WepSel_Cur < index-1))	AJS37_WepSel_Cur = (AJS37_WepSel_Cur+1)%index;				//posit > index will cycle by +1
+//	else if ((posit < 0) & (AJS37_WepSel_Cur > 0))			AJS37_WepSel_Cur = (AJS37_WepSel_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+//	}
+//else				AJS37_WepSel_Cur = posit;							//posit in bounds will be discrete function call
+//ActKey(KEYON+PULSE+X(AJS37_WepSel_Array,AJS37_WepSel_Cur));
+//}
+
+//int	AJS37_WepInt_Cycle(int posit, int loop = 0, int index = 11)			//posit is array position, index is max array size (starting with 1)
+//{
+//if (		(loop) & ((posit > index-1) | (posit < 0))	)
+//	{
+//	if (posit > index-1)		AJS37_WepInt_Cur = (AJS37_WepInt_Cur+1)%index;	//posit > index will cycle by +1
+//	else if (posit < 0)	AJS37_WepInt_Cur = (AJS37_WepInt_Cur+index-1)%index;	//posit < 0 will cycle by -1 
+//	}
+//else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+//	{
+//	if ((posit > index-1) & (AJS37_WepInt_Cur < index-1))	AJS37_WepInt_Cur = (AJS37_WepInt_Cur+1)%index;				//posit > index will cycle by +1
+//	else if ((posit < 0) & (AJS37_WepInt_Cur > 0))			AJS37_WepInt_Cur = (AJS37_WepInt_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+//	}
+//else				AJS37_WepInt_Cur = posit;							//posit in bounds will be discrete function call
+//ActKey(KEYON+PULSE+X(AJS37_WepInt_Array,AJS37_WepInt_Cur));
+//}
+
+
+//int AJS37_DataCart_Set(int posit, int delay = 100, int loop = 0, int index = 7, int trend = 0, int time = 0)	//posit is switch position value (0 for mid, 1 for aft, 2 for fwd), delay is time between switches, time and trend should always start at 0
+//{
+//if 	(posit > (index-1))
+//	{
+//	trend = 1;
+//	if (AJS37_DataCart_Cur < index-1) posit = (AJS37_DataCart_Cur+1);	//out of bounds up toggles one step
+//	else if (loop) posit = (AJS37_DataCart_Cur+1)%index;
+//	else
+//		{
+//		posit = index-1;
+//		trend = 0;
+//		}
+//	}
+		
+//else if (posit < 0)
+//	{
+//	trend = -1;
+//	if (AJS37_DataCart_Cur > 0) posit = (AJS37_DataCart_Cur-1);			//out of bounds down toggles (index-1) steps (comes to -1)
+//	else if (loop) posit = (AJS37_DataCart_Cur+index-1)%index;
+//	else
+//		{
+//		posit = 0;
+//		trend = 0;
+//		}
+//	}
+
+//while (AJS37_DataCart_Cur != posit)
+//	{
+//	if (AJS37_DataCart_Cur < posit)
+//		{
+//		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+AJS37_DataCart_Incr);
+//		AJS37_DataCart_Cur = (AJS37_DataCart_Cur+1);
+//		}
+//	else
+//		{
+//		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+AJS37_DataCart_Decr);
+//		AJS37_DataCart_Cur = (AJS37_DataCart_Cur-1);
+//		}
+//	if (WarthogThrottle > 0)
+//		{
+//		if ((WHIdle_Enabled > 0) & (Throttle[IDLERON]))	//double nested just so unconnected warthog isnt potentially pinged.  shouldnt be necessary but doesnt hurt
+//			{
+//			if (trend > 0) WHT_Light_UpI(AJS37_DataCart_Cur);
+//			else if (trend < 0) WHT_Light_DnI(AJS37_DataCart_Cur);
+//			}
+//		}
+	 
+//	time = time + delay;
+//	}
+//printf("Datacartridge %i Selected\xa",AJS37_DataCart_Cur);	
+//if (WarthogThrottle > 0)
+//	{
+//	if ((Throttle[IDLERON]) & (WHIdle_Enabled > 0) & (trend == 0)) WHT_Light_SelI(AJS37_DataCart_Cur, 1, 1);
+//	}
+//}

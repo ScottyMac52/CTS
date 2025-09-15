@@ -1,0 +1,1402 @@
+//==============================================================================
+//	DCS World MiG-21bis Fishbed N for HOTAS Cougar/Warthog and Cougar MFDs
+//					by Don "Home Fries" Heumphreus
+//						last updated: 27OCT2021
+//
+//	Change Log:
+//	1.29	Initial Release
+//	1.32	Added air start switch & Pitot Heat, moved Nosewheel Lock to RMFD, moved Master Arm and reorganized bottom RMFD.  Reversed orientation of Weapon Select (LSYM).
+//			Added MiG21_ButtonCap_Cycle() for T6 Short
+//			Changed Station Select default from AA1 to B1-2/UB16 (GSD)/AA1 (GSU)
+//	1.33	Analog Paddle Brake option added
+//			Changed LSYM, LBRT to TEMPO
+//	1.34	DX1 added to TG1 command (removed from TriggerZoom)
+//			Modified Gear Lock check for use with MiG-15
+//	1.35	Updated WheelBrakeFull argument for new DiffBraking() routine
+//	1.40a2	Added Warthog compatibility
+//	1.50	Added Target Wingspan and Intercept Angle to CS
+//	1.53	Adjusted for new 2.0 module selection
+//	1.56	Enabled WAV files for aircraft selection
+//	1.61	Added Warthog Lighting init
+//	1.63	Updated buttons for non-discrete cycling where applicable
+//	1.66	Moved MiG21 CommState_Off routines here
+//			Fixed bug with LMFD Landing Light mapping
+//			Added MapKeyR for ROSB13-14 for compatibilty with Spitfire
+//	1.69	Updated CommState_Off() call
+//	2.02	Set FkeyPress=1 on init to prevent Commswitch activation on profile load
+//	2.10	Added VAICOM support
+//	2.11	Fixed ASP arrays
+//	2.21	Added NS430 compatibility
+//	2.29	Added MFDisplay module selection
+//			Replaced 4 MFD Led functions with Lights_Four()
+//	2.34	Added context-sensitive pylon selection based on AA/AG Master Mode
+//	2.43	Removed SnapViews for VR (additional functionality TBD)
+//	2.44	Added VR and Spyglass Zoom to VR
+//	2.45	Added Radar Power to China Hat (Warthog)
+//			Reversed orientation of landing light switch (Warthog)
+//	2.46	Moved ROSB20 to MFD_Init()
+//	2.47	fixed typo causing crash.
+//	2.50b	Removed duplicate MapKeyR(0) mappings to free stack space.
+//	2.51	Removed Script_Debug print commands to free stack space.
+//	2.57	Set SPO-10 to toggle (DX) and removed array/routine to free stack space
+//	2.63	Added WHIdle_Enabled parameter to WH Idle commands
+//
+//
+//===============================================================================
+
+//	DX8, DX10, DX12, DX14, DX16, DX18 Free
+
+
+int	Force_GearLock;		//added in 1.34 for dual use with MiG-15
+
+int	MiG21_Array_Array;
+int	MiG21_Cur_Array;
+
+int MiG21_DA_Array;
+int	MiG21_WepsSel_Array;
+int	MiG21_WepsSelAA_Array;	//added in 2.34
+int	MiG21_WepsSelAG_Array;	//added in 2.34
+int	MiG21_WepsMM_Array;
+int	MiG21_WepsAA_Array;
+int	MiG21_ASP_CU13_Array;
+int	MiG21_ASP_CU14_Array;
+int	MiG21_ASPMM_Array;
+int	MiG21_ASP_CU19_Array;
+int	MiG21_Pipper_Sw_Array;
+int	MiG21_FixNet_Sw_Array;
+//int	MiG21_Tac_Drop_Sw_Array;
+//int	MiG21_Radar_Sw_Array;
+int	MiG21_Radar_Alt_Sw_Array;
+int MiG21_RSBN_Mode_Sw_Array;
+int	MiG21_Ldg_Lt_Sw_Array;
+//int	MiG21_SAU_Low_Recovery_Sw_Array;
+int	MiG21_ARK_Sw_Array;
+int	MiG21_Nav_Lts_Array;
+//int	MiG21_SPO10_Lts_Array;
+
+int	MiG21_Tac_Drop_Cover_Array;
+int	MiG21_Emer_AA_Cover_Array;
+int	MiG21_WingFuelJett_Cover_Array;
+int	MiG21_WingOuterJett_Cover_Array;
+int	MiG21_WingInnerJett_Cover_Array;
+
+int	MiG21_DA_Cur;
+int	MiG21_WepsSel_Cur;
+int	MiG21_WepsMM_Cur;
+int	MiG21_WepsAA_Cur;
+int	MiG21_ASP_CU13_Cur;
+int	MiG21_ASP_CU14_Cur;
+int	MiG21_ASPMM_Cur;
+int	MiG21_ASP_CU19_Cur;
+int	MiG21_Pipper_Sw_Cur;
+int	MiG21_FixNet_Sw_Cur;
+
+int	MiG21_Tac_Drop_Sw_Cur;
+//int	MiG21_Radar_Sw_Cur;
+
+int	MiG21_Radar_Alt_Sw_Cur;
+int MiG21_RSBN_Mode_Sw_Cur;
+int	MiG21_Ldg_Lt_Sw_Cur;
+//int	MiG21_SAU_Low_Recovery_Sw_Cur;
+int	MiG21_ARK_Sw_Cur;
+int	MiG21_Nav_Lts_Cur;
+//int	MiG21_SPO10_Lts_Cur;
+
+int	MiG21_Tac_Drop_Cover_Cur; //1 = open, 0 = closed
+int	MiG21_Emer_AA_Cover_Cur;
+int	MiG21_WingFuelJett_Cover_Cur;
+int	MiG21_WingOuterJett_Cover_Cur;
+int	MiG21_WingInnerJett_Cover_Cur;
+int MiG21_GearUp_Unlock_Cur;
+
+int MiG21_ButtonCap_Cur;		//buttoncap added in 1.32
+int	MiG21_ButtonCap_Array;
+
+
+
+int DCS_MiG21(int led, int sp)
+{
+printf("DCS MiG-21bis Fishbed N\xa");
+
+if (WarthogStick > 0)
+	{
+	MapKeyR	(&Joystick,	S2,	EXEC("DCS_MiG21_Init();"));
+	}
+else
+	{
+	MapKeyR	(&HCougar,	S2,	EXEC("DCS_MiG21_Init();"));
+	}
+if (sp > 0)	PlayWav("mig21bis.wav");
+if (led > 0)
+	{
+	//should see 0 * * * to indicate that MiG-21 has been selected.
+	Lights_Four(0,1,1,1,	ProfileSwapDelay+LED_Delay);
+	//Lights_LMFD(1);
+	}
+}
+
+int	SetMenu_MiG21()
+{
+Set_Acft_Array_Cur(2021);
+}
+
+
+int DCS_MiG21_Init()
+{
+Determine_Differential_Braking(0);
+
+//Declare Values
+FkeyPress			=	1;	//added in 2.02 to prevent Commswitch key activation on profile load.
+GraceFlag			=	0;
+Eng_Start_x			=	IdleDetentLow;	//why this value and not 1?  revisit.
+Eng_Stop_x			=	IdleDetentLow;
+Starter_Ind_x		=	Engine_Shutdown_Ind_Time;	//Starter_Ind_MiG21;
+MFD_Eng_Start		=	0;
+ProfID				=	2021;
+FixedGear			=	0;
+Helicopter			=	0;
+T6WheelBrake		=	0;
+BrakeOnCycleTime	=	Airbrake_Out_MiG21;
+BrakeOffCycleTime	=	Airbrake_In_MiG21;
+GearCycleTimeUp		=	Gear_Retract_MiG21;
+GearCycleTimeDn		=	Gear_Deploy_MiG21;
+TriggerZoomEnabled	=	1;
+S4AnalogBrake		=	AnalogPaddleBrake;	//added in 1.33
+AnalogParkingBrake	=	0;					//added in 1.33; JoyY Parking Brake disabled for MiG-21
+S4asNWS				=	0;					//added in 1.33
+S3holdNWS 			= 	0;	//added in 2.05
+Force_GearLock		=	Force_GearLock_MiG21;	//added in 1.34
+XYAxisTrim			=	0;	//added in 1.34
+DMS_SnapView		=	0;	//added in 1.34
+WheelBrakeFull		=	1;	//added in 1.35
+ToeBrakesAvailable	=	0;	//added in 1.40
+NVG_Capable			=	0;	//added in 1.40
+AB_Capable			=	1;	//added in 1.61
+Adjust_Backlighting	=	0;	//added in 1.62
+NS430_Enabled		=	NS430_Installed*NS430_Enabled_MiG21;	//added in 2.21
+CrewCount			=	1;
+StationChangeModifier	=	0;
+//BrakeOffCycleTime 	= 	1500;
+WH_Use_TQS			=	0;	//added in 2.43
+Analog_TDC			=	1;	//added in 2.43
+EngineCount			=	1;	//added in 2.43
+Airbrake_Type_Cur	=	Airbrake_Type_MiG21;	//added in 2.43
+Airbrake_Swap		=	1;	//added in 2.43
+CommInitType		=	1;	//0 for none/custom, 1 for single channel (P-51), 2 for simple (dual channel), 3 for complex (3 channel).  added in 2.43
+StnCheckDisabled	=	2;	//added in 2.43.  Forced for single seat
+CurrentStation 		=	1;	//moved here in 2.43
+
+
+printf("Done\xa Execute DCS MiG-21bis Config (Profile v%i.%i):\xa",MajorVersion,MinorVersion);
+PlayWavSel(ProfID,abs(Init_Run - 1),DCSFP_Enabled,MFDisplayEnabled);	//added in 1.61, DCSFP added in 2.05, MFDisplay added in 2.29
+Pause_TrackIR(0);
+AnalogBrakePoll(0);	//added in 1.23
+MiG21_Switch_Posit_Init(GearDn_Ind_Default);
+MiG21_Array_Init();			//for the vast amout of discrete states in the MiG-21 converted to toggles/cycles.
+AirBrake_Init(AirBrkFlash);	//moved to individual modules in 1.22
+MFD_Init(ProfID);
+DCS_Axis_Init(ProfID,EngineCount,Analog_TDC);
+if (WarthogStick > 0)
+	{
+	printf("   Map HOTAS Warthog for DCS MiG-21bis Config:\xa");
+
+		printf("      Button Mapping:\xa");
+			printf("         Shift Commands: S3 momentary...");
+				if (WarthogThrottle > 0) SetShiftButton (&Joystick, S3, &Throttle, 0, 0);
+				else SetShiftButton (&Joystick, S3, &HCougar, 0, 0);
+				MapKey	(&Joystick, S3, BTN_S3P);
+				MapKeyR	(&Joystick, S3, BTN_S3R);
+			printf("Done!\xa");		
+			printf("         Warthog Stick Buttons...");	
+				MapKeyIO(&Joystick, TG1, EXEC("TriggerZoom_toggle(-1,AirBrkFlash,GearState);"), CHAIN(DX1,EXEC("TriggerZoom_in();"))	);
+				MapKeyRIO(&Joystick,TG1, UP+DX1, EXEC("ActKey(ZoomIn_slow); DeferCall(KBDelay,&TriggerZoom_out,0);"));				//ActKey(DX1) added in 1.21 to force DX1 release if stuck
+
+				MapKey	(&Joystick, TG2,DX6);
+//				MapKeyR	(&Joystick, TG2,0);
+				MapKey	(&Joystick, S1, DX5);	
+				MapKeyIO(&Joystick, S2, TEMPO(DX2, MiG21_Wpn_Rel_Cover_Open, DefTempo),	DX2);
+				MapKeyR	(&Joystick,	S2, 0);
+				MapKeyIO(&Joystick, S4, EXEC("S3S4Shifted();"), EXEC("DiffBraking(RudderPedals,0,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,0);"));	//allows DX4 (A/P Disconnect) or wheelbrakes; DiffBraking (arg 2) = 0 because it's built into the module
+				MapKeyR	(&Joystick, S4, EXEC("DiffBraking(RudderPedals,0,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,1);"));							//GearState reinstated in 1.33 to allow for A/P disconnect
+			printf("...Done!\xa");	
+	}						
+else
+	{	
+	printf("   Map HOTAS Cougar for DCS MiG-21bis Config:\xa");
+
+		printf("      Button Mapping:\xa");
+			printf("         Shift Commands: S3 momentary...");
+				SetShiftButton(&HCougar, S3, &HCougar, 0, 0);
+				MapKey	(&HCougar, S3, CHAIN(DX30,TEMPO(DX3, 	EXEC("S3S4Shifted(ProfID,RudderPedals,GearState,Helicopter);"), ModTempo)));		//DX3 short, long(er) for modifier and eject check, moved here in 0.53, removed S4 and changed argument to "RudderPedals"
+				MapKeyR	(&HCougar, S3, 							EXEC("S3Release(ProfID,RudderPedals,GearState,RevANTRudder,Helicopter);"));		//added in 0.53 to release "RudderPedals" argument in S3Shifted
+			printf("Done!\xa");		
+			printf("         Cougar Stick Buttons...");	
+				MapKeyIO(&HCougar, TG1, EXEC("TriggerZoom_toggle(-1,AirBrkFlash,GearState);"), CHAIN(DX1,EXEC("TriggerZoom_in();"))	);
+				MapKeyRIO(&HCougar,TG1, UP+DX1, EXEC("ActKey(ZoomIn_slow); DeferCall(KBDelay,&TriggerZoom_out,0);"));				//ActKey(DX1) added in 1.21 to force DX1 release if stuck
+
+				MapKey	(&HCougar, TG2,DX6);
+//				MapKeyR	(&HCougar, TG2,0);
+				MapKey	(&HCougar, S1, DX5);	
+				MapKeyIO(&HCougar, S2, TEMPO(DX2, MiG21_Wpn_Rel_Cover_Open, DefTempo),	DX2);
+				MapKeyR	(&HCougar,	S2, 0);
+				MapKeyIO(&HCougar, S4, EXEC("S3S4Shifted();"), EXEC("DiffBraking(RudderPedals,0,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,0);"));	//allows DX4 (A/P Disconnect) or wheelbrakes; DiffBraking (arg 2) = 0 because it's built into the module
+				MapKeyR	(&HCougar, S4, EXEC("DiffBraking(RudderPedals,0,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,1);"));							//GearState reinstated in 1.33 to allow for A/P disconnect
+			printf("...Done!\xa");	
+	}			
+		H1_Init(TrackIR, PadlockEnabled, ProfID);	//moved to individual routines in 1.27 for trim reset removal on helos
+		CommState_Off(1,ProfID,1,0,1);	//sets hats 2-4 to DX functions	
+if (WarthogThrottle > 0)
+	{
+			printf("         Warthog Throttle Buttons\xa");	
+	
+				
+				MapKey	(&Throttle,	CSU,	DX11);	//TDC adjust
+				MapKey	(&Throttle,	CSD,	DX13);
+				MapKeyIO(&Throttle,	CSL,	MiG21_Intercept_Angle_Decr,	MiG21_Target_Size_Decr);
+				MapKeyIO(&Throttle,	CSR,	MiG21_Intercept_Angle_Incr, MiG21_Target_Size_Incr);
+				
+				MapKey	(&Throttle,	SC,		DX7);	//Target Lock
+//				MapKeyR	(&Throttle,	SC,		0);
+//Toggle Obsolete
+				MapKeyIO(&Throttle,	PSB,	0,	PULSE+MiG21_Ldg_Lt_Off);		//Landing lights; discrete from array in 2.10
+				MapKeyIO(&Throttle,	PSM,	0,	TEMPO(0,PULSE+MiG21_Ldg_Lt_Taxi,DoubleTap));
+				MapKeyIO(&Throttle,	PSF,	0,	PULSE+MiG21_Ldg_Lt_Land);
+
+				
+				MapKeyIO(&Throttle,	CHF,	MiG21_Radar_On,										MiG21_Radar_Lockbeam_On);	//Radar Lock Beam, Radar power added in 2.45
+				MapKeyIO(&Throttle,	CHB,	TEMPO(MiG21_Radar_Stby,MiG21_Radar_Off,DefTempo),	MiG21_Radar_Lockbeam_Off);
+//				MapKeyR	(&Throttle,	CHF,	0);	//Added for F-86 in 1.69
+//				MapKeyR	(&Throttle,	CHB,	0);	//Added for F-86 in 1.69
+				
+				MapKeyIO(&Throttle,	LTB,	TEMPO(EXEC("MiG21_ButtonCap_Cycle(0,0);"),	DX24,	DefTempo),	//dx24 is drag chute disconnect
+											TEMPO(EXEC("MiG21_ButtonCap_Cycle(1,0);"),	MiG21_DragChute,	LongTempo)	); 
+												
+				//MapKey	(&Throttle,	LTB,	CHAIN(DX30,D(ModDelay),DX9));	//drop centerline fuel tank
+//				MapKeyR	(&Throttle,	LTB, 	0);			
+			if (WHIdle_Enabled > 0)
+				{			
+				MapKeyIO(&Throttle,	IDLERON,	0,	PULSE+CHAIN(DX30,D(ModDelay),MiG21_Throttle_StartStop_Toggle_DX));
+				MapKeyIO(&Throttle,	IDLEROFF,	0,	PULSE+CHAIN(DX30,D(ModDelay),MiG21_Throttle_StartStop_Toggle_DX));	//allows for single toggle /I
+//				MapKey	(&Throttle,	IDLELON,	0);	//zeroed out since single throttle
+//				MapKey	(&Throttle,	IDLELOFF,	0);
+				}
+
+			printf("...Base Switches\xa");				
+				//FLAPU covered in MiG21_GearUp_Map()
+				TriggerZoom_MapGearDn(TriggerZoom_state, ProfID);	//MapKeyIO(&HCougar, T8, PULSE+DX26, );			//done in TriggerZoom_MapGearDn()						
+																	//MapKeyR	(&Throttle, FLAPD, 0);
+				MapKey	(&Throttle, FLAPM, TEMPO(0,CHAIN(PULSE+MiG21_Gear_Neutral, EXEC("GearStateInd(GearState, ProfID, FixedGear, Helicopter, 0, 1);")), DoubleTap));	//Terminates gear cycling indication if returned to center before timeout
+
+
+				MapKeyIO(&Throttle,	LDGH,	TEMPO(0,EXEC("EjectCheckLDGH(ProfID);"), DefTempo),	MiG21_SORC);	//I Long Eject/Toggle Gearstate, /O Master Caution Reset
+				MapKeyIO(&Throttle,	APENG,	MiG21_NPP_Cage,	CHAIN(DX30,DX31,D(ModDelay),DX19));	//Starter
+				
+				MapKeyIO(&Throttle,	APPAT,	0,EXEC("MiG21_RSBN_Mode_Sw_Cycle(2,0);")	);	
+				MapKeyIO(&Throttle,	APAH,	0,TEMPO(0,EXEC("MiG21_RSBN_Mode_Sw_Cycle(1,0);"),DoubleTap)	);
+				MapKeyIO(&Throttle,	APALT,	0,EXEC("MiG21_RSBN_Mode_Sw_Cycle(0,0);")	);
+				
+				MapKeyIO(&Throttle,	EFLNORM,	0,EXEC("MiG21_ASP_CU13_Cycle(0);"));	//Gun
+//				MapKeyR	(&Throttle,	EFLNORM,	0);
+				MapKeyIO(&Throttle,	EFLOVER,	0,EXEC("MiG21_ASP_CU13_Cycle(1);"));	//Missile Rocket
+				MapKeyIO(&Throttle,	EFRNORM,	0,EXEC("MiG21_ASP_CU19_Cycle(0);"));	//Missile
+				MapKeyIO(&Throttle,	EFROVER,	0,EXEC("MiG21_ASP_CU19_Cycle(1);"));	//Gyro
+//				MapKeyR	(&Throttle,	EFROVER,	0);
+				
+				MapKey	(&Throttle,	EOLIGN,		CHAIN(MiG21_Main_Pitot_Sel,EXEC("if (!Discrete_Array_MiG21) GraceFlag = 1;"))	);	//Discrete_Array_MiG21 condition added in 1.63 with apparent shift from discrete switches to toggle functions
+				MapKeyIO(&Throttle,	EOLNORM,	0,EXEC("if ((Discrete_Array_MiG21) | ((!Discrete_Array_MiG21) & (GraceFlag != 1)))	ActKey(KEYON+PULSE+MiG21_Main_Pitot_On); GraceFlag = 0;")	);
+				MapKeyIO(&Throttle,	EOLMOTOR,	0,CHAIN(PULSE+MiG21_Main_Pitot_Off,EXEC("GraceFlag = 0;"))	);
+				MapKey	(&Throttle,	EORIGN,		CHAIN(MiG21_Emer_Pitot_Sel,EXEC("if (!Discrete_Array_MiG21) GraceFlag = 1;"))	);
+				MapKeyIO(&Throttle,	EORNORM,	0,EXEC("if ((Discrete_Array_MiG21) | ((!Discrete_Array_MiG21) & (GraceFlag != 1)))	ActKey(KEYON+PULSE+MiG21_Emer_Pitot_On); GraceFlag = 0;")	);
+				MapKeyIO(&Throttle,	EORMOTOR,	0,CHAIN(PULSE+MiG21_Emer_Pitot_Off,EXEC("GraceFlag = 0;"))	);
+//				MapKeyR	(&Throttle,	EOLIGN,		0);
+//				MapKeyR	(&Throttle,	EORIGN,		0);
+				
+				MapKeyIO(&Throttle,	APUON,	0,PULSE+MiG21_Emer_Airstart_On);
+				MapKeyIO(&Throttle,	APUOFF,	0,PULSE+MiG21_Emer_Airstart_Off);
+				
+				MapKeyIO(&Throttle,	RDRNRM,	0,EXEC("MiG21_WepsAA_Cycle(1);"));
+				MapKeyIO(&Throttle,	RDRDIS,	0,EXEC("MiG21_WepsAA_Cycle(0);"));
+				MapKeyIO(&Throttle,	EACON,	0,EXEC("MiG21_WepsMM_Cycle(1);"));
+				MapKeyIO(&Throttle,	EACOFF,	0,EXEC("MiG21_WepsMM_Cycle(0);"));
+						
+			printf("...Done!\xa");
+	}
+	
+else
+	{
+			printf("         TQS Buttons\xa");	
+//Temporary T2/T3 mapping
+				if ((VAC > 0) | (TARS > 0))
+					{
+					MapKeyIO(&HCougar, T2,	CHAIN(X(Mic_Sw_Fwd,0),D(KBDelay+ModDelay),	EXEC("CommState_On(CommStateAllow);")),
+											CHAIN(X(Mic_Sw_Fwd,1),D(KBDelay+ModDelay),	EXEC("CommState_On(CommStateVAC);")));
+					MapKeyRIO(&HCougar,T2,	EXEC("CommState_Off(CommStateAllow, ProfID);"), EXEC("CommState_Off(CommStateVAC, ProfID);"));	
+					}
+				else
+					{
+					MapKey	(&HCougar, T2, CHAIN(PULSE+X(Mic_Sw_Fwd,TS3_DX),D(KBDelay+ModDelay),	EXEC("CommState_On(CommStateAllow);"))	);		//temporary - cycles comm menu w/o PTT (added in 1.32)
+					MapKeyR	(&HCougar, T2, EXEC("CommState_Off(CommStateAllow, ProfID);"));	
+					}
+				//if (TARS_PTT_Common) 	
+				MapKey	(&HCougar, T3, PTT_Common);		//temporary	; if-else added in 1.32
+				//else					MapKey	(&HCougar, T3, TS3_DX);
+				MapKeyR	(&HCougar, T3, 0);	
+//end temporary				
+			
+				MapKeyIO(&HCougar, T4, EXEC("MiG21_ButtonCap_Cycle(1,0);"),	MiG21_Radio_Ch_Incr);
+				MapKeyR	(&HCougar, T4, 0);
+				MapKeyIO(&HCougar, T5, EXEC("MiG21_ButtonCap_Cycle(0,0);"),	MiG21_Radio_Ch_Decr);
+				MapKeyR	(&HCougar, T5, 0);
+						
+				MapKeyIO(&HCougar,	T6, TEMPO(DX24, EXEC("EjectCheckT6(ProfID);"), DefTempo),	TEMPO(EXEC("MiG21_ButtonCap_Cycle(-1,1);"), MiG21_DragChute, DefTempo));		//Will check for ejection parameters if held for 500ms.
+				
+				//T7 covered in MiG21_GearUp_Map()
+
+			printf("...Done!\xa");
+	}
+	P51D_CommState_Init(ProfID,0,0);			//Set Comms routine (DX21, no PTTLED, and simple comms (\)
+	Airbrake_Map_Set(Airbrake_Type_Cur,Airbrake_Swap);	//added in 1.29
+	printf("   HOTAS Mapping Complete.\xa\xa");	
+
+//MiG21_MFD_Init();
+
+TriggerZoom_state  = 0;		//reset TriggerZoom
+FlapState=0;				//future implementation
+//Lights_ALL(0);				//Says Init complete
+	DeferCall(LED_Delay,&Backlight_Max_Init,0);
+	DeferCall(4*LED_Delay,&Lights_RLED1,0);
+	DeferCall(5*LED_Delay,&Lights_RLED2,0);
+	//DeferCall(5*LED_Delay,&Lights_LLED2,0);
+	if (WarthogThrottle > 0) DeferCall(6*LED_Delay,&WHT_Lights_Dn_D,0);
+	
+ActKey(DX1);				//just in case DX1 lingers from trigger activation
+if (Init_Run == 0) Gear_Ind_Init(GearDn_Ind_Default,FixedGear,Helicopter,AirBrkFlash);
+
+Map_Cougar_ToeBrakes(0);	//added in 1.40
+MiG21_DF_Init(WarthogThrottle, GearDn_Ind_Default);
+printf("\xa DCS MiG-21bis Fishbed N Init Complete!\xa");	
+Set_Acft_Array_Cur(ProfID);
+}
+
+int MiG21_HCS_Init()
+{
+//				if (Script_Debug) printf("         Hat2 (TMS)...");	
+					MapKey	(&HCougar, 	H2U,	DX7);
+					MapKeyIO(&HCougar, 	H2D,	TEMPO(0,DX9,LongTempo),DX9);	//S3+long for jettison center tank
+					if (WepsSel_Array_MiG21 > 0)
+						{
+						MapKeyIO(&HCougar, 	H2R,	EXEC("MiG21_WepsAA_Cycle(3);"),	EXEC("MiG21_WepsSel_Cycle(12,1);")	);	//clockwise			//DX8);
+						MapKeyIO(&HCougar, 	H2L,	EXEC("MiG21_WepsMM_Cycle(2);"),	EXEC("MiG21_WepsSel_Cycle(-1,1);")	);	//counterclockwise	//DX10);
+						}
+					else	
+						{
+						MapKeyIO(&HCougar, 	H2R,	EXEC("MiG21_WepsAA_Cycle(3);"),	MiG21_WepsSel_Next	);	//clockwise			//DX8);
+						MapKeyIO(&HCougar, 	H2L,	EXEC("MiG21_WepsMM_Cycle(2);"),	MiG21_WepsSel_Prev	);	//counterclockwise	//DX10);
+						}
+//				if (Script_Debug) printf("...Done!\xa");	
+//				if (Script_Debug) printf("         Hat3 (DMS)...");	
+					if (TrackIR < 2)
+						{					
+						MapKeyIO(&HCougar, 	H3U,	TEMPO(EXEC("SnapViewModRelease(KBPress, ProfID);"), EXEC("SetSnapViewT(5);"), DefTempo),	DX11);
+						MapKeyIO(&HCougar, 	H3R,	TEMPO(EXEC("SnapViewModRelease(KBPress, ProfID);"), EXEC("SetSnapViewT(3);"), DefTempo),	MiG21_Radio_Ch_Incr);	//DX12);
+						MapKeyIO(&HCougar, 	H3L,	TEMPO(EXEC("SnapViewModRelease(KBPress, ProfID);"), EXEC("SetSnapViewT(1);"), DefTempo),	MiG21_Radio_Ch_Decr);	//DX14);
+						MapKeyIO(&HCougar, 	H3D,	TEMPO(EXEC("SnapViewModRelease(KBPress, ProfID);"), EXEC("SetSnapViewT(2);"), DefTempo),	DX13);
+						}
+					else
+						{					
+						MapKeyIO(&HCougar, 	H3U,	VR_Zoom_kb,		DX11);
+						MapKey	(&HCougar, 	H3R,	MiG21_Radio_Ch_Incr);	//DX12);
+						MapKey	(&HCougar, 	H3L,	MiG21_Radio_Ch_Decr);	//DX14);
+						MapKeyIO(&HCougar, 	H3D,	VR_Spyglass,	DX13);
+						}
+//				if (Script_Debug) printf("...Done!\xa");	
+//				if (Script_Debug) printf("         Hat4 (CMS)...");	
+					MapKeyIO(&HCougar,	H4U,	TEMPO(EXEC("MiG21_DA_Cycle(8,0);"), DX15, DefTempo),	DX15);
+//					MapKeyR	(&HCougar,	H4U, 	0);			//added to cancel helo trim
+					MapKeyIO(&HCougar,	H4R,	MiG21_RSBN_Land_Ch_Incr,	MiG21_RSBN_Nav_Ch_Incr);	//DX16);
+					MapKeyIO(&HCougar,	H4D,	TEMPO(EXEC("MiG21_DA_Cycle(-1,0);"),DX17, DefTempo),	DX17);
+//					MapKeyR	(&HCougar,	H4D,	0);			//added to cancel helo trim
+					MapKeyIO(&HCougar,	H4L,	MiG21_RSBN_Land_Ch_Decr,	MiG21_RSBN_Nav_Ch_Decr);	//DX18);
+//				if (Script_Debug) printf("...Done!\xa");
+}
+int MiG21_WHS_Init()
+{
+//				if (Script_Debug) printf("         Hat2 (TMS)...");	
+					MapKey	(&Joystick, 	H2U,	DX7);
+					
+					MapKeyIO(&Joystick, 	H2D,	TEMPO(0,DX9,LongTempo),DX9);	//S3+long for jettison center tank
+					
+					if (WepsSel_Array_MiG21)
+						{
+						MapKeyIO(&Joystick, H2R,	EXEC("MiG21_WepsAA_Cycle(3);"),	EXEC("MiG21_WepsSel_Cycle(12,1);")	);	//clockwise			//DX8);
+						MapKeyIO(&Joystick, H2L,	EXEC("MiG21_WepsMM_Cycle(2);"),	EXEC("MiG21_WepsSel_Cycle(-1,1);")	);	//counterclockwise	//DX10);
+						}
+					else
+						{
+						MapKeyIO(&Joystick,	H2R,	EXEC("MiG21_WepsAA_Cycle(3);"),	MiG21_WepsSel_Next	);	//clockwise			//DX8);
+						MapKeyIO(&Joystick,	H2L,	EXEC("MiG21_WepsMM_Cycle(2);"),	MiG21_WepsSel_Prev	);	//counterclockwise	//DX10);
+						}
+//				if (Script_Debug) printf("...Done!\xa");	
+//				if (Script_Debug) printf("         Hat3 (DMS)...");		
+					if (TrackIR < 2)
+						{
+						MapKeyIO(&Joystick, 	H3U,	Std_SnapView5,	DX11);
+						MapKeyIO(&Joystick, 	H3D,	Std_SnapView2,	DX13);
+						if (WarthogThrottle > 0)
+							{
+							MapKeyIO(&Joystick, 	H3R,	Std_SnapView3,	EXEC("MiG21_DA_Cycle(8,0);")	);	//DX12);
+							MapKeyIO(&Joystick, 	H3L,	Std_SnapView1,	EXEC("MiG21_DA_Cycle(-1,0);")	);	//DX14);
+							}
+						else
+							{
+							MapKeyIO(&Joystick, 	H3R,	Std_SnapView3,	MiG21_Radio_Ch_Incr	);	//DX12);
+							MapKeyIO(&Joystick, 	H3L,	Std_SnapView1,	MiG21_Radio_Ch_Decr	);	//DX14);
+							}
+						}	
+					else	//VR no Snapviews
+						{
+						MapKeyIO(&Joystick, 	H3U,	VR_Zoom_kb,		DX11);
+						MapKeyIO(&Joystick, 	H3D,	VR_Spyglass,	DX13);
+						if (WarthogThrottle > 0)
+							{
+							MapKey	(&Joystick, 	H3R,	EXEC("MiG21_DA_Cycle(8,0);")	);	//DX12);
+							MapKey	(&Joystick, 	H3L,	EXEC("MiG21_DA_Cycle(-1,0);")	);	//DX14);
+							}
+						else
+							{
+							MapKeyIO(&Joystick, 	H3R,	EXEC("MiG21_DA_Cycle(8,0);"),	MiG21_Radio_Ch_Incr	);	//DX12);
+							MapKeyIO(&Joystick, 	H3L,	EXEC("MiG21_DA_Cycle(-1,0);"),	MiG21_Radio_Ch_Decr	);	//DX14);
+							}
+						}							
+//				if (Script_Debug) printf("...Done!\xa");	
+//				if (Script_Debug) printf("         Hat4 (CMS)...");	
+					MapKey	(&Joystick,	H4U,	DX15);
+//					MapKeyR	(&Joystick,	H4U, 	0);			//added to cancel helo trim	
+					MapKey	(&Joystick,	H4D,	DX17);
+//					MapKeyR	(&Joystick,	H4D,	0);			//added to cancel helo trim
+					MapKeyIO(&Joystick, H4P,	TEMPO(DX15,DX17,DefTempo),	DX15);
+//					MapKeyR	(&Joystick, H4P,	0);
+					MapKeyIO(&Joystick,	H4R,	MiG21_RSBN_Land_Ch_Incr,	MiG21_RSBN_Nav_Ch_Incr);	//DX16);
+					MapKeyIO(&Joystick,	H4L,	MiG21_RSBN_Land_Ch_Decr,	MiG21_RSBN_Nav_Ch_Decr);	//DX18);
+//				if (Script_Debug) printf("...Done!\xa");
+}
+
+int	MiG21_DF_Init(int wh, int state = 0)
+{
+if (wh > 0)
+	{
+	MapKeyIO(&Throttle,	BSF,	0,EXEC("MiG21_Radar_Alt_Sw_Cycle(2,0);"));	//Radar Altitude Switch
+	MapKeyR	(&Throttle,	BSF,	0);	
+	MapKeyIO(&Throttle,	BSB,	0,EXEC("MiG21_Radar_Alt_Sw_Cycle(0,0);"));
+	MapKeyR	(&Throttle,	BSB,	0);	
+	MapKeyIO(&Throttle,	BSM,	0,TEMPO(0,EXEC("MiG21_Radar_Alt_Sw_Cycle(1,0);"),DoubleTap));	
+	}
+else
+	{
+	MiG21_GearUp_Map(Force_GearLock,abs(state-1));
+	TriggerZoom_MapGearDn(TriggerZoom_state, ProfID);	//MapKeyIO(&HCougar, T8, PULSE+DX26, );			//done in TriggerZoom_MapGearDn()						
+	//MapKeyR	(&HCougar, T8, 0);
+	MapKey	(&HCougar, DFM, TEMPO(0,CHAIN(PULSE+MiG21_Gear_Neutral, EXEC("GearStateInd(GearState, ProfID, FixedGear, Helicopter, 0, 1);")), DoubleTap));	//Terminates gear cycling indication if returned to center before timeout
+	
+	}
+}
+
+
+int MiG21_MFD_Init()
+{
+//===================================
+//		Standard MFD Buttons
+//===================================
+
+	printf("   Map Cougar Left  MFD (DX31)...");	
+//LOSB 1 in Init
+					MapKeyIO(&LMFD, OSB02,	CHAIN(DX31,D(ModDelay),DX2),	TEMPO(EXEC("MiG21_WepsAA_Cycle(3);"),	CHAIN(DX30,DX31,D(ModDelay),DX2),	DefTempo)	);				//Use for array cycle in MiG-21 or long/shifted for neutral posit
+					MapKey	(&LMFD, OSB03,	CHAIN(DX31,D(ModDelay),DX3));
+					MapKey	(&LMFD,	OSB04,	CHAIN(DX31,D(ModDelay),DX4));
+//					MapKeyR	(&LMFD,	OSB04,	0);	//for A-10C and F-5E					
+					MapKey	(&LMFD, OSB05,	CHAIN(DX31,D(ModDelay),DX5));
+//					MapKeyR	(&LMFD,	OSB05,	0);	//For F-5E
+//LOSB 6-10
+if (Discrete_ASP_MiG21 > 0)
+					{
+					MapKeyIO(&LMFD,	OSB06,	EXEC("MiG21_ASP_CU13_Cycle(0);"),	TEMPO(EXEC("MiG21_ASP_CU13_Cycle(1);"),	EXEC("MiG21_ASP_CU13_Cycle(0);"),DefTempo)	);
+					MapKeyIO(&LMFD,	OSB07,	EXEC("MiG21_ASP_CU14_Cycle(0);"),	TEMPO(EXEC("MiG21_ASP_CU14_Cycle(1);"),	EXEC("MiG21_ASP_CU14_Cycle(0);"),DefTempo)	);
+					MapKeyIO(&LMFD,	OSB08,	EXEC("MiG21_ASPMM_Cycle(0);"),		TEMPO(EXEC("MiG21_ASPMM_Cycle(1);"),	EXEC("MiG21_ASPMM_Cycle(0);"),	 DefTempo)	);
+					MapKeyIO(&LMFD,	OSB09,	EXEC("MiG21_ASP_CU19_Cycle(0);"),	TEMPO(EXEC("MiG21_ASP_CU19_Cycle(1);"),	EXEC("MiG21_ASP_CU19_Cycle(0);"),DefTempo)	);
+					}
+else
+					{
+					MapKey	(&LMFD,	OSB06,	EXEC("MiG21_ASP_CU13_Cycle(2);")	);
+					MapKey	(&LMFD,	OSB07,	EXEC("MiG21_ASP_CU14_Cycle(2);")	);
+					MapKey	(&LMFD,	OSB08,	EXEC("MiG21_ASPMM_Cycle(2);")		);
+					MapKey	(&LMFD,	OSB09,	EXEC("MiG21_ASP_CU19_Cycle(2);")	);
+					}
+//					MapKeyR	(&LMFD,	OSB07,	0);	//for Bf109					
+					MapKeyIO(&LMFD,	OSB10,	EXEC("MiG21_FixNet_Sw_Cycle(2);"),	TEMPO(EXEC("MiG21_Pipper_Sw_Cycle(2);"),EXEC("MiG21_FixNet_Sw_Cycle(2);"),DefTempo)	);
+
+//LOSB 11-15, 16
+					MapKey	(&LMFD,	OSB11,	CHAIN(DX31,D(ModDelay),DX11));
+					MapKey	(&LMFD,	OSB12,	CHAIN(DX31,D(ModDelay),DX12));
+					MapKey	(&LMFD,	OSB13,	CHAIN(DX31,D(ModDelay),DX13));
+					MapKey	(&LMFD,	OSB14,	CHAIN(DX31,D(ModDelay),DX14));
+if (Discrete_Array_MiG21)
+					MapKeyIO(&LMFD,	OSB15,	CHAIN(DX31,D(ModDelay),DX15),	TEMPO(CHAIN(DX31,D(ModDelay),DX15),CHAIN(DX30,DX31,D(ModDelay),DX15),DefTempo)	);	//Air Start
+else				MapKeyIO(&LMFD,	OSB15,	CHAIN(DX31,D(ModDelay),DX15),	TEMPO(CHAIN(DX31,D(ModDelay),DX25),CHAIN(DX30,DX31,D(ModDelay),DX15),DefTempo)	);	//Air Start Toggle long / RSBN/ARK toggle short
+					MapKey	(&LMFD,	OSB16,	CHAIN(DX31,D(ModDelay),DX16));
+
+//LOSB 17-19
+					MapKey	(&LMFD,	OSB17,	CHAIN(DX31,D(ModDelay),DX17));
+					MapKey	(&LMFD,	OSB18,	CHAIN(DX31,D(ModDelay),DX18));
+					MapKey	(&LMFD,	OSB19,	CHAIN(DX31,D(ModDelay),DX19));
+		
+//LMFD 20 in Init
+
+
+//Left Rocker Switches
+//SYM (free dx31+21/22)
+if (WepsSel_Array_MiG21)
+		{
+		MapKeyIO(&LMFD, SYMU,	EXEC("MiG21_RSBN_Mode_Sw_Cycle(3,0);"),		TEMPO(EXEC("MiG21_WepsSel_Cycle(-1,1);"), EXEC("MiG21_RSBN_Mode_Sw_Cycle(3,0);"), DefTempo)	);		//Use for array cycle in MiG-21
+		MapKeyIO(&LMFD, SYMD,	EXEC("MiG21_RSBN_Mode_Sw_Cycle(-1,0);"),	TEMPO(EXEC("MiG21_WepsSel_Cycle(12,1);"), EXEC("MiG21_RSBN_Mode_Sw_Cycle(-1,0);"),DefTempo)	);		//Use for array cycle in MiG-21
+		}
+else
+		{
+		MapKeyIO(&LMFD, SYMU,	EXEC("MiG21_RSBN_Mode_Sw_Cycle(3,0);"),		TEMPO(MiG21_WepsSel_Prev, EXEC("MiG21_RSBN_Mode_Sw_Cycle(3,0);"), DefTempo)	);		
+		MapKeyIO(&LMFD, SYMD,	EXEC("MiG21_RSBN_Mode_Sw_Cycle(-1,0);"),	TEMPO(MiG21_WepsSel_Next, EXEC("MiG21_RSBN_Mode_Sw_Cycle(-1,0);"),DefTempo)	);		
+		}
+		
+//		MapKeyR	(&RMFD,	SYMU,	0);	//added in 1.61 to account for context sensitive R in M2000C
+//		MapKeyR	(&RMFD,	SYMD,	0);
+		
+//CON 
+		MapKeyIO(&LMFD, CONU,	EXEC("MiG21_DA_Cycle(8,0);"),				KB_LCONU	);								//Use for array cycle in MiG-21
+		MapKeyIO(&LMFD, COND,	EXEC("MiG21_DA_Cycle(-1,0);"),				KB_LCOND	);								//Use for array cycle in MiG-21
+
+//BRT
+//if (Discrete_Array_MiG21)
+//		{		
+//		MapKeyIO(&LMFD,	BRTU,	EXEC("MiG21_Ldg_Lt_Sw_Cycle(3, Discrete_Array_MiG21, 0, 0, Switch_Delay);"),		TEMPO(KB_LBRTU, EXEC("MiG21_Ldg_Lt_Sw_Cycle(3, Discrete_Array_MiG21, 0, 1, Switch_Delay);"),DefTempo)	);
+//		MapKeyIO(&LMFD,	BRTD,	EXEC("MiG21_Ldg_Lt_Sw_Cycle(-1,Discrete_Array_MiG21, 0, 0, Switch_Delay);"),		TEMPO(KB_LBRTD, EXEC("MiG21_Ldg_Lt_Sw_Cycle(-1,Discrete_Array_MiG21, 0, 1, Switch_Delay);"),DefTempo)	);
+//		}
+//else
+//		{
+//		MapKeyIO(&LMFD,	BRTU,	EXEC("MiG21_Ldg_Lt_Sw_Cycle(2, Discrete_Array_MiG21, 0, 0, Switch_Delay);"),		EXEC("MiG21_Ldg_Lt_Sw_Cycle(2, Discrete_Array_MiG21, 0, 1, Switch_Delay);")	);
+//		MapKeyIO(&LMFD,	BRTD,	TEMPO(EXEC("MiG21_Ldg_Lt_Sw_Cycle(1,Discrete_Array_MiG21, 0, 0, Switch_Delay);"),	EXEC("MiG21_Ldg_Lt_Sw_Cycle(0,Discrete_Array_MiG21, 0, 0, Switch_Delay);"),	DefTempo),
+//								TEMPO(EXEC("MiG21_Ldg_Lt_Sw_Cycle(1,Discrete_Array_MiG21, 0, 1, Switch_Delay);"), 	EXEC("MiG21_Ldg_Lt_Sw_Cycle(0,Discrete_Array_MiG21, 0, 1, Switch_Delay);"), DefTempo)	);
+//		}
+		MapKey	(&LMFD,	BRTU,	MiG21_Ldg_Lt_Land);
+		MapKeyIO(&LMFD,	BRTD,	MiG21_Ldg_Lt_Off,	TEMPO(MiG21_Ldg_Lt_Taxi, MiG21_Ldg_Lt_Off, DefTempo)	);	//discrete from array in 2.10
+		
+//GAIN in Init
+
+
+	printf("Done!\xa");
+
+	printf("   Map Cougar Right MFD (DX32)...");
+
+//ROSB 1-10 at first part of routine
+		MapKeyIO(&RMFD, OSB01,	CHAIN(DX32,D(ModDelay),DX1),	TEMPO(CHAIN(DX32,D(ModDelay),DX1),CHAIN(DX30,DX32,D(ModDelay),DX1), DefTempo)	);
+		MapKeyIO(&RMFD, OSB02,	CHAIN(DX32,D(ModDelay),DX2),	TEMPO(CHAIN(DX32,D(ModDelay),DX2),	CHAIN(DX30,DX32,D(ModDelay),DX2), DefTempo)	);
+		MapKeyIO(&RMFD,	OSB03,	CHAIN(DX32,D(ModDelay),DX3),	TEMPO(CHAIN(DX32,DX3),CHAIN(DX30,DX32,D(ModDelay),DX3), DefTempo)	);						//unshifted tempo added for P-51D Gun Heat and Ka-50 Hdg/Trk switch
+		MapKeyIO(&RMFD,	OSB04,	CHAIN(DX32,D(ModDelay),DX4),	TEMPO(CHAIN(DX32,D(ModDelay),DX4),	CHAIN(DX30,DX32,D(ModDelay),DX4), DefTempo)	);						//unshifted tempo added for Ka-50 Baro/Ralt Switch
+		MapKeyIO(&RMFD,	OSB05,	CHAIN(DX32,D(ModDelay),DX5),	TEMPO(CHAIN(DX32,D(ModDelay),DX5),	CHAIN(DX30,DX32,D(ModDelay),DX5), DefTempo)	);
+																//TEMPO(EXEC("MiG21_SPO10_Lts_Cycle(2);"),	CHAIN(DX30,DX32,D(ModDelay),DX5),DefTempo)	);
+//		MapKeyR	(&RMFD,	OSB05,	0);
+		MapKeyIO(&RMFD,	OSB06,	CHAIN(DX32,D(ModDelay),DX6),	TEMPO(CHAIN(DX32,D(ModDelay),DX6),CHAIN(DX30,DX32,D(ModDelay),DX6),	DefTempo));
+		MapKeyIO(&RMFD,	OSB07,	CHAIN(DX32,D(ModDelay),DX7),	TEMPO(CHAIN(DX32,D(ModDelay),DX7),CHAIN(DX30,DX32,D(ModDelay),DX7),	DefTempo));
+//		MapKeyR	(&RMFD,	OSB07,	0);
+		MapKeyIO(&RMFD,	OSB08,	CHAIN(DX32,D(ModDelay),DX8),	TEMPO(CHAIN(DX32,D(ModDelay),DX8),CHAIN(DX30,DX32,D(ModDelay),DX8),	DefTempo));
+		MapKeyIO(&RMFD,	OSB09,	CHAIN(DX32,D(ModDelay),DX9),	TEMPO(CHAIN(DX32,D(ModDelay),DX9),CHAIN(DX30,DX32,D(ModDelay),DX9),	DefTempo));
+		MapKey	(&RMFD,	OSB10,	CHAIN(DX32,D(ModDelay),DX10));	
+//ROSB 11-15
+		MapKey	(&RMFD,	OSB11,	TEMPO(EXEC("MiG21_WingInnerJett_Cover_Cycle(2);"),		CHAIN(DX32,D(ModDelay),DX11),		DefTempo)	);
+		MapKey	(&RMFD,	OSB12,	TEMPO(EXEC("MiG21_WingOuterJett_Cover_Cycle(2);"),		CHAIN(DX32,D(ModDelay),DX12),		DefTempo)	);
+		
+if (Discrete_Array_MiG21)
+		MapKeyIO(&RMFD,	OSB13,	TEMPO(MiG21_Emer_Pitot_Off,MiG21_Emer_Pitot_On,DefTempo),	TEMPO(CHAIN(DX32,D(ModDelay),DX13),CHAIN(DX30,DX32,D(ModDelay),DX13),DefTempo)	);	//Pitot Heat
+else	MapKeyIO(&RMFD,	OSB13,	MiG21_Emer_Pitot_On,	TEMPO(MiG21_Main_Pitot_On,MiG21_Main_Pitot_Sel,DefTempo));
+
+		MapKey	(&RMFD,	OSB14,	TEMPO(EXEC("MiG21_Tac_Drop_Cover_Cycle(2);"),			EXEC("MiG21_Tac_Drop_Sw_Cycle(2);"),DefTempo)	);	
+		MapKey	(&RMFD,	OSB15,	TEMPO(EXEC("MiG21_Emer_AA_Cover_Cycle(2);"),			CHAIN(DX32,D(ModDelay),DX15),		DefTempo)	);
+//		MapKeyR	(&RMFD,	OSB13,	0);	//for Spitfire Engine Start	
+//		MapKeyR	(&RMFD,	OSB14,	0);	//for Spitfire Engine Start			
+//ROSB 16-20
+		MapKey	(&RMFD,	OSB16,	CHAIN(DX32,D(ModDelay),DX16));
+		MapKeyIO(&RMFD,	OSB17,	CHAIN(DX32,D(ModDelay),DX17),	TEMPO(CHAIN(DX32,D(ModDelay),DX17),			CHAIN(DX30,DX32,D(ModDelay),DX17),	DefTempo)	);	//Master Arm
+		MapKey	(&RMFD,	OSB18,	TEMPO(EXEC("MiG21_WingFuelJett_Cover_Cycle(2);"),		CHAIN(DX32,D(ModDelay),DX18),		DefTempo)	);
+		MapKeyIO(&RMFD,	OSB19,	CHAIN(DX32,D(ModDelay),DX19),	TEMPO(CHAIN(DX32,D(ModDelay),DX19),			CHAIN(DX30,DX32,D(ModDelay),DX19),	DefTempo)	);	//Nosewheel brake
+//		MapKeyIO(&RMFD,	OSB20,	CHAIN(DX32,D(ModDelay),DX24),	TEMPO(CHAIN(DX32,D(ModDelay),DX24),			CHAIN(DX30,DX32,D(ModDelay),DX24),	LongTempo)	);	//Canopy Jettison (Long)
+
+
+//Right Rocker Switches
+//SYM
+		MapKeyIO(&RMFD,	SYMU,	KB_RSYMU,EXEC("MiG21_ARK_Sw_Cycle(-1,0);"));	// /I canopy added in 1.63
+		MapKeyIO(&RMFD,	SYMD,	KB_RSYMD,EXEC("MiG21_ARK_Sw_Cycle(8,0);"));
+		
+//CON
+		MapKeyIO(&RMFD,	CONU,	KB_RCONU,	TEMPO(EXEC("MiG21_Radar_Alt_Sw_Cycle(3,0);"),	CHAIN(DX30,KB_RCONU), DefTempo)	);
+		MapKeyIO(&RMFD,	COND,	KB_RCOND,	TEMPO(EXEC("MiG21_Radar_Alt_Sw_Cycle(-1,0);"),	CHAIN(DX30,KB_RCOND), DefTempo)	);
+//		MapKeyR	(&RMFD,	CONU,	0);	//added in 1.24 to account for context sensitive R in UH-1
+//		MapKeyR	(&RMFD,	COND,	0);
+		
+//BRT
+	MapKey	(&RMFD,	BRTU,	KB_RBRTU	);
+	//MapKeyIO(&RMFD,	BRTU,	CHAIN(DX32,D(ModDelay),DX25),	TEMPO(CHAIN(DX32,D(ModDelay),DX25),			CHAIN(DX30,DX32,D(ModDelay),DX25), DefTempo)	);
+	MapKeyIO(&RMFD,	BRTD,	KB_RBRTD,	TEMPO(KB_RBRTD,			CHAIN(DX30,KB_RBRTD), LongTempo)	);
+//	MapKey	(&RMFD,	BRTU,	EXEC("MiG21_Radar_Sw_Cycle(3,0);")	);
+//	MapKey	(&RMFD,	BRTD,	EXEC("MiG21_Radar_Sw_Cycle(-1,0);")	);
+
+//GAIN
+//	MapKeyIO(&RMFD,	GAINU,	CHAIN(DX32,D(ModDelay),DX27),	TEMPO(EXEC("MiG21_Nav_Lts_Cycle(4, Discrete_Array_MiG21, 0, 1, Switch_Delay);"),	CHAIN(DX30,DX32,D(ModDelay),DX27), DefTempo)	);
+//	MapKeyIO(&RMFD,	GAIND,	CHAIN(DX32,D(ModDelay),DX28),	TEMPO(EXEC("MiG21_Nav_Lts_Cycle(-1,Discrete_Array_MiG21, 0, 1, Switch_Delay);"),	CHAIN(DX30,DX32,D(ModDelay),DX28), DefTempo)	);
+	MapKeyIO(&RMFD,	GAINU,	TEMPO(EXEC("MiG21_Nav_Lts_Cycle(2, Discrete_Array_MiG21, 0, 0, Switch_Delay);"),	EXEC("MiG21_Nav_Lts_Cycle(3, Discrete_Array_MiG21, 0, 0, Switch_Delay);"),	DefTempo),		// /i for logic
+							TEMPO(EXEC("MiG21_Nav_Lts_Cycle(2, Discrete_Array_MiG21, 0, 1, Switch_Delay);"),	EXEC("MiG21_Nav_Lts_Cycle(3, Discrete_Array_MiG21, 0, 1, Switch_Delay);"),	DefTempo)	);	//long for max, short for norm
+	MapKeyIO(&RMFD,	GAIND,	TEMPO(EXEC("MiG21_Nav_Lts_Cycle(1, Discrete_Array_MiG21, 0, 0, Switch_Delay);"),	EXEC("MiG21_Nav_Lts_Cycle(0, Discrete_Array_MiG21, 0, 0, Switch_Delay);"),	DefTempo),		// /i for logic
+							TEMPO(EXEC("MiG21_Nav_Lts_Cycle(1, Discrete_Array_MiG21, 0, 1, Switch_Delay);"),	EXEC("MiG21_Nav_Lts_Cycle(0, Discrete_Array_MiG21, 0, 1, Switch_Delay);"),	DefTempo)	);	//long for off, short for min
+
+	printf("Done!\xa");	
+}
+
+
+int MiG21_Bomb_Fuse_Sw_Set(int state)
+{
+//if (MiG21_BombSwitchGuard)
+//	{
+	if (state) 	ActKey(KEYON+PULSE+MiG21_Tac_Drop_Sw_On);
+	else 		ActKey(KEYON+PULSE+MiG21_Tac_Drop_Sw_Off);
+	Lights_RLED1(state);
+//	}
+}
+
+int	MiG21_Tac_Drop_Sw_Cycle(int posit, int loop = 1, int index = 2)		//posit is array position, index is max array size(starting with 1)
+{
+if (MiG21_Tac_Drop_Cover_Cur)
+	{
+	if (		(loop) & ((posit > index-1) | (posit < 0))	)
+		{
+		if (posit > index-1)		MiG21_Tac_Drop_Sw_Cur = (MiG21_Tac_Drop_Sw_Cur+1)%index;		//posit > index will cycle by +1
+		else if (posit < 0)	MiG21_Tac_Drop_Sw_Cur = (MiG21_Tac_Drop_Sw_Cur+index-1)%index;		//posit < 0 will cycle by -1 
+		}
+	else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+		{
+		if ((posit > index-1) & (MiG21_Tac_Drop_Sw_Cur < index-1))	MiG21_Tac_Drop_Sw_Cur = (MiG21_Tac_Drop_Sw_Cur+1)%index;		//posit > index will cycle by +1
+		else if ((posit < 0) & (MiG21_Tac_Drop_Sw_Cur > 0))		MiG21_Tac_Drop_Sw_Cur = (MiG21_Tac_Drop_Sw_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+		}
+	else				MiG21_Tac_Drop_Sw_Cur = posit;										//posit in bounds will be discrete function call
+//	ActKey(KEYON+PULSE+X(MiG21_Tac_Drop_Sw_Array,MiG21_Tac_Drop_Sw_Cur));
+	MiG21_Bomb_Fuse_Sw_Set(MiG21_Tac_Drop_Sw_Cur);
+	}
+}
+
+int MiG21_GearUp_Map(int allow, int state)
+{
+if (WarthogThrottle > 0)
+	{
+	if ((allow) & (!state))	//force lock is allowed and state is 0 (locked)
+		{
+		MapKeyIO(&Throttle,	FLAPU,	CHAIN(PULSE+DX25,	EXEC("MiG21_GearUp_Unlock_Cur = 1; GearState_Blink(GearState);")), 																		//	Gear unlock
+									CHAIN(DOWN+DX30,D(ModDelay),PULSE+DX25,D(KBDelay+ModDelay),UP+DX30, D(KBDelay),	EXEC("MiG21_GearUp_Unlock_Cur = 1; GearState_Blink(GearState);")) );	//if gear up is locked, first press will unlock and then remap controller
+		MapKeyR	(&Throttle,	FLAPU,	EXEC("MiG21_GearUp_Map(Force_GearLock,MiG21_GearUp_Unlock_Cur);"));
+//		if (Script_Debug) printf("MiG-21 Landing Gear Locked\xa");	//For test purposes
+		}
+	
+	else	//normal FLAPU mapping
+		{
+		MapKeyIO(&Throttle,	FLAPU,	CHAIN(PULSE+DX25,	EXEC("MiG21_GearUp_Unlock_Cur = 1; MiG21_GearUp_Map(Force_GearLock,MiG21_GearUp_Unlock_Cur); GearState_Blink(GearState);")), 																		//	Gear unlock
+									CHAIN(PULSE+DX25,	EXEC("if((MiG21_GearUp_Unlock_Cur) | (!Force_GearLock)) GearStateInd(0, ProfID, FixedGear, Helicopter, GearCycleTimeUp, AirBrkFlash);")) );	//Cycles Logical Gear State if unlocked or force lock disabled.  Gear command cycles automatically (governed in-game)								// gear up
+		MapKeyR	(&Throttle, FLAPU, 0);
+//		if (Script_Debug) printf("MiG-21 Landing Gear Unlocked\xa");	//For test purposes
+		}
+	}
+else
+	{
+	if ((allow) & (!state))	//force lock is allowed and state is 0 (locked)
+		{
+		MapKeyIO(&HCougar,	T7,	CHAIN(PULSE+DX25,	EXEC("MiG21_GearUp_Unlock_Cur = 1; GearState_Blink(GearState);")), 																		//	Gear unlock
+								CHAIN(DOWN+DX30,D(ModDelay),PULSE+DX25,D(KBDelay+ModDelay),UP+DX30, D(KBDelay),	EXEC("MiG21_GearUp_Unlock_Cur = 1; GearState_Blink(GearState);")) );	//if gear up is locked, first press will unlock and then remap controller
+		MapKeyR	(&HCougar,	T7,	EXEC("MiG21_GearUp_Map(Force_GearLock,MiG21_GearUp_Unlock_Cur);"));
+//		if (Script_Debug) printf("MiG-21 Landing Gear Locked\xa");	//For test purposes
+		}
+	
+	else	//normal T7 mapping
+		{
+		MapKeyIO(&HCougar,	T7,	CHAIN(PULSE+DX25,	EXEC("MiG21_GearUp_Unlock_Cur = 1; MiG21_GearUp_Map(Force_GearLock,MiG21_GearUp_Unlock_Cur); GearState_Blink(GearState);")), 																		//	Gear unlock
+								CHAIN(PULSE+DX25,	EXEC("if((MiG21_GearUp_Unlock_Cur) | (!Force_GearLock)) GearStateInd(0, ProfID, FixedGear, Helicopter, GearCycleTimeUp, AirBrkFlash);")) );	//Cycles Logical Gear State if unlocked or force lock disabled.  Gear command cycles automatically (governed in-game)								// gear up
+		MapKeyR(&HCougar, T7, 0);
+//		if (Script_Debug) printf("MiG-21 Landing Gear Unlocked\xa");	//For test purposes
+		}
+	}
+//if (allow) printf("Dogfight Up mapped to GearUnlocked = %i.\xa",state);	//for test purposes
+}
+
+//=================================
+//		Array Discrete/Toggle 
+//=================================
+
+
+int	MiG21_Array_Init()
+{
+//The 'Big Daddy' Arrays.  Addresses used for Cycle function call.  Currently not in use.
+MiG21_Array_Array		= SEQ(
+							MiG21_DA_Array,						//0
+							MiG21_WepsSel_Array,				//1
+							MiG21_WepsMM_Array,					//2
+							MiG21_WepsAA_Array,					//3
+							MiG21_ASP_CU13_Array,				//4
+							MiG21_ASP_CU14_Array,				//5
+							MiG21_ASPMM_Array,					//6
+							MiG21_ASP_CU19_Array,				//7
+							MiG21_Pipper_Sw_Array,				//8
+							MiG21_FixNet_Sw_Array,				//9
+							//MiG21_Tac_Drop_Sw_Array,			//10
+							//MiG21_Radar_Sw_Array,				//11
+							MiG21_Radar_Alt_Sw_Array,			//12
+							MiG21_RSBN_Mode_Sw_Array,			//13
+							MiG21_Ldg_Lt_Sw_Array,				//14
+							//MiG21_SAU_Low_Recovery_Sw_Array,	//15
+							MiG21_ARK_Sw_Array,					//16
+							MiG21_Nav_Lts_Array,				//17
+//							MiG21_SPO10_Lts_Array,				//18
+							MiG21_Emer_AA_Cover_Array,			//19
+							MiG21_WingFuelJett_Cover_Array,		//20
+							MiG21_WingOuterJett_Cover_Array,	//21
+							MiG21_WingInnerJett_Cover_Array,	//22
+							MiG21_Tac_Drop_Cover_Array			//23
+							);
+MiG21_Cur_Array			= SEQ(
+							MiG21_DA_Cur,						//0
+							MiG21_WepsSel_Cur,					//1
+							MiG21_WepsMM_Cur,					//2
+							MiG21_WepsAA_Cur,					//3
+							MiG21_ASP_CU13_Cur,					//4
+							MiG21_ASP_CU14_Cur,					//5
+							MiG21_ASPMM_Cur,					//6
+							MiG21_ASP_CU19_Cur,					//7
+							MiG21_Pipper_Sw_Cur,				//8
+							MiG21_FixNet_Sw_Cur,				//9
+							//MiG21_Tac_Drop_Sw_Cur,				//10
+							//MiG21_Radar_Sw_Cur,					//11
+							MiG21_Radar_Alt_Sw_Cur,				//12
+							MiG21_RSBN_Mode_Sw_Cur,				//13
+							MiG21_Ldg_Lt_Sw_Cur,				//14
+							//MiG21_SAU_Low_Recovery_Sw_Cur,		//15
+							MiG21_ARK_Sw_Cur,					//16
+							MiG21_Nav_Lts_Cur,					//17
+//							MiG21_SPO10_Lts_Cur,				//18
+							MiG21_Emer_AA_Cover_Cur,			//19
+							MiG21_WingFuelJett_Cover_Cur,		//20
+							MiG21_WingOuterJett_Cover_Cur,		//21
+							MiG21_WingInnerJett_Cover_Cur,		//22
+							MiG21_Tac_Drop_Cover_Cur			//23
+							);
+//Danger Altitude
+MiG21_DA_Array 			= SEQ(
+							MiG21_DA_Off,
+							MiG21_DA_050m,
+							MiG21_DA_100m,
+							MiG21_DA_150m,
+							MiG21_DA_200m,
+							MiG21_DA_250m,
+							MiG21_DA_300m,
+							MiG21_DA_400m
+							);
+	
+MiG21_WepsSel_Array 	= SEQ(
+							MiG21_WepsSel_AA34,
+							MiG21_WepsSel_AA12,
+							MiG21_WepsSel_AA1,
+							MiG21_WepsSel_AA2,
+							MiG21_WepsSel_AA3,
+							MiG21_WepsSel_AA4,
+
+							MiG21_WepsSel_B12,
+							MiG21_WepsSel_B34,
+							MiG21_WepsSel_B14,
+
+							MiG21_WepsSel_S24_12,
+							MiG21_WepsSel_S24_34
+							);
+MiG21_WepsSelAA_Array 	= SEQ(						//added in 2.34, reversed from clockwise array due to bottom orientation
+							MiG21_WepsSel_AA4,
+							MiG21_WepsSel_AA3,
+							MiG21_WepsSel_AA2,
+							MiG21_WepsSel_AA1,
+							MiG21_WepsSel_AA12,
+							MiG21_WepsSel_AA34
+							);
+MiG21_WepsSelAG_Array 	= SEQ(						//added in 2.34
+							MiG21_WepsSel_B12,
+							MiG21_WepsSel_B34,
+							MiG21_WepsSel_B14,
+
+							MiG21_WepsSel_S24_12,
+							MiG21_WepsSel_S24_34
+							);
+							
+MiG21_WepsMM_Array		= SEQ(MiG21_WepsMM_Gnd,MiG21_WepsMM_Air);
+MiG21_WepsAA_Array		= SEQ(MiG21_WepsAA_SAR,MiG21_WepsAA_IR);							//No neutral position
+//MiG21_WepsAA_Array	= SEQ(MiG21_WepsAA_SAR,MiG21_WepsAA_Neutral,MiG21_WepsAA_IR);		//Includes neutral position
+
+MiG21_ASP_CU13_Array	= SEQ(MiG21_ASP_Gun,MiG21_ASP_MissRock);
+MiG21_ASP_CU14_Array	= SEQ(MiG21_ASP_Shooting,MiG21_ASP_Bomb);
+MiG21_ASPMM_Array		= SEQ(MiG21_ASPMM_Auto,MiG21_ASPMM_Man);
+MiG21_ASP_CU19_Array	= SEQ(MiG21_ASP_Missile,MiG21_ASP_Gyro);
+MiG21_Pipper_Sw_Array	= SEQ(MiG21_Pipper_Off,MiG21_Pipper_On);
+MiG21_FixNet_Sw_Array	= SEQ(MiG21_FixNet_Off,MiG21_FixNet_On);
+
+//MiG21_Tac_Drop_Sw_Array	= SEQ(EXEC("MiG21_Bomb_Fuse_Sw_Set(0);"),EXEC("MiG21_Bomb_Fuse_Sw_Set(1);"));	//SEQ(MiG21_Tac_Drop_Sw_On,MiG21_Tac_Drop_Sw_Off);
+
+//MiG21_Radar_Sw_Array	= SEQ(MiG21_Radar_Off,MiG21_Radar_Stby,MiG21_Radar_On);
+MiG21_Radar_Alt_Sw_Array= SEQ(MiG21_Radar_Alt_Filter_Off,MiG21_Radar_Alt_Filter_On,MiG21_Radar_Alt_Tilt);
+
+MiG21_RSBN_Mode_Sw_Array= SEQ(MiG21_RSBN_Landing,MiG21_RSBN_Nav,MiG21_RSBN_Descend);
+
+MiG21_Ldg_Lt_Sw_Array	= SEQ(MiG21_Ldg_Lt_Off,MiG21_Ldg_Lt_Taxi,MiG21_Ldg_Lt_Land);
+
+//MiG21_SAU_Low_Recovery_Sw_Array = SEQ(MiG21_SAU_Low_Recovery_Off,MiG21_SAU_Low_Recovery_On);	//not currently in use
+
+MiG21_ARK_Sw_Array		= SEQ(
+							MiG21_ARK_I1,
+							MiG21_ARK_I2,
+							MiG21_ARK_II1,
+							MiG21_ARK_II2,
+							MiG21_ARK_III1,
+							MiG21_ARK_III2,
+							MiG21_ARK_IV1,
+							MiG21_ARK_IV2
+							);
+
+MiG21_Nav_Lts_Array		= SEQ(MiG21_Nav_Lts_Off,MiG21_Nav_Lts_Min,MiG21_Nav_Lts_Med,MiG21_Nav_Lts_Max);	
+//MiG21_SPO10_Lts_Array	= SEQ(MiG21_SPO10_Lts_Day,MiG21_SPO10_Lts_Night);
+
+MiG21_Emer_AA_Cover_Array		= SEQ(MiG21_Emer_AA_Cover_Close,MiG21_Emer_AA_Cover_Open);
+MiG21_WingFuelJett_Cover_Array 	= SEQ(MiG21_WingFuelJett_Cover_Close,MiG21_WingFuelJett_Cover_Open);
+MiG21_WingOuterJett_Cover_Array	= SEQ(MiG21_WingOuterJett_Cover_Close,MiG21_WingOuterJett_Cover_Open);
+MiG21_WingInnerJett_Cover_Array	= SEQ(MiG21_WingInnerJett_Cover_Close,MiG21_WingInnerJett_Cover_Open);
+MiG21_Tac_Drop_Cover_Array		= SEQ(MiG21_Tac_Drop_Cover_Close,MiG21_Tac_Drop_Cover_Open);
+
+MiG21_ButtonCap_Array			= SEQ(MiG21_ButtonCap_Close,MiG21_ButtonCap_Open);	//added in 1.32
+}
+
+//Initial Switch Positions by gear/startup state.  To be fleshed out.
+int	MiG21_Switch_Posit_Init(int state)
+{
+MiG21_DA_Cur		=	0;
+if (state) 	MiG21_WepsSel_Cur	=	6;	//Set for B1-2/UB16
+else		MiG21_WepsSel_Cur	=	2;	//Set for AA1
+MiG21_WepsMM_Cur	=	0;
+MiG21_WepsAA_Cur	=	0;
+MiG21_ASP_CU13_Cur	=	1;
+MiG21_ASP_CU14_Cur	=	1;
+MiG21_ASPMM_Cur		=	1;
+MiG21_ASP_CU19_Cur	=	0;
+MiG21_Pipper_Sw_Cur = 	abs(state-1);
+MiG21_FixNet_Sw_Cur	=	abs(state-1);
+MiG21_Tac_Drop_Sw_Cur = 0;
+//MiG21_Radar_Sw_Cur	=	0;
+MiG21_Radar_Alt_Sw_Cur = 0;
+MiG21_RSBN_Mode_Sw_Cur=	1;
+MiG21_Ldg_Lt_Sw_Cur = 	0;
+//MiG21_SAU_Low_Recovery_Sw_Cur = 0;
+MiG21_ARK_Sw_Cur	=	2;
+MiG21_Nav_Lts_Cur 	=	0;
+//MiG21_SPO10_Lts_Cur	=	0;
+MiG21_Emer_AA_Cover_Cur = 0;
+MiG21_WingFuelJett_Cover_Cur = 0;
+MiG21_WingOuterJett_Cover_Cur = 0;
+MiG21_WingInnerJett_Cover_Cur = 0;
+MiG21_ButtonCap_Cur	= 0;
+
+MiG21_GearUp_Unlock_Cur	=	abs(state-1);
+MiG21_GearUp_Map(Force_GearLock,abs(state-1));
+MiG21_Tac_Drop_Cover_Cur = 0;
+Lights_RLED1(0);
+}
+
+
+//Trouble with one-size routine; stick with individual functions for now.
+int	MiG21_Array_Cycle(int arr, int posit, int loop = 1, int index = 2, int i = 0, int j = 0)			//arr is posit in big daddy, posit is array position, loop is whether the array cycles at limit, index is max array size (starting with 1), i,j are dummy
+{
+i = X(MiG21_Array_Array,arr);
+j = X(MiG21_Cur_Array,arr);
+
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)		j = (j+1)%index;	//posit > index will cycle by +1
+	else if (posit < 0)	j = (j+index-1)%index;	//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (j < index-1))	j = (j+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (j > 0))			j = (j+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				j = posit;							//posit in bounds will be discrete function call
+
+//X(MiG21_Cur_Array,arr) = j;	//can't get value assigned to array
+ActKey(KEYON+PULSE+X(i,j));
+}
+
+
+//Individual Switches (poss obsolete)
+int	MiG21_DA_Cycle(int posit, int loop = 0, int index = 8)			//posit is array position, index is max array size (starting with 1)
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)		MiG21_DA_Cur = (MiG21_DA_Cur+1)%index;	//posit > index will cycle by +1
+	else if (posit < 0)	MiG21_DA_Cur = (MiG21_DA_Cur+index-1)%index;	//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (MiG21_DA_Cur < index-1))	MiG21_DA_Cur = (MiG21_DA_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (MiG21_DA_Cur > 0))			MiG21_DA_Cur = (MiG21_DA_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				MiG21_DA_Cur = posit;							//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(MiG21_DA_Array,MiG21_DA_Cur));
+}
+
+int	MiG21_WepsSel_Cycle(int posit, int loop = 1, int index = 11)		//posit is array position, index is max array size(starting with 1).  Added AA/AG arrays in 2.34
+{
+if (WepsSel_Array_MiG21 > 1)
+	{
+	loop = WepsSel_Array_MiG21 - 2;		//will be 2 or 3, makes loop 0 or 1 by option
+	if (MiG21_WepsMM_Cur)	index = 6;	//AA
+	else 					index = 5;	//AG
+	}
+
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)
+		{
+		if ((WepsSel_Array_MiG21 > 1) & (MiG21_WepsSel_Cur > index-1))
+						MiG21_WepsSel_Cur = index-1;								//WepsSel_CUR OOB, set to max
+		else			MiG21_WepsSel_Cur = (MiG21_WepsSel_Cur+1)%index;			//posit > index will cycle by +1
+		}
+	else if (posit < 0)	MiG21_WepsSel_Cur = (MiG21_WepsSel_Cur+index-1)%index;		//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)
+		{
+		if ((WepsSel_Array_MiG21 > 1) & (MiG21_WepsSel_Cur > index-1))
+													MiG21_WepsSel_Cur = index-1;							//WepsSel_CUR OOB, set to max
+		else if (MiG21_WepsSel_Cur < index-1)		MiG21_WepsSel_Cur = (MiG21_WepsSel_Cur+1)%index;		//posit > index will cycle by +1
+		}
+	else if ((posit < 0) & (MiG21_WepsSel_Cur > 0))	MiG21_WepsSel_Cur = (MiG21_WepsSel_Cur+index-1)%index;	//posit < 0 will cycle by -1 
+	}
+else				MiG21_WepsSel_Cur = posit;									//posit in bounds will be discrete function call
+if (WepsSel_Array_MiG21 > 1)
+	{
+	if (MiG21_WepsMM_Cur)	ActKey(KEYON+PULSE+X(MiG21_WepsSelAA_Array,MiG21_WepsSel_Cur));
+	else					ActKey(KEYON+PULSE+X(MiG21_WepsSelAG_Array,MiG21_WepsSel_Cur));
+	}
+else	ActKey(KEYON+PULSE+X(MiG21_WepsSel_Array,MiG21_WepsSel_Cur));
+}
+
+int	MiG21_WepsMM_Cycle(int posit, int loop = 1, int index = 2)		//posit is array position, index is max array size(starting with 1)
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)		MiG21_WepsMM_Cur = (MiG21_WepsMM_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)	MiG21_WepsMM_Cur = (MiG21_WepsMM_Cur+index-1)%index;		//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (MiG21_WepsMM_Cur < index-1))	MiG21_WepsMM_Cur = (MiG21_WepsMM_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (MiG21_WepsMM_Cur > 0))			MiG21_WepsMM_Cur = (MiG21_WepsMM_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				MiG21_WepsMM_Cur = posit;									//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(MiG21_WepsMM_Array,MiG21_WepsMM_Cur));
+}
+
+int	MiG21_WepsAA_Cycle(int posit, int loop = 1, int index = 2) //3)		//posit is array position, index is max array size(starting with 1)
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)		MiG21_WepsAA_Cur = (MiG21_WepsAA_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)	MiG21_WepsAA_Cur = (MiG21_WepsAA_Cur+index-1)%index;		//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (MiG21_WepsAA_Cur < index-1))	MiG21_WepsAA_Cur = (MiG21_WepsAA_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (MiG21_WepsAA_Cur > 0))			MiG21_WepsAA_Cur = (MiG21_WepsAA_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				MiG21_WepsAA_Cur = posit;									//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(MiG21_WepsAA_Array,MiG21_WepsAA_Cur));
+}
+
+int	MiG21_ASP_CU13_Cycle(int posit, int loop = 1, int index = 2)		//posit is array position, index is max array size(starting with 1)
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)		MiG21_ASP_CU13_Cur = (MiG21_ASP_CU13_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)	MiG21_ASP_CU13_Cur = (MiG21_ASP_CU13_Cur+index-1)%index;		//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (MiG21_ASP_CU13_Cur < index-1))	MiG21_ASP_CU13_Cur = (MiG21_ASP_CU13_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (MiG21_ASP_CU13_Cur > 0))			MiG21_ASP_CU13_Cur = (MiG21_ASP_CU13_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				MiG21_ASP_CU13_Cur = posit;										//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(MiG21_ASP_CU13_Array,MiG21_ASP_CU13_Cur));
+}
+
+int	MiG21_ASP_CU14_Cycle(int posit, int loop = 1, int index = 2)		//posit is array position, index is max array size(starting with 1)
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)		MiG21_ASP_CU14_Cur = (MiG21_ASP_CU14_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)	MiG21_ASP_CU14_Cur = (MiG21_ASP_CU14_Cur+index-1)%index;		//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (MiG21_ASP_CU14_Cur < index-1))	MiG21_ASP_CU14_Cur = (MiG21_ASP_CU14_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (MiG21_ASP_CU14_Cur > 0))			MiG21_ASP_CU14_Cur = (MiG21_ASP_CU14_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				MiG21_ASP_CU14_Cur = posit;										//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(MiG21_ASP_CU14_Array,MiG21_ASP_CU14_Cur));
+}
+
+int	MiG21_ASPMM_Cycle(int posit, int loop = 1, int index = 2)		//posit is array position, index is max array size(starting with 1)
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)		MiG21_ASPMM_Cur = (MiG21_ASPMM_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)	MiG21_ASPMM_Cur = (MiG21_ASPMM_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (MiG21_ASPMM_Cur < index-1))	MiG21_ASPMM_Cur = (MiG21_ASPMM_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (MiG21_ASPMM_Cur > 0))			MiG21_ASPMM_Cur = (MiG21_ASPMM_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				MiG21_ASPMM_Cur = posit;									//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(MiG21_ASPMM_Array,MiG21_ASPMM_Cur));
+}
+
+int	MiG21_ASP_CU19_Cycle(int posit, int loop = 1, int index = 2)		//posit is array position, index is max array size(starting with 1)
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)		MiG21_ASP_CU19_Cur = (MiG21_ASP_CU19_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)	MiG21_ASP_CU19_Cur = (MiG21_ASP_CU19_Cur+index-1)%index;		//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (MiG21_ASP_CU19_Cur < index-1))	MiG21_ASP_CU19_Cur = (MiG21_ASP_CU19_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (MiG21_ASP_CU19_Cur > 0))		MiG21_ASP_CU19_Cur = (MiG21_ASP_CU19_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				MiG21_ASP_CU19_Cur = posit;										//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(MiG21_ASP_CU19_Array,MiG21_ASP_CU19_Cur));
+}
+
+int	MiG21_Pipper_Sw_Cycle(int posit, int loop = 1, int index = 2)		//posit is array position, index is max array size(starting with 1)
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)		MiG21_Pipper_Sw_Cur = (MiG21_Pipper_Sw_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)	MiG21_Pipper_Sw_Cur = (MiG21_Pipper_Sw_Cur+index-1)%index;		//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (MiG21_Pipper_Sw_Cur < index-1))	MiG21_Pipper_Sw_Cur = (MiG21_Pipper_Sw_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (MiG21_Pipper_Sw_Cur > 0))		MiG21_Pipper_Sw_Cur = (MiG21_Pipper_Sw_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				MiG21_Pipper_Sw_Cur = posit;										//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(MiG21_Pipper_Sw_Array,MiG21_Pipper_Sw_Cur));
+}
+
+int	MiG21_FixNet_Sw_Cycle(int posit, int loop = 1, int index = 2)		//posit is array position, index is max array size(starting with 1)
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)		MiG21_FixNet_Sw_Cur = (MiG21_FixNet_Sw_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)	MiG21_FixNet_Sw_Cur = (MiG21_FixNet_Sw_Cur+index-1)%index;		//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (MiG21_FixNet_Sw_Cur < index-1))	MiG21_FixNet_Sw_Cur = (MiG21_FixNet_Sw_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (MiG21_FixNet_Sw_Cur > 0))		MiG21_FixNet_Sw_Cur = (MiG21_FixNet_Sw_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				MiG21_FixNet_Sw_Cur = posit;										//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(MiG21_FixNet_Sw_Array,MiG21_FixNet_Sw_Cur));
+}
+
+//int	MiG21_Tac_Drop_Sw_Cycle(int posit, int loop = 1, int index = 2)		//posit is array position, index is max array size(starting with 1)
+//{
+//if (		(loop) & ((posit > index-1) | (posit < 0))	)
+//	{
+//	if (posit > index-1)		MiG21_Tac_Drop_Sw_Cur = (MiG21_Tac_Drop_Sw_Cur+1)%index;		//posit > index will cycle by +1
+//	else if (posit < 0)	MiG21_Tac_Drop_Sw_Cur = (MiG21_Tac_Drop_Sw_Cur+index-1)%index;		//posit < 0 will cycle by -1 
+//	}
+//else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+//	{
+//	if ((posit > index-1) & (MiG21_Tac_Drop_Sw_Cur < index-1))	MiG21_Tac_Drop_Sw_Cur = (MiG21_Tac_Drop_Sw_Cur+1)%index;		//posit > index will cycle by +1
+//	else if ((posit < 0) & (MiG21_Tac_Drop_Sw_Cur > 0))		MiG21_Tac_Drop_Sw_Cur = (MiG21_Tac_Drop_Sw_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+//	}
+//else				MiG21_Tac_Drop_Sw_Cur = posit;										//posit in bounds will be discrete function call
+//ActKey(KEYON+PULSE+X(MiG21_Tac_Drop_Sw_Array,MiG21_Tac_Drop_Sw_Cur));
+//}
+
+int	MiG21_Radar_Sw_Cycle(int posit, int loop = 0, int index = 3)		//posit is array position, index is max array size(starting with 1)
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)		MiG21_Radar_Sw_Cur = (MiG21_Radar_Sw_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)	MiG21_Radar_Sw_Cur = (MiG21_Radar_Sw_Cur+index-1)%index;		//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (MiG21_Radar_Sw_Cur < index-1))	MiG21_Radar_Sw_Cur = (MiG21_Radar_Sw_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (MiG21_Radar_Sw_Cur > 0))		MiG21_Radar_Sw_Cur = (MiG21_Radar_Sw_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				MiG21_Radar_Sw_Cur = posit;										//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(MiG21_Radar_Sw_Array,MiG21_Radar_Sw_Cur));
+}
+
+int	MiG21_Radar_Alt_Sw_Cycle(int posit, int loop = 0, int index = 3)		//posit is array position, index is max array size(starting with 1)
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)		MiG21_Radar_Alt_Sw_Cur = (MiG21_Radar_Alt_Sw_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)	MiG21_Radar_Alt_Sw_Cur = (MiG21_Radar_Alt_Sw_Cur+index-1)%index;		//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (MiG21_Radar_Alt_Sw_Cur < index-1))	MiG21_Radar_Alt_Sw_Cur = (MiG21_Radar_Alt_Sw_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (MiG21_Radar_Alt_Sw_Cur > 0))		MiG21_Radar_Alt_Sw_Cur = (MiG21_Radar_Alt_Sw_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				MiG21_Radar_Alt_Sw_Cur = posit;										//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(MiG21_Radar_Alt_Sw_Array,MiG21_Radar_Alt_Sw_Cur));
+}
+
+int	MiG21_RSBN_Mode_Sw_Cycle(int posit, int loop = 0, int index = 3)		//posit is array position, index is max array size(starting with 1)
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)		MiG21_RSBN_Mode_Sw_Cur = (MiG21_RSBN_Mode_Sw_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)	MiG21_RSBN_Mode_Sw_Cur = (MiG21_RSBN_Mode_Sw_Cur+index-1)%index;		//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (MiG21_RSBN_Mode_Sw_Cur < index-1))	MiG21_RSBN_Mode_Sw_Cur = (MiG21_RSBN_Mode_Sw_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (MiG21_RSBN_Mode_Sw_Cur > 0))		MiG21_RSBN_Mode_Sw_Cur = (MiG21_RSBN_Mode_Sw_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				MiG21_RSBN_Mode_Sw_Cur = posit;											//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(MiG21_RSBN_Mode_Sw_Array,MiG21_RSBN_Mode_Sw_Cur));
+}
+
+int	MiG21_Ldg_Lt_Sw_Cycle(int posit, int array = 1, int loop = 0, int key = 1, int delay = 200, 	int index = 3, int time = 0)		//posit is array position, array is whether array for discrete commands is called (0 for cycle), delay is switch cycle delay index is max array size(starting with 1)
+{
+if (array > 0)
+	{
+	if (		(loop) & ((posit > index-1) | (posit < 0))	)
+		{
+		if (posit > index-1)	MiG21_Ldg_Lt_Sw_Cur = (MiG21_Ldg_Lt_Sw_Cur+1)%index;		//posit > index will cycle by +1
+		else if (posit < 0)	MiG21_Ldg_Lt_Sw_Cur = (MiG21_Ldg_Lt_Sw_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+		}
+	else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+		{
+		if ((posit > index-1) & (MiG21_Ldg_Lt_Sw_Cur < index-1))	MiG21_Ldg_Lt_Sw_Cur = (MiG21_Ldg_Lt_Sw_Cur+1)%index;		//posit > index will cycle by +1
+		else if ((posit < 0) & (MiG21_Ldg_Lt_Sw_Cur > 0))			MiG21_Ldg_Lt_Sw_Cur = (MiG21_Ldg_Lt_Sw_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+		}
+	else				MiG21_Ldg_Lt_Sw_Cur = posit;										//posit in bounds will be discrete function call
+	if (key) ActKey(KEYON+PULSE+X(MiG21_Ldg_Lt_Sw_Array,MiG21_Ldg_Lt_Sw_Cur));
+	else printf("MiG21_Ldg_Lt_Sw_Cur = %i\xa",MiG21_Ldg_Lt_Sw_Cur);
+	}
+else
+	{
+	if 		(	(posit > (index-1)) & ((loop) | ((!loop) & (MiG21_Ldg_Lt_Sw_Cur < index-1)))	)	posit = (MiG21_Ldg_Lt_Sw_Cur+1)%index;			//out of bounds up toggles one step
+	else if (	(posit < 0) 		& ((loop) | ((!loop) & (MiG21_Ldg_Lt_Sw_Cur >0		)))		) 	posit = (MiG21_Ldg_Lt_Sw_Cur+(index-1))%index;	//out of bounds down toggles (index-1) steps (comes to -1)
+	
+	while (MiG21_Ldg_Lt_Sw_Cur != posit)
+		{
+		if ((delay > 0) & (key)) DeferCall(time, &ActKey, KEYON+PULSE+MiG21_Ldg_Lt_Cyc);
+		//else 
+		MiG21_Ldg_Lt_Sw_Cur = (MiG21_Ldg_Lt_Sw_Cur+1)%index;
+		time = time + delay;
+//		if (Script_Debug) printf("MiG21_Ldg_Lt_Sw_Cur = %i\xa",MiG21_Ldg_Lt_Sw_Cur);
+		}
+	}
+}
+
+int	MiG21_SAU_Low_Recovery_Sw_Cycle(int posit, int loop = 0, int index = 2)		//posit is array position, index is max array size(starting with 1); not currently in use
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)	MiG21_SAU_Low_Recovery_Sw_Cur = (MiG21_SAU_Low_Recovery_Sw_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)	MiG21_SAU_Low_Recovery_Sw_Cur = (MiG21_SAU_Low_Recovery_Sw_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (MiG21_SAU_Low_Recovery_Sw_Cur < index-1))	MiG21_SAU_Low_Recovery_Sw_Cur = (MiG21_SAU_Low_Recovery_Sw_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (MiG21_SAU_Low_Recovery_Sw_Cur > 0))			MiG21_SAU_Low_Recovery_Sw_Cur = (MiG21_SAU_Low_Recovery_Sw_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				MiG21_SAU_Low_Recovery_Sw_Cur = posit;										//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(MiG21_SAU_Low_Recovery_Sw_Array,MiG21_SAU_Low_Recovery_Sw_Cur));
+}
+
+int	MiG21_ARK_Sw_Cycle(int posit, int loop = 0, int index = 8)		//posit is array position, index is max array size(starting with 1); not currently in use
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)	MiG21_ARK_Sw_Cur = (MiG21_ARK_Sw_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)	MiG21_ARK_Sw_Cur = (MiG21_ARK_Sw_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (MiG21_ARK_Sw_Cur < index-1))	MiG21_ARK_Sw_Cur = (MiG21_ARK_Sw_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (MiG21_ARK_Sw_Cur > 0))			MiG21_ARK_Sw_Cur = (MiG21_ARK_Sw_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				MiG21_ARK_Sw_Cur = posit;										//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(MiG21_ARK_Sw_Array,MiG21_ARK_Sw_Cur));
+}
+
+int	MiG21_Nav_Lts_Cycle(int posit, int array = 1, int loop = 0, int key = 1, int delay = 200, 	int index = 4, int time = 0)		//posit is array position, array is whether array for discrete commands is called (0 for cycle), delay is switch cycle delay index is max array size(starting with 1)
+{
+if (array > 0)
+	{
+	if (		(loop) & ((posit > index-1) | (posit < 0))	)
+		{
+		if (posit > index-1)	MiG21_Nav_Lts_Cur = (MiG21_Nav_Lts_Cur+1)%index;		//posit > index will cycle by +1
+		else if (posit < 0)	MiG21_Nav_Lts_Cur = (MiG21_Nav_Lts_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+		}
+	else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+		{
+		if ((posit > index-1) & (MiG21_Nav_Lts_Cur < index-1))	MiG21_Nav_Lts_Cur = (MiG21_Nav_Lts_Cur+1)%index;		//posit > index will cycle by +1
+		else if ((posit < 0) & (MiG21_Nav_Lts_Cur > 0))			MiG21_Nav_Lts_Cur = (MiG21_Nav_Lts_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+		}
+	else				MiG21_Nav_Lts_Cur = posit;										//posit in bounds will be discrete function call
+	if (key) ActKey(KEYON+PULSE+X(MiG21_Nav_Lts_Array,MiG21_Nav_Lts_Cur));
+	else printf("MiG21_Nav_Lts_Cur = %i\xa",MiG21_Nav_Lts_Cur);
+	}
+else
+	{
+	if 		(	(posit > (index-1)) & ((loop) | ((!loop) & (MiG21_Nav_Lts_Cur < index-1)))	)	posit = (MiG21_Nav_Lts_Cur+1)%index;			//out of bounds up toggles one step
+	else if (	(posit < 0) 		& ((loop) | ((!loop) & (MiG21_Nav_Lts_Cur >0		)))	) 	posit = (MiG21_Nav_Lts_Cur+(index-1))%index;	//out of bounds down toggles (index-1) steps (comes to -1)
+	
+	while (MiG21_Nav_Lts_Cur != posit)
+		{
+		if ((delay > 0) & (key))	DeferCall(time, &ActKey, KEYON+PULSE+MiG21_Nav_Lts_Cyc);
+		//else 
+		MiG21_Nav_Lts_Cur = (MiG21_Nav_Lts_Cur+1)%index;
+		time = time + delay;
+//		if (Script_Debug) printf("MiG21_Nav_Lts_Cur = %i\xa",MiG21_Nav_Lts_Cur);
+		}
+	}
+
+}
+
+//int	MiG21_SPO10_Lts_Cycle(int posit, int loop = 1, int index = 2)		//posit is array position, index is max array size(starting with 1); not currently in use
+//{
+//if (		(loop) & ((posit > index-1) | (posit < 0))	)
+//	{
+//	if (posit > index-1)	MiG21_SPO10_Lts_Cur = (MiG21_SPO10_Lts_Cur+1)%index;		//posit > index will cycle by +1
+//	else if (posit < 0)	MiG21_Nav_SPO10_Cur = (MiG21_SPO10_Lts_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+//	}
+//else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+//	{
+//	if ((posit > index-1) & (MiG21_SPO10_Lts_Cur < index-1))	MiG21_SPO10_Lts_Cur = (MiG21_SPO10_Lts_Cur+1)%index;		//posit > index will cycle by +1
+//	else if ((posit < 0) & (MiG21_SPO10_Lts_Cur > 0))			MiG21_SPO10_Lts_Cur = (MiG21_SPO10_Lts_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+//	}
+//else				MiG21_SPO10_Lts_Cur = posit;										//posit in bounds will be discrete function call
+//ActKey(KEYON+PULSE+X(MiG21_SPO10_Lts_Array,MiG21_SPO10_Lts_Cur));
+//}
+
+int	MiG21_Tac_Drop_Cover_Cycle(int posit, int loop = 1, int index = 2)		//posit is array position, index is max array size(starting with 1); not currently in use
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)	MiG21_Tac_Drop_Cover_Cur = (MiG21_Tac_Drop_Cover_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)	MiG21_Tac_Drop_Cover_Cur = (MiG21_Tac_Drop_Cover_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (MiG21_Tac_Drop_Cover_Cur < index-1))	MiG21_Tac_Drop_Cover_Cur = (MiG21_Tac_Drop_Cover_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (MiG21_Tac_Drop_Cover_Cur > 0))			MiG21_Tac_Drop_Cover_Cur = (MiG21_Tac_Drop_Cover_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				MiG21_Tac_Drop_Cover_Cur = posit;										//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(MiG21_Tac_Drop_Cover_Array,MiG21_Tac_Drop_Cover_Cur));
+}
+
+int	MiG21_Emer_AA_Cover_Cycle(int posit, int loop = 1, int index = 2)		//posit is array position, index is max array size(starting with 1); not currently in use
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)	MiG21_Emer_AA_Cover_Cur = (MiG21_Emer_AA_Cover_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)	MiG21_Emer_AA_Cover_Cur = (MiG21_Emer_AA_Cover_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (MiG21_Emer_AA_Cover_Cur < index-1))	MiG21_Emer_AA_Cover_Cur = (MiG21_Emer_AA_Cover_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (MiG21_Emer_AA_Cover_Cur > 0))			MiG21_Emer_AA_Cover_Cur = (MiG21_Emer_AA_Cover_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				MiG21_Emer_AA_Cover_Cur = posit;										//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(MiG21_Emer_AA_Cover_Array,MiG21_Emer_AA_Cover_Cur));
+}
+
+int	MiG21_WingFuelJett_Cover_Cycle(int posit, int loop = 1, int index = 2)		//posit is array position, index is max array size(starting with 1); not currently in use
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)	MiG21_WingFuelJett_Cover_Cur = (MiG21_WingFuelJett_Cover_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)	MiG21_WingFuelJett_Cover_Cur = (MiG21_WingFuelJett_Cover_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (MiG21_WingFuelJett_Cover_Cur < index-1))	MiG21_WingFuelJett_Cover_Cur = (MiG21_WingFuelJett_Cover_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (MiG21_WingFuelJett_Cover_Cur > 0))			MiG21_WingFuelJett_Cover_Cur = (MiG21_WingFuelJett_Cover_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				MiG21_WingFuelJett_Cover_Cur = posit;										//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(MiG21_WingFuelJett_Cover_Array,MiG21_WingFuelJett_Cover_Cur));
+}
+
+int	MiG21_WingOuterJett_Cover_Cycle(int posit, int loop = 1, int index = 2)		//posit is array position, index is max array size(starting with 1); not currently in use
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)	MiG21_WingOuterJett_Cover_Cur = (MiG21_WingOuterJett_Cover_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)	MiG21_WingOuterJett_Cover_Cur = (MiG21_WingOuterJett_Cover_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (MiG21_WingOuterJett_Cover_Cur < index-1))	MiG21_WingOuterJett_Cover_Cur = (MiG21_WingOuterJett_Cover_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (MiG21_WingOuterJett_Cover_Cur > 0))			MiG21_WingOuterJett_Cover_Cur = (MiG21_WingOuterJett_Cover_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				MiG21_WingOuterJett_Cover_Cur = posit;										//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(MiG21_WingOuterJett_Cover_Array,MiG21_WingOuterJett_Cover_Cur));
+}
+
+int	MiG21_WingInnerJett_Cover_Cycle(int posit, int loop = 1, int index = 2)		//posit is array position, index is max array size(starting with 1); not currently in use
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)	MiG21_WingInnerJett_Cover_Cur = (MiG21_WingInnerJett_Cover_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)	MiG21_WingInnerJett_Cover_Cur = (MiG21_WingInnerJett_Cover_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (MiG21_WingInnerJett_Cover_Cur < index-1))	MiG21_WingInnerJett_Cover_Cur = (MiG21_WingInnerJett_Cover_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (MiG21_WingInnerJett_Cover_Cur > 0))			MiG21_WingInnerJett_Cover_Cur = (MiG21_WingInnerJett_Cover_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				MiG21_WingInnerJett_Cover_Cur = posit;										//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(MiG21_WingInnerJett_Cover_Array,MiG21_WingInnerJett_Cover_Cur));
+}
+
+	
+int	MiG21_ButtonCap_Cycle(int posit, int loop = 1, int index = 2)		//posit is array position, index is max array size(starting with 1); not currently in use
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)	MiG21_ButtonCap_Cur = (MiG21_ButtonCap_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)	MiG21_ButtonCap_Cur = (MiG21_ButtonCap_Cur+index-1)%index;		//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (MiG21_ButtonCap_Cur < index-1))	MiG21_ButtonCap_Cur = (MiG21_ButtonCap_Cur+1)%index;			//posit > index will cycle by +1
+	else if ((posit < 0) & (MiG21_ButtonCap_Cur > 0))			MiG21_ButtonCap_Cur = (MiG21_ButtonCap_Cur+index-1)%index;		//posit < 0 will cycle by -1 
+	}
+else				MiG21_ButtonCap_Cur = posit;										//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(MiG21_ButtonCap_Array,MiG21_ButtonCap_Cur));
+}
+
+
+

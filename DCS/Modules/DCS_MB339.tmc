@@ -1,0 +1,476 @@
+//================================================================================
+//		DCS World Standard DirectX for HOTAS Cougar/Warthog and Cougar MFDs
+//					by Don "Home Fries" Heumphreus
+//						last updated: 27OCT2021
+//
+//	Change Log:
+//	2.43	Initial Release
+//	2.44	Changed MB339_RequestAcftCtl to global macro RequestAcftCtl
+//	2.46	Moved ROSB20 to MFD_Init()
+//	2.51	Removed duplicate MapKeyR(0) mappings to free stack space.
+//	2.63	Added WHIdle_Enabled parameter to WH Idle commands
+//
+//
+//================================================================================
+
+//	Default DCS Configuration, useful for any aircraft except for Flaming Cliffs 3/Su-25T.
+//	All buttons mapped directly to DX buttons, but with shift state, gear and analog airbrake lights enabled, and CommState routine.
+//	WH Note: Buttons beyond DX28 (throttle base switches, Pinkie switch, China Hat, Coolie Switch) modified with DX31,DX32.  LDGH Modified with DX30,DX31,DX32.
+
+int DCS_MB339(int led, int sp, int prof = 2539, int stn = 1)
+{
+int dly = 1350;
+int sdly = dly + 500;
+
+printf("MB-339");
+if (stn > 1)
+	{
+	printf(" (Rear)\xa");
+	DefaultStation_MB339 = 2;
+	}
+else
+	{
+	printf("\xa");
+	DefaultStation_MB339 = 1;
+	}
+
+if (WarthogStick > 0)
+	{
+	if (stn > 1)	MapKeyR	(&Joystick, S2, EXEC("DCS_MB339_Init(2539,2);"));
+	else			MapKeyR	(&Joystick, S2, EXEC("DCS_MB339_Init(2539,1);"));
+	}
+else
+	{
+	if (stn > 1)	MapKeyR	(&HCougar,	S2, EXEC("DCS_MB339_Init(2539,2);"));
+	else			MapKeyR	(&HCougar,	S2, EXEC("DCS_MB339_Init(2539,1);"));
+	}
+
+if (sp > 0)
+	{
+	PlayWav("mb339.wav");
+	if (stn > 1)
+		{
+		DeferCall(dly, &PlayWav,"station.wav");
+		DeferCall(sdly,&PlayWav,"2.wav");
+		}
+	}
+if (led > 0)	Lights_Four(0,0,1,1,	ProfileSwapDelay+LED_Delay);
+}
+
+
+int	SetMenu_MB339()
+{
+Set_Acft_Array_Cur(2539);
+}
+
+
+int	LdgLight_Cur;
+int	NavLight_Cur;
+int BombFuse_Cur;
+
+int DCS_MB339_Init(int prof = 2539, int stn = 1)
+{
+Determine_Differential_Braking(DiffBraking_Enabled,CougarToeBrakes);
+
+FkeyPress				=	1;	//added in 2.02 to prevent Commswitch key activation on profile load.
+GraceFlag				=	0;
+Eng_Start_x				=	0;
+Eng_Stop_x				=	0;
+Starter_Ind_x			=	0;
+MFD_Eng_Start			=	0;
+ProfID					=	prof;
+FixedGear				=	0;
+Helicopter				=	0;
+T6WheelBrake			=	0;
+TriggerZoomEnabled		=	1;
+BrakeOnCycleTime		=	Airbrake_Out_MB339;
+BrakeOffCycleTime		=	Airbrake_In_MB339;
+GearCycleTimeUp			=	Gear_Retract_MB339;
+GearCycleTimeDn			=	Gear_Deploy_MB339;
+S4AnalogBrake			=	JoyAsAnalogBrake;	//added in 1.33
+S4asNWS					=	0;					//added in 1.33
+S3holdNWS 				= 	0;	//added in 2.05
+AnalogParkingBrake		=	0;	//added in 1.33
+XYAxisTrim				=	0;	//added in 1.34
+DMS_SnapView			=	1;	//added in 1.34
+WheelBrakeFull			=	1;	//added in 1.35
+ToeBrakesAvailable		=	1;	//added in 1.40, constant in dcs world.tmc TBI
+NVG_Capable				=	0;	//added in 1.40
+AB_Capable				=	0;	//added in 1.61
+Adjust_Backlighting		=	0;	//added in 1.62
+NS430_Enabled			=	NS430_Installed*NS430_Enabled_MB339;	//added in 2.21
+CrewCount				=	2;				//use DX commands for cockpit switch as required
+StationChangeModifier	=	1;	//1 for RSHIFT, 2 for LSHIFT
+WH_Use_TQS				=	0;	//added in 2.43
+Analog_TDC				=	1;	//added in 2.43	
+EngineCount				=	1;	//added in 2.43
+Airbrake_Type_Cur		=	1;	//dummy value with forced internal routine (for now)
+CommInitType			=	1;	//0 for none/custom, 1 for single channel (P-51), 2 for simple (dual channel), 3 for complex (3 channel).  added in 2.43
+StnCheckDisabled		=	StnCheckDisabled_MB339;	//added in 2.43.
+CurrentStation			= 	stn;	//moved here in 2.43
+
+printf("Execute DCS MB-339 Config (Profile v%i.%i):\xa",		MajorVersion,MinorVersion);
+PlayWavSel(ProfID,abs(Init_Run - 1),DCSFP_Enabled,MFDisplayEnabled);	//added in 1.61, DCSFP added in 2.05, MFDisplay added in 2.29
+Pause_TrackIR(0);
+AirBrake_Init(AirBrkFlash);	//moved to individual modules in 1.22 
+MFD_Init(ProfID);
+	printf("   Map HOTAS for DCS MB-339:\xa");
+	DCS_Axis_Init(ProfID,EngineCount,Analog_TDC);
+if (WarthogStick > 0)
+	{
+		printf("      Warthog Stick Button Mapping:\xa");
+			printf("         Shift Commands: S3  momentary...");
+				if (WarthogThrottle > 0) SetShiftButton(&Joystick, S3, &Throttle, 0, 0);
+				else	SetShiftButton(&Joystick, S3, &HCougar, 0, 0);
+				MapKey	(&Joystick, S3, BTN_S3P);		//DX3 short, long(er) for modifier and eject check, moved here in 0.53, removed S4 and changed argument to "RudderPedals"
+				MapKeyR	(&Joystick, S3, BTN_S3R);		//added in 0.53 to release "RudderPedals" argument in S3Shifted
+			printf("...Done!\xa");	
+			printf("         Warthog Stick Buttons...");	
+				
+
+				MapKey	(&Joystick, TG2, DX6);
+//				MapKeyR	(&Joystick, TG2, 0);
+				MapKey	(&Joystick, S1, RequestAcftCtl);	//DX5);
+
+				MapKeyIO(&Joystick, TG1, EXEC("TriggerZoom_toggle(-1,AirBrkFlash,GearState);"), CHAIN(DX1,EXEC("TriggerZoom_in();"))	);
+				MapKeyRIO(&Joystick,TG1, UP+DX1, EXEC("ActKey(ZoomIn_slow); DeferCall(KBDelay,&TriggerZoom_out,0);"));				//ActKey(DX1) added in 1.21 to force DX1 release if stuck
+			
+				MapKey	(&Joystick, S2, DX2);
+				MapKeyR	(&Joystick,	S2, 0);
+			
+				MapKeyIO(&Joystick, S4, EXEC("S3S4Shifted();"), EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,0);"));	//Chain allows DX4 and wheelbrakes; diffbraking added in 0.24, DX30 removed, DX4 moved to Diffbraking in 0.32
+				MapKeyRIO(&Joystick, S4, 0, EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,1);"));
+			printf("...Done!\xa");	
+	}
+else
+	{
+		printf("      Button Mapping:\xa");
+			printf("         Shift Commands: S3  momentary...");
+				SetShiftButton(&HCougar, S3, &HCougar, 0, 0);
+				MapKey	(&HCougar, S3, BTN_S3P);		//DX3 short, long(er) for modifier and eject check, moved here in 0.53, removed S4 and changed argument to "RudderPedals"
+				MapKeyR	(&HCougar, S3, BTN_S3R);		//added in 0.53 to release "RudderPedals" argument in S3Shifted
+			printf("...Done!\xa");	
+			printf("         Cougar Stick Buttons...");	
+				
+				MapKey(&HCougar, TG2, DX6);
+//				MapKeyR(&HCougar, TG2, 0);
+				MapKey(&HCougar, S1, RequestAcftCtl);	//DX5);
+
+				MapKeyIO(&HCougar, TG1, EXEC("TriggerZoom_toggle(-1,AirBrkFlash,GearState);"), CHAIN(DX1,EXEC("TriggerZoom_in();"))	);
+				MapKeyRIO(&HCougar,TG1, UP+DX1, EXEC("ActKey(ZoomIn_slow); DeferCall(KBDelay,&TriggerZoom_out,0);"));				//ActKey(DX1) added in 1.21 to force DX1 release if stuck
+
+				MapKey(&HCougar, S2, DX2);
+				MapKeyR	(&HCougar,	S2, 0);
+
+				MapKeyIO(&HCougar, S4, EXEC("S3S4Shifted();"), EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,0);"));	//Chain allows DX4 and wheelbrakes; diffbraking added in 0.24, DX30 removed, DX4 moved to Diffbraking in 0.32
+				MapKeyRIO(&HCougar, S4, 0, EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,1);"));
+
+			printf("...Done!\xa");	
+	}
+	
+			H1_Init(TrackIR, PadlockEnabled, ProfID, XYAxisTrim);	//moved to individual routines in 1.27 for trim reset removal on helos, added XYAxisTrim in 1.34
+			CommState_Off(1,prof,1,DMS_SnapView,1);		//sets hats 2-4 to DX functions, possibly 3 to SnapViews
+if (WarthogThrottle > 0)
+	{
+			printf("         Throttle Buttons...");	
+
+//				MapKeyR	(&Throttle, SC, 0);							//Added in 0.51 to prevent P-51D CommState Release.
+
+
+				MapKey	(&Throttle, SC, DX19);
+			
+				MapKey	(&Throttle, LTB,	DX24);	//TBD
+				MapKey	(&Throttle,	APENG,	DX24);	//TBD
+				MapKeyIO(&Throttle,	LDGH,	TEMPO(MB339_MasterCaution,EXEC("EjectCheckLDGH(ProfID);"),DefTempo),	TEMPO(MB339_Warn_Silence,MB339_MasterCaution,DefTempo)	);
+				
+				MapKey	(&Throttle, CSR,	CHAIN(DX31,DX32,D(ModDelay),DXHATRIGHT));	//TBD
+				MapKey	(&Throttle, CSL,	CHAIN(DX31,DX32,D(ModDelay),DXHATLEFT));
+				MapKey	(&Throttle, CSU,	CHAIN(DX31,DX32,D(ModDelay),DXHATUP));
+				MapKey	(&Throttle, CSD,	CHAIN(DX31,DX32,D(ModDelay),DXHATDOWN));
+				
+				MapKeyIO(&Throttle,	CHB,	TEMPO(CHAIN(DX31,DX32,D(ModDelay),DX1),Gear_Up_T,GearUpTempo),		CHAIN(DX31,DX32,D(ModDelay),DX1));	//CRS
+				
+				if (WHIdle_Enabled > 0)	MapKey	(&Throttle,	IDLERON,	DX28);
+				
+//				MapKey	(&Throttle,	IDLEROFF,	0);
+//				MapKey	(&Throttle,	IDLELON,	0);
+//				MapKey	(&Throttle,	IDLELOFF,	0);
+
+				MapKeyIO(&Throttle,	PSF,	EXEC("MB339_NavLight_Set(1,Switch_Delay,0);"),	EXEC("MB339_NavLight_Set(1,Switch_Delay,1);"));
+				MapKeyIO(&Throttle,	PSB,	EXEC("MB339_NavLight_Set(2,Switch_Delay,0);"),	EXEC("MB339_NavLight_Set(2,Switch_Delay,1);"));
+				MapKeyIO(&Throttle,	PSM,	TEMPO(0,EXEC("MB339_NavLight_Set(0,Switch_Delay,0);"),DoubleTap),
+											TEMPO(0,EXEC("MB339_NavLight_Set(0,Switch_Delay,1);"),DoubleTap));
+				
+				MapKeyIO(&Throttle,	APPAT,		EXEC("MB339_BombFuse_Set(1,Switch_Delay,0);"),	EXEC("MB339_BombFuse_Set(1,Switch_Delay,1);"));
+				MapKeyIO(&Throttle,	APALT,		EXEC("MB339_BombFuse_Set(3,Switch_Delay,0);"),	EXEC("MB339_BombFuse_Set(3,Switch_Delay,1);"));
+				MapKeyIO(&Throttle,	APAH,		TEMPO(0,EXEC("if (BombFuse_Cur == 1) MB339_BombFuse_Set(2,Switch_Delay,0); else MB339_BombFuse_Set(0,Switch_Delay,0);"),DoubleTap),
+												TEMPO(0,EXEC("if (BombFuse_Cur == 1) MB339_BombFuse_Set(2,Switch_Delay,1); else MB339_BombFuse_Set(0,Switch_Delay,1);"),DoubleTap));	//Sets neutral position immediately following last switch state
+				
+				MapKey	(&Throttle,	FLAPU,		DX26);	//Flaps Off else T/O
+				MapKey	(&Throttle,	FLAPD,		DX25);	//Flaps Ldg else T/O
+				
+				//FC3_Map_Flaps_WH(FlapType_DX);
+
+//				MapKeyR	(&Throttle, LTB,	0);
+					
+//				MapKeyR	(&Throttle,	CHF,	0);	//Added for F-86 in 1.69
+//				MapKeyR	(&Throttle,	CHB,	0);	//Added for F-86 in 1.69
+				
+	//			MapKey	(&Throttle,	EACON,	0);	//	PULSE+CHAIN(DX31,DX32,D(ModDelay),DX5));
+	//			MapKey	(&Throttle,	EACOFF,	0);	//	PULSE+CHAIN(DX31,DX32,D(ModDelay),DX6));
+				MapKeyIO(&Throttle,	RDRNRM,		0,PULSE+MB339_Salvo_Toggle);
+				MapKeyIO(&Throttle,	RDRDIS,		0,PULSE+MB339_Salvo_Toggle);
+
+				
+	//			MapKey	(&Throttle,	EFLNORM,	0);	//	PULSE+CHAIN(DX31,DX32,D(ModDelay),DX12));
+//				MapKeyR	(&Throttle,	EFLNORM,	0);
+	//			MapKey	(&Throttle,	EFLOVER,	0);	//	PULSE+CHAIN(DX31,DX32,D(ModDelay),DX13));
+	//			MapKey	(&Throttle,	EFRNORM,	0);	//PULSE+CHAIN(DX31,DX32,D(ModDelay),DX14));
+//				MapKeyR	(&Throttle,	EFRNORM,	0);
+	//			MapKey	(&Throttle,	EFROVER,	0);	//PULSE+CHAIN(DX31,DX32,D(ModDelay),DX15));
+				
+	//			MapKey	(&Throttle,	EOLIGN,		0);	//CHAIN(DX31,DX32,D(ModDelay),DX16));
+	//			MapKey	(&Throttle,	EOLNORM,	0);	//PULSE+CHAIN(DX31,DX32,D(ModDelay),DX17));
+	//			MapKey	(&Throttle,	EOLMOTOR,	0);	//PULSE+CHAIN(DX31,DX32,D(ModDelay),DX18));				
+	//			MapKey	(&Throttle,	EORIGN,		0);	//CHAIN(DX31,DX32,D(ModDelay),DX24));
+	//			MapKey	(&Throttle,	EORNORM,	0);	//PULSE+CHAIN(DX31,DX32,D(ModDelay),DX25));
+	//			MapKey	(&Throttle,	EORMOTOR,	0);	//PULSE+CHAIN(DX31,DX32,D(ModDelay),DX26));
+//				MapKeyR	(&Throttle,	EOLIGN,		0);
+//				MapKeyR	(&Throttle,	EORIGN,		0);
+				
+	//			MapKey	(&Throttle,	APUON,		0);	//PULSE+CHAIN(DX31,DX32,D(ModDelay),DX27));
+	//			MapKeyIO(&Throttle,	APUOFF,		0,0);	//,PULSE+CHAIN(DX31,DX32,D(ModDelay),DX28));	//IO to eliminate DX30,31,32+28 (LDGH)
+
+				if ((MFD_Count < 1) | (TrackIR > 1))
+						MapKeyIO(&Throttle,	SPDB,	TEMPO(DX27,	EXEC("DCS_AcftSel(1);"),	SwapTempo),	Toggle_AirbrakeOn);
+				else	MapKeyIO(&Throttle,	SPDB,	DX27,												Toggle_AirbrakeOn);		//forced airbrake toggle for now
+				MapKeyRIO(&Throttle,SPDB,		0,		Toggle_AirbrakeOff);
+				
+				MapKey	(&Throttle,	SPDF,		Toggle_AirbrakeOn);
+				MapKeyR	(&Throttle,	SPDF,		Toggle_AirbrakeOff);
+	}
+else
+	{
+			printf("         TQS Buttons...");	
+				MapKey	(&HCougar,	T1, DX19);
+//				MapKeyR	(&HCougar,	T1, 0);							//Added in 0.51 to prevent P-51D CommState Release.
+				
+				MapKeyIO(&HCougar,	T6,	TEMPO(MB339_MasterCaution, EXEC("EjectCheckT6(ProfID);"), DefTempo),	TEMPO(MB339_Warn_Silence,MB339_MasterCaution,DefTempo)	);		//Will check for ejection parameters if T6+S3 held for 500ms.
+//				MapKeyR	(&HCougar,	T6, 0);
+				
+				if ((MFD_Count < 1) | (TrackIR > 1))
+						MapKeyIO(&HCougar,	T9,	TEMPO(DX27,	EXEC("DCS_AcftSel(1);"),	SwapTempo),	Toggle_AirbrakeOn);
+				else	MapKeyIO(&HCougar,	T9,	DX27,												Toggle_AirbrakeOn);		//forced airbrake toggle for now
+				
+				MapKey	(&HCougar,	T10,	Toggle_AirbrakeOn);
+				MapKeyR	(&HCougar,	T10,	Toggle_AirbrakeOff);
+	}
+	
+Simple_Comm_Init(ProfID,1,0);		//CommStateVAC addressed in Simple_Comm_Init.  Reserve L/R for Comm 1/2, but use / for now
+
+
+//Airbrake switches
+
+
+
+	Global_DF_Init(WarthogThrottle,ProfID);
+		printf("...Done!\xa");	
+	printf("   HOTAS Mapping Complete.\xa");			
+
+//DX_MFD_Init();
+
+
+FlapState=0;				//for future implementation
+TriggerZoom_state  = 0;		//reset TriggerZoom
+ActKey(DX1);				//just in case DX1 lingers from trigger activation
+//Lights_ALL(0);				//Says Init Complete
+	
+	DeferCall(LED_Delay,&Lights_RLED2,0);	//Number changed in 1.28
+	DeferCall(2*LED_Delay,&Lights_LLED1,0);
+	DeferCall(3*LED_Delay,&Lights_RLED1,0);
+	DeferCall(4*LED_Delay,&Backlight_Max_Init,0);
+	if (WarthogThrottle > 0) DeferCall(7*LED_Delay,&WHT_Lights_Dn_D,0);
+
+if (Init_Run == 0) Gear_Ind_Init(GearDn_Ind_Default,FixedGear,Helicopter,AirBrkFlash);
+
+if (GearDn_Ind_Default > 0) Map_Cougar_ToeBrakes(ToeBrakesAvailable);//added in 1.40;
+else	Map_Cougar_ToeBrakes(0);
+
+printf(" MB-339 Config Complete!\xa");	
+Set_Acft_Array_Cur(prof);
+}
+
+int MB339_DF_Init(int wh)	
+{
+if (wh > 0)	//Warthog
+		{
+		MapKey	(&Throttle, BSF,	EXEC("MB339_LdgLight_Set(1,Switch_Delay,0);"),	EXEC("MB339_LdgLight_Set(1,Switch_Delay,1);"));
+		MapKey	(&Throttle,	BSB,	EXEC("MB339_LdgLight_Set(2,Switch_Delay,0);"),	EXEC("MB339_LdgLight_Set(2,Switch_Delay,1);"));
+		MapKey	(&Throttle,	BSM,	TEMPO(0,EXEC("MB339_LdgLight_Set(0,Switch_Delay,0);"),DoubleTap),
+									TEMPO(0,EXEC("MB339_LdgLight_Set(0,Switch_Delay,1);"),DoubleTap));	
+		//MapKey	(&Throttle, BSB, 0);	//DX25);	//DX placeholders only
+		//MapKey	(&Throttle, BSF, 0);	//DX26);									
+		MapKeyR	(&Throttle,	BSB,	0);	
+		MapKeyR	(&Throttle, BSF, 	0);
+		}
+else				//TQS
+		{
+		MapKey	(&HCougar,	T8,		EXEC("MB339_NavLight_Set(1,Switch_Delay,0);"),	EXEC("MB339_NavLight_Set(1,Switch_Delay,1);"));
+		MapKey	(&HCougar,	T7,		EXEC("MB339_NavLight_Set(2,Switch_Delay,0);"),	EXEC("MB339_NavLight_Set(2,Switch_Delay,1);"));
+		MapKey	(&HCougar,	DFM,	TEMPO(0,EXEC("MB339_NavLight_Set(0,Switch_Delay,0);"),DoubleTap),
+									TEMPO(0,EXEC("MB339_NavLight_Set(0,Switch_Delay,1);"),DoubleTap));		
+		//MapKey	(&HCougar,	T7,	0);	//DX25);
+		//MapKey	(&HCougar,	T8, 0);	//DX26);
+		MapKeyR	(&HCougar,	T7, 	0);
+		MapKeyR	(&HCougar,	T8, 	0);
+		}
+}
+
+
+int MB339_MFD_Init(int prof = 2539)
+{
+//===================================
+//		Standard MFD Buttons
+//===================================
+
+	printf("   Map Cougar Left  MFD (DX31)...");	
+//LOSB 1 in Init
+					MapKey	(&LMFD, OSB02,	CHAIN(DX31,D(ModDelay),DX2));
+					MapKey	(&LMFD, OSB03,	CHAIN(DX31,D(ModDelay),DX3));
+					MapKey	(&LMFD,	OSB04,	CHAIN(DX31,D(ModDelay),DX4));
+//					MapKeyR	(&LMFD,	OSB04,	0);	//for A-10C and F-5E				
+					MapKey	(&LMFD, OSB05,	CHAIN(DX31,D(ModDelay),DX5));
+//					MapKeyR	(&LMFD,	OSB05,	0);	//For F-5E
+					
+					MapKey	(&LMFD,	OSB06,	CHAIN(DX31,D(ModDelay),DX6));
+					MapKey	(&LMFD,	OSB07,	CHAIN(DX31,D(ModDelay),DX7));
+//					MapKeyR	(&LMFD,	OSB07,	0);	//for Bf109
+					MapKey	(&LMFD,	OSB08,	CHAIN(DX31,D(ModDelay),DX8));	
+					MapKey	(&LMFD,	OSB09,	CHAIN(DX31,D(ModDelay),DX9));
+					MapKey	(&LMFD,	OSB10,	CHAIN(DX31,D(ModDelay),DX10));
+					
+					MapKey	(&LMFD,	OSB11,	CHAIN(DX31,D(ModDelay),DX11));
+					MapKey	(&LMFD,	OSB12,	CHAIN(DX31,D(ModDelay),DX12));
+					MapKey	(&LMFD,	OSB13,	CHAIN(DX31,D(ModDelay),DX13));
+					MapKey	(&LMFD,	OSB14,	CHAIN(DX31,D(ModDelay),DX14));
+					MapKey	(&LMFD,	OSB15,	CHAIN(DX31,D(ModDelay),DX15));
+					MapKey	(&LMFD,	OSB16,	CHAIN(DX31,D(ModDelay),DX16));
+
+//LOSB 17-19
+					MapKey	(&LMFD,	OSB17,	CHAIN(DX31,D(ModDelay),DX17));
+					MapKey	(&LMFD,	OSB18,	CHAIN(DX31,D(ModDelay),DX18));
+					MapKey	(&LMFD,	OSB19,	CHAIN(DX31,D(ModDelay),DX19));
+
+//LMFD 20 in Init
+
+//Left Rocker Switches
+//SYM
+		MapKey	(&LMFD,	SYMU,	KB_LSYMU);
+		MapKey	(&LMFD,	SYMD,	KB_LSYMD);
+
+//CON
+		MapKey	(&LMFD,	CONU,	KB_LCONU);
+		MapKey	(&LMFD,	COND,	KB_LCOND);
+		
+//BRT
+		MapKeyIO(&LMFD,	BRTU,	KB_LBRTU,	TEMPO(EXEC("MB339_BombFuse_Set(1,Switch_Delay,1);"),	EXEC("MB339_BombFuse_Set(2,Switch_Delay,1);"),	DefTempo)	);
+		MapKeyIO(&LMFD,	BRTD,	KB_LBRTD,	TEMPO(EXEC("MB339_BombFuse_Set(3,Switch_Delay,1);"),	EXEC("MB339_BombFuse_Set(0,Switch_Delay,1);"),	DefTempo)	);
+		
+//GAIN in Init
+
+	printf("Done!\xa");
+
+	printf("   Map Cougar Right MFD (DX32)...");
+
+//ROSB 1-10 in Init
+		MapKey	(&RMFD,	OSB01,	DX_ROSB01);
+		MapKey	(&RMFD, OSB02,	DX_ROSB02);
+		MapKey	(&RMFD,	OSB03,	DX_ROSB03);
+		MapKey	(&RMFD,	OSB04,	DX_ROSB04);
+		MapKey	(&RMFD,	OSB05,	DX_ROSB05);
+//		MapKeyR	(&RMFD,	OSB05,	0);
+		MapKey	(&RMFD,	OSB06,	DX_ROSB06);
+		MapKey	(&RMFD,	OSB07,	DX_ROSB07);
+//		MapKeyR	(&RMFD,	OSB07,	0);
+		MapKey	(&RMFD,	OSB08,	DX_ROSB08);
+		MapKey	(&RMFD,	OSB09,	DX_ROSB09);
+		MapKey	(&RMFD,	OSB10,	DX_ROSB10);
+		
+//ROSB 11-15
+		MapKey	(&RMFD,	OSB11,	DX_ROSB11);
+		MapKey	(&RMFD,	OSB12,	DX_ROSB12);
+		MapKey	(&RMFD,	OSB13,	DX_ROSB13);
+		MapKey	(&RMFD,	OSB14,	DX_ROSB14);
+		MapKey	(&RMFD,	OSB15,	DX_ROSB15);
+//		MapKeyR	(&RMFD,	OSB13,	0);	//for Spitfire Engine Start	
+//		MapKeyR	(&RMFD,	OSB14,	0);	//for Spitfire Engine Start		
+//ROSB 16-20
+		MapKey	(&RMFD,	OSB16,	DX_ROSB16);
+		MapKey	(&RMFD,	OSB17,	DX_ROSB17);
+		MapKey	(&RMFD,	OSB18,	DX_ROSB18);
+		MapKey	(&RMFD,	OSB19,	DX_ROSB19);
+//		MapKey	(&RMFD,	OSB20,	CHAIN(DX32,D(ModDelay),DX24));		
+
+//Right Rocker Switches
+//SYM
+		MapKey	(&RMFD,	SYMU,	KB_RSYMU);
+		MapKey	(&RMFD,	SYMD,	KB_RSYMD);
+//		MapKeyR	(&RMFD,	SYMU,	0);	//added in 1.61 to account for context sensitive R in M2000C
+//		MapKeyR	(&RMFD,	SYMD,	0);
+		
+//CON
+		MapKey	(&RMFD,	CONU,	KB_RCONU);
+		MapKey	(&RMFD,	COND,	KB_RCOND);
+//		MapKeyR	(&RMFD,	CONU,	0);	//added in 1.24 to account for context sensitive R in UH-1
+//		MapKeyR	(&RMFD,	COND,	0);
+
+//BRT
+	MapKey	(&RMFD,	BRTU,	KB_RBRTU);
+	MapKey	(&RMFD,	BRTD,	KB_RBRTD);
+
+//GAIN
+	MapKey	(&RMFD,	GAINU,	KB_RGAINU);
+	MapKey	(&RMFD,	GAIND,	KB_RGAIND);
+
+	printf("Done!\xa");	
+}
+
+
+int MB339_LdgLight_Set(int posit, int delay = 200, int key = 1, int index = 3, int time = 0)	//posit is switch position value (0 for mid, 1 for aft, 2 for fwd), delay is time between switches, time should always start at 0
+{
+if 	(posit > (index-1)) posit = (LdgLight_Cur+1)%index;	//out of bounds up toggles one step
+else if (posit < 0) posit = (LdgLight_Cur+(index-1))%index;		//out of bounds down toggles (index-1) steps (comes to -1)
+
+while (LdgLight_Cur != posit)
+	{
+	if ((delay > 0) & (key)) DeferCall(time, &ActKey, KEYON+PULSE+MB339_LdgLight_Cycle);
+	LdgLight_Cur = (LdgLight_Cur+1)%index;
+	time = time + delay;
+	}
+}
+
+int MB339_NavLight_Set(int posit, int delay = 200, int key = 1, int index = 3, int time = 0)	//posit is switch position value (0 for mid, 1 for aft, 2 for fwd), delay is time between switches, time should always start at 0
+{
+if 	(posit > (index-1)) posit = (NavLight_Cur+1)%index;	//out of bounds up toggles one step
+else if (posit < 0) posit = (NavLight_Cur+(index-1))%index;		//out of bounds down toggles (index-1) steps (comes to -1)
+
+while (NavLight_Cur != posit)
+	{
+	if ((delay > 0) & (key)) DeferCall(time, &ActKey, KEYON+PULSE+MB339_NavLts_Cycle);
+	NavLight_Cur = (NavLight_Cur+1)%index;
+	time = time + delay;
+	}
+}
+
+int MB339_BombFuse_Set(int posit, int delay = 200, int key = 1, int index = 4, int time = 0)	//posit is switch position value (0/2 for mid, 1 for up, 3 for down), delay is time between switches, time should always start at 0
+{
+if 	(posit > (index-1)) posit = (BombFuse_Cur+1)%index;	//out of bounds up toggles one step
+else if (posit < 0) posit = (BombFuse_Cur+(index-1))%index;		//out of bounds down toggles (index-1) steps (comes to -1)
+
+while (BombFuse_Cur != posit)
+	{
+	if ((delay > 0) & (key)) DeferCall(time, &ActKey, KEYON+PULSE+MB339_BombFuse_Cycle);
+	BombFuse_Cur = (BombFuse_Cur+1)%index;
+	time = time + delay;
+	}
+}

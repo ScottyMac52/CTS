@@ -1,0 +1,731 @@
+//===========================================================================
+//		DCS World MiG-19P Farmer for HOTAS Cougar/Warthog and Cougar MFDs
+//					by Don "Home Fries" Heumphreus
+//						last updated: 27OCT2021
+//
+//	Change Log:
+//	2.42	Initial Release
+//	2.43	SnapViews removed for VR, replaced with tgt size/gain
+//	2.46	Moved ROSB20 to MFD_Init()
+//	2.50b	Removed duplicate MapKeyR(0) mappings to free stack space.
+//	2.51	Removed Script_Debug print commands to free stack space.
+//	2.63	Added WHIdle_Enabled parameter to WH Idle commands
+//
+//	
+//============================================================================
+
+//DX not currently in use: DX1, 19 (must unmap first)
+
+
+
+int MiG19_AirbrakeOn;
+int MiG19_AirbrakeOff;
+int MiG19_AirbrakeOnF;	//F for Forward (i.e. SPDF/T10 only)
+int MiG19_AirbrakeOffF;
+//int MiG19_Airbrake_Cur;
+int MiG19_RadarMode_Cur;
+int MiG19_NDB_Cur;
+
+int DCS_MiG19(int led, int sp)
+{
+
+
+printf("DCS MiG-19P Farmer\xa");
+
+
+if (WarthogStick > 0)
+	{
+	MapKeyR(&Joystick,	S2,	EXEC("DCS_MiG19_Init();"));
+	}
+else
+	{
+	MapKeyR(&HCougar,	S2,	EXEC("DCS_MiG19_Init();"));
+	}
+if (sp > 0)	PlayWav("mig19.wav");
+if (led > 0)
+	{
+	Lights_Four(1,0,0,0,	ProfileSwapDelay+LED_Delay);
+	}
+}
+
+
+
+int	SetMenu_MiG19()
+{
+Set_Acft_Array_Cur(2019);
+}
+
+
+int DCS_MiG19_Init()
+{
+Determine_Differential_Braking(0);
+
+//Declare Values
+FkeyPress			=	0;	//added in 2.02 to prevent Commswitch key activation on profile load.  Should be 1?
+GraceFlag			=	0;
+Eng_Start_x			=	0;	//IdleDetentLow;
+Eng_Stop_x			=	0;	//Eng_Stop_F5E;
+Starter_Ind_x		=	0;	//Starter_Ind_MiG19;
+MFD_Eng_Start		=	0;
+ProfID				=	2019;
+FixedGear			=	0;
+Helicopter			=	0;
+T6WheelBrake		=	0;
+BrakeOnCycleTime	=	Airbrake_Out_MiG19;
+BrakeOffCycleTime	=	Airbrake_In_MiG19;
+GearCycleTimeUp		=	Gear_Retract_MiG19;
+GearCycleTimeDn		=	Gear_Deploy_MiG19;
+TriggerZoomEnabled	=	1;
+S4AnalogBrake		=	AnalogPaddleBrake;	//added in 1.33
+AnalogParkingBrake	=	0;					//added in 1.33; JoyY Parking Brake disabled for MiG-19 (uses digital control)
+S4asNWS				=	0;					//added in 1.33
+S3holdNWS 			= 	0;	//added in 2.05
+Force_GearLock		=	Force_GearLock_MiG19;	//added in 1.34
+XYAxisTrim			=	0;	//added in 1.34
+DMS_SnapView		=	0;	//added in 1.34
+WheelBrakeFull		=	1;	//added in 1.35
+ToeBrakesAvailable	=	0;	//added in 1.40
+NVG_Capable			=	0;	//added in 1.40
+AB_Capable			=	1;	//added in 1.61
+//BrakeOffCycleTime 	= 	1500;
+Adjust_Backlighting	=	Adjust_Backlight_MiG19;	//added in 1.62
+NS430_Enabled		=	NS430_Installed*NS430_Enabled_MiG19;	//added in 2.21
+CrewCount			=	1;
+StationChangeModifier	=	0;
+WH_Use_TQS			=	0;	//added in 2.43
+Analog_TDC			=	1;	//added in 2.43
+EngineCount			=	2;	//added in 2.43
+Airbrake_Type_Cur	=	0;	//dummy value as MiG19 has own routine
+Airbrake_Swap		=	0;	//dummy value as MiG19 has own routine
+CommInitType		=	1;	//0 for none/custom, 1 for single channel (P-51), 2 for simple (dual channel), 3 for complex (3 channel).  added in 2.43
+StnCheckDisabled	=	2;	//added in 2.43.  Forced for single seat
+CurrentStation 		=	1;	//moved here in 2.43
+
+
+printf("Done\xa Execute DCS MiG-19P Farmer Config (Profile v%i.%i):\xa",MajorVersion,MinorVersion);
+PlayWavSel(ProfID,abs(Init_Run - 1),DCSFP_Enabled,MFDisplayEnabled);	//added in 1.61, DCSFP added in 2.05, MFDisplay added in 2.29
+Pause_TrackIR(0);
+AnalogBrakePoll(0);	//added in 1.23
+MiG19_Airbrake_Map(WarthogThrottle,AirBrkFlash);
+//AirBrake_Init(AirBrkFlash);	//moved to individual modules in 1.22
+MFD_Init(ProfID);
+	printf("   Map HOTAS Cougar for DCS MiG-19P Farmer Config:\xa");
+	DCS_Axis_Init(ProfID,EngineCount,Analog_TDC);
+
+
+			printf("         Shift Commands: S3 momentary...");
+			if (WarthogStick > 0)
+				{
+				if (WarthogThrottle > 0) 	SetShiftButton(&Joystick, S3, &Throttle, 0, 0);
+				else						SetShiftButton(&Joystick, S3, &HCougar, 0, 0);
+				MapKey	(&Joystick, S3, BTN_S3P);		
+				MapKeyR	(&Joystick, S3, BTN_S3R);	
+				}				
+			else
+				{
+				SetShiftButton(&HCougar, S3, &HCougar, 0, 0);
+				MapKey	(&HCougar, S3, BTN_S3P);	//dynamic mapping with NWS	
+				MapKeyR	(&HCougar, S3, BTN_S3R);		
+				}				
+			printf("Done!\xa");
+			if (WarthogStick > 0)
+				{
+				printf("         Warthog Stick Buttons...");	
+				MapKeyIO(&Joystick, TG1, BTN_TG1PI_TGZ, BTN_TG1PO_TGZ);
+				MapKeyRIO(&Joystick,TG1, BTN_TG1RI_TGZ, BTN_TG1RO_TGZ);
+
+				MapKey	(&Joystick, TG2,BTN_TG2);
+//				MapKeyR	(&Joystick, TG2,0);
+				MapKeyIO(&Joystick, S1, TEMPO(DX5,M2k_Hide_Throttle,DefTempo),DX5);		//remap to sight glass
+				MapKeyIO(&Joystick,	S2,	TEMPO(DX2, MiG19_Sight_Uncage, DefTempo),	DX2);
+				//MapKey	(&Joystick,	S2,	DX2);
+				MapKeyR	(&Joystick,	S2, 0);
+				MapKeyIO(&Joystick, S4, BTN_S4PI,	BTN_S4PO_NoDiff);
+				MapKeyR	(&Joystick, S4, BTN_S4R_NoDiff);
+				}
+			else
+				{
+				printf("         Cougar Stick Buttons...");	
+				MapKeyIO(&HCougar, TG1, BTN_TG1PI_TGZ, BTN_TG1PO_TGZ);
+				MapKeyRIO(&HCougar,TG1, BTN_TG1RI_TGZ, BTN_TG1RO_TGZ);
+
+				MapKey	(&HCougar, TG2,	BTN_TG2);
+//				MapKeyR	(&HCougar, TG2,	0);
+				MapKeyIO(&HCougar, S1,	TEMPO(DX5,M2k_Hide_Throttle,DefTempo),DX5);	
+				MapKeyIO(&HCougar, S2,	TEMPO(DX2, MiG19_Sight_Uncage, DefTempo),	DX2);
+				//MapKey	(&HCougar, S2,	DX2);
+				MapKeyR	(&HCougar, S2,	0);
+				MapKeyIO(&HCougar, S4,	BTN_S4PI,	BTN_S4PO_NoDiff);
+				MapKeyR	(&HCougar, S4,	BTN_S4R_NoDiff);
+				}
+			printf("Done!\xa");	
+						
+			H1_Init(TrackIR, PadlockEnabled, ProfID);	//moved to individual routines in 1.27 for trim reset removal on helos
+			CommState_Off(1,ProfID,1,0,1);	//sets hats 2-4 to DX functions	
+			
+			//P51D_CommState_Init(ProfID,1,0);									//Set Comms routine (DX21 plus whatever options selected)
+			if (WarthogThrottle > 0)
+				{
+				printf("         Warthog Throttle Buttons\xa");	
+				
+				MapKeyIO(&Throttle,	CSU,	DX11,DX13);	//Tgt Range adjust, /I added in 2.56 to sync with H3
+				MapKeyIO(&Throttle,	CSD,	DX13,DX11);
+				MapKey	(&Throttle,	CSL,	DX14);
+				MapKey	(&Throttle,	CSR,	DX12);
+				
+				MapKey	(&Throttle,	SC,		DX24);	//AB or /I for Mil
+//				MapKeyR	(&Throttle,	SC,		0);
+				
+				MapKeyIO(&Throttle,	PSF,	EXEC("MiG19_ExtLts_Set(2,0);"),EXEC("MiG19_ExtLts_Set(2,1);")	);	
+				MapKeyIO(&Throttle,	PSM,	EXEC("MiG19_ExtLts_Set(0,0);"),TEMPO(0,EXEC("MiG19_ExtLts_Set(0,1);"),DoubleTap));
+				MapKeyIO(&Throttle,	PSB,	EXEC("MiG19_ExtLts_Set(1,0);"),EXEC("MiG19_ExtLts_Set(1,1);")	);	
+
+				MapKeyIO(&Throttle,	CHF,	MiG19_Radar_Display_Toggle,	MiG19_Radar_Horizon_Incr);	// /I Day/Night
+				MapKeyIO(&Throttle,	CHB,	MiG19_ECCM_Toggle,			MiG19_Radar_Horizon_Decr);	// /I ECCM 
+//				MapKeyR	(&Throttle,	CHF,	0);	//Added for F-86 in 1.69
+//				MapKeyR	(&Throttle,	CHB,	0);	//Added for F-86 in 1.69				
+
+
+				
+				MapKeyIO(&Throttle,	LTB,	DX24,CHAIN(DX30,D(ModDelay),DX24));	
+//				MapKeyR	(&Throttle,	LTB, 	0);			
+			
+			if (WHIdle_Enabled > 0)
+				{			
+				MapKeyIO(&Throttle,	IDLERON,	0,DX28);
+//				MapKey	(&Throttle,	IDLEROFF,	0);	//,EXEC("MiG19_MapStarter(1,1);DeferCall(Starter_Ind_MiG19,&MiG19_MapStarterOff,1);"));
+				MapKeyIO(&Throttle,	IDLELON,	0,DX27);
+//				MapKey	(&Throttle,	IDLELOFF,	0);	//,EXEC("MiG19_MapStarter(0,1);DeferCall(Starter_Ind_MiG19,&MiG19_MapStarterOff,0);"));
+				}
+
+				printf("...Base Switches\xa");				
+				TriggerZoom_MapGearDn(TriggerZoom_state, ProfID);	//MapKeyIO(&HCougar, T8, PULSE+DX26, );			//done in TriggerZoom_MapGearDn()						
+																	//MapKeyR	(&Throttle, FLAPD, 0);
+				MapKey	(&Throttle, FLAPM, TEMPO(0,CHAIN(PULSE+MiG19_Gear_Neutral, EXEC("GearStateInd(GearState, ProfID, FixedGear, Helicopter, 0, 1);")), DoubleTap));	//Terminates gear cycling indication if returned to center before timeout
+				
+				
+				MapKeyIO(&Throttle,	LDGH,	TEMPO(MiG19_TankJett_DX,EXEC("EjectCheckLDGH(ProfID);"), DefTempo),	TEMPO(MiG19_TankJett_DX,CHAIN(DX30,MiG19_TankJett_DX),DefTempo)	);
+				MapKeyIO(&Throttle,	APENG,	MiG21_ButtonCap_Close,	TEMPO(MiG21_ButtonCap_Open,	MiG21_DragChute, DefTempo)	);	//Drag Chute	
+											//MiG19_Gyro_Uncage,TEMPO(MiG19_Gyro_Uncage,MiG19_Gyro_Cage,DefTempo));	// /I GIK1 Slave
+				
+				MapKeyIO(&Throttle,	APPAT,	EXEC("MiG19_RadarMode_Sel(2, 0);"),EXEC("MiG19_RadarMode_Sel(2, Switch_Delay);"));	
+				MapKeyIO(&Throttle,	APAH,	TEMPO(0,	EXEC("MiG19_RadarMode_Sel(1, 0);"), DoubleTap),	TEMPO(0,	EXEC("MiG19_RadarMode_Sel(1, Switch_Delay);"), DoubleTap));
+				MapKeyIO(&Throttle,	APALT,	EXEC("MiG19_RadarMode_Sel(0, 0);"),EXEC("MiG19_RadarMode_Sel(0, Switch_Delay);"));	
+				
+				MapKeyIO(&Throttle,	EFLNORM,	EXEC("MiG19_NDB_Sel(WarthogStick,0,0);"),EXEC("MiG19_NDB_Sel(WarthogStick,0);"));
+//				MapKeyR	(&Throttle,	EFLNORM,	0);
+				MapKeyIO(&Throttle,	EFLOVER,	EXEC("MiG19_NDB_Sel(WarthogStick,1,0);"),EXEC("MiG19_NDB_Sel(WarthogStick,1);"));
+				MapKeyIO(&Throttle,	EFRNORM,	0,PULSE+MiG19_NoseBrake_On);
+				MapKeyIO(&Throttle,	EFROVER,	0,PULSE+MiG19_NoseBrake_Off);
+//				MapKeyR	(&Throttle,	EFROVER,	0);
+
+				
+				MapKey	(&Throttle,	EOLIGN,		EXEC("MiG19_ExtLts_Set(2,1);if (!IgnLState){ Grace_Flag(1); IgnLState = 1;}")	);
+				MapKeyIO(&Throttle,	EOLNORM,	EXEC("if (!IgnLState) MiG19_ExtLts_Set(0,0);"),	EXEC("if (!IgnLState) MiG19_ExtLts_Set(0,1);")	);
+				MapKeyIO(&Throttle,	EOLMOTOR,	EXEC("MiG19_ExtLts_Set(1,0);IgnLState = 0;"),	EXEC("if (MiG21_Nav_Lts_Cur == 2) {MiG19_ExtLts_Set(0,1);DeferCall(Switch_Delay,&MiG19_ExtLts_Set,1);} else MiG19_ExtLts_Set(1,1);IgnLState = 0;")	);	//MiG21_Nav_Lts_Cur check forces 2x toggle to go off then 100%
+				MapKey	(&Throttle,	EORIGN,		CHAIN(MiG19_Landing_Lts_On,		EXEC("if (!IgnRState){ Grace_Flag(1); IgnRState = 1;}"))	);
+				MapKeyIO(&Throttle,	EORNORM,	0,								EXEC("if (!IgnRState) ActKey(KEYON+PULSE+MiG19_Landing_Lts_Off);"));
+				MapKey	(&Throttle,	EORMOTOR,	CHAIN(PULSE+MiG19_Taxi_Lts_On,	EXEC("IgnRState = 0;"))	);
+				MapKeyRIO(&Throttle,EOLIGN,		EXEC("IgnLState = 1;"),	EXEC("if ((IgnLState) & (!GraceFlag)) IgnLState = 0; else Grace_Flag(0);")	);
+				MapKeyRIO(&Throttle,EORIGN,		EXEC("IgnRState = 1;"),	EXEC("if ((IgnRState) & (!GraceFlag)) IgnRState = 0; else Grace_Flag(0);")	);		// removed EXEC("IgnRState = 0;") from /I because cover independent of switch posit
+
+				MapKeyIO(&Throttle,	APUON,	EXEC("MiG19_BombArm_Set(1,0);"),	EXEC("MiG19_BombArm_Set(1,1);"));	//EXEC("if (Adjust_Backlighting > 0) MFD_WHT_Power(2); else LMFD_Pwr_State = 2;"),	CHAIN(PULSE+F5E_Batt_On, EXEC("if (Adjust_Backlighting > 0) MFD_WHT_Power(2); else LMFD_Pwr_State = 2;"))	);
+				MapKeyIO(&Throttle,	APUOFF,	EXEC("MiG19_BombArm_Set(0,0);"),	EXEC("MiG19_BombArm_Set(0,1);"));	//EXEC("if (Adjust_Backlighting > 0) MFD_WHT_Power(0); else LMFD_Pwr_State = 0;"),	CHAIN(PULSE+F5E_Batt_Off,EXEC("if (Adjust_Backlighting > 0) MFD_WHT_Power(0); else LMFD_Pwr_State = 0;"))	);
+				
+				MapKeyIO(&Throttle,	RDRNRM,	0,PULSE+MiG19_Track_Toggle);
+				MapKeyIO(&Throttle,	RDRDIS,	0,PULSE+MiG19_Track_Toggle);
+				MapKeyIO(&Throttle,	EACON,	0,PULSE+MiG19_Radar_Telemetry_Off);
+				MapKeyIO(&Throttle,	EACOFF,	0,PULSE+MiG19_Radar_Telemetry_On);
+				}
+			else
+				{
+				printf("         TQS Buttons\xa");	
+			//Temporary T2/T3 mapping copied from MiG-21
+				if ((VAC > 0) | (TARS > 0))
+					{
+					MapKeyIO(&HCougar, T2,	CHAIN(X(Mic_Sw_Fwd,0),D(KBDelay+ModDelay),	EXEC("CommState_On(CommStateAllow);")),
+											CHAIN(X(Mic_Sw_Fwd,1),D(KBDelay+ModDelay),	EXEC("CommState_On(CommStateVAC);")));
+					MapKeyRIO(&HCougar,T2,	EXEC("CommState_Off(CommStateAllow, ProfID);"), EXEC("CommState_Off(CommStateVAC, ProfID);"));	
+					}
+				else
+					{
+					MapKey	(&HCougar, T2, CHAIN(PULSE+X(Mic_Sw_Fwd,TS3_DX),D(KBDelay+ModDelay),	EXEC("CommState_On(CommStateAllow);"))	);		//temporary - cycles comm menu w/o PTT (added in 1.32)
+					MapKeyR	(&HCougar, T2, EXEC("CommState_Off(CommStateAllow, ProfID);"));	
+					}
+				//if (TARS_PTT_Common) 	
+				MapKey	(&HCougar, T3, PTT_Common);		//temporary	; if-else added in 1.32
+				//else					MapKey	(&HCougar, T3, TS3_DX);
+				MapKeyR	(&HCougar, T3, 0);	
+			//end temporary		
+
+				MapKeyIO(&HCougar, T6, TEMPO(CHAIN(DOWN+DX24,D(Mil_Delay_MiG19),UP+DX24), EXEC("EjectCheckT6(ProfID);"), DefTempo),	DX24);
+//				MapKeyR	(&HCougar, T6, 0);
+				}
+			P51D_CommState_Init(ProfID);
+			MiG19_DF_Init(WarthogThrottle,GearDn_Ind_Default);	
+				
+			printf("...Done!\xa");
+	printf("   HOTAS Cougar Mapping Complete.\xa\xa");	
+
+//F5E_MFD_Init();
+MiG19_Switch_Init(GearDn_Ind_Default,8);	//8 multiplier should apply a 400ms delay assuming LED_Delay is 50
+
+TriggerZoom_state  = 0;		//reset TriggerZoom
+//FlapState=0;				//future implementation
+//Lights_ALL(0);				//Says Init complete
+	DeferCall(LED_Delay,&Lights_RLED2,0);
+
+	if (WarthogThrottle > 0)	DeferCall(2*LED_Delay,&WHT_Lights_Dn_D,0);
+		
+	
+ActKey(DX1);				//just in case DX1 lingers from trigger activation
+if (Init_Run == 0) Gear_Ind_Init(GearDn_Ind_Default,FixedGear,Helicopter,AirBrkFlash);
+
+
+	//S3_NWS(GearDn_Ind_Default,ProfID); 							//covered in Gear_Ind_Init();
+
+Map_Cougar_ToeBrakes(0);
+
+
+printf("\xa DCS MiG-19P Farmer Init Complete!\xa");	
+Set_Acft_Array_Cur(ProfID);
+}
+
+int MiG19_HCS_Init(int prof = 2019, int force = 0)	//force added in 1.69 as passthru to allow for initial TGZ_MapGearDn if TGZ disabled. must force if no wh throttle
+{
+//		if (Script_Debug) printf("         Hat2 (TMS)...");	
+			MapKeyIO(&HCougar, 	H2R,	TEMPO(DX8, MiG19_RocketSalvo_Auto,DefTempo),	DX8);		
+			MapKeyIO(&HCougar, 	H2L,	TEMPO(DX10,MiG19_RocketSalvo_Auto,DefTempo),	DX10);		
+			MapKeyIO(&HCougar, 	H2U,	DX7,CHAIN(DX7,EXEC("if (!WarthogThrottle) MiG19_RNG_Map(0);"))	);	
+			MapKeyIO(&HCougar,	H2D,	DX9,CHAIN(DX9,EXEC("if (!WarthogThrottle) MiG19_RNG_Map(1);"))	);		
+			
+//		if (Script_Debug) printf("...Done!\xa");	
+//		if (Script_Debug) printf("         Hat3 (DMS)...");		
+			MapKey	(&HCougar, 	H3U,	DX11);					
+			MapKey	(&HCougar, 	H3D,	DX13);
+
+//		if (Script_Debug) printf("...Done!\xa");	
+//		if (Script_Debug) printf("         Hat4 (CMS)...");	
+			MiG19_NDB_Sel(0,MiG19_NDB_Cur,0);
+
+		if (TrackIR < 2)	//TrackIR or POV
+			{
+			MapKeyIO(&HCougar, 	H3R,	Std_SnapView3,	SnapView9);
+			MapKeyIO(&HCougar, 	H3L,	Std_SnapView1,	SnapView4);
+			
+			MapKeyIO(&HCougar, 	H4R,	Std_SnapView6,	DX16);	
+			MapKeyIO(&HCougar, 	H4L,	Std_SnapView7,	DX18);
+			}
+		else	//VR
+			{
+			MapKey	(&HCougar, 	H3R,	DX12);
+			MapKey	(&HCougar, 	H3L,	DX14);
+			
+			MapKey	(&HCougar, 	H4R,	DX16);
+			MapKey	(&HCougar, 	H4L,	DX18);
+			}
+//		if (Script_Debug) printf("...Done!\xa");		
+}
+
+int MiG19_WHS_Init(int prof = 2019, int force = 0)	//force added in 1.69 as passthru to allow for initial TGZ_MapGearDn if TGZ disabled. must force if no wh throttle
+{
+//		if (Script_Debug) printf("         Hat2 (TMS)...");	
+			MapKeyIO(&Joystick, 	H2R,	TEMPO(DX8, MiG19_RocketSalvo_Auto,DefTempo),	DX8);		
+			MapKeyIO(&Joystick, 	H2L,	TEMPO(DX10,MiG19_RocketSalvo_Auto,DefTempo),	DX10);		
+			MapKeyIO(&Joystick, 	H2U,	DX7,CHAIN(DX7,EXEC("if (!WarthogThrottle) MiG19_RNG_Map(0);"))	);	
+			MapKeyIO(&Joystick,		H2D,	DX9,CHAIN(DX9,EXEC("if (!WarthogThrottle) MiG19_RNG_Map(1);"))	);			
+			
+//		if (Script_Debug) printf("...Done!\xa");	
+//		if (Script_Debug) printf("         Hat3 (DMS)...");		
+			MapKey	(&Joystick, 	H3U,	DX11);					
+			MapKey	(&Joystick, 	H3R,	DX12);
+			MapKey	(&Joystick, 	H3D,	DX13);
+			MapKey	(&Joystick, 	H3L,	DX14);
+			//TriggerZoom_MapGearDn_WH(TriggerZoom_state, prof, 0, force); on FLAP/DF
+//		if (Script_Debug) printf("...Done!\xa");	
+//		if (Script_Debug) printf("         Hat4 (CMS)...");	
+			MiG19_NDB_Sel(1,MiG19_NDB_Cur,0);
+			//MapKey	(&Joystick,		H4P,	DX4);	//Airbrake
+			MapKeyIO(&Joystick,	H4P,	DX4,	MiG19_AirbrakeOn);
+			MapKeyRIO(&Joystick,H4P,	DX4,	MiG19_AirbrakeOff);
+			
+		if (TrackIR < 2)	//VR
+			{
+			MapKeyIO(&Joystick, 	H3R,	Std_SnapView3,	SnapView9);
+			MapKeyIO(&Joystick, 	H3L,	Std_SnapView1,	SnapView4);
+			MapKeyIO(&Joystick, 	H4R,	Std_SnapView6,	DX16);	
+			MapKeyIO(&Joystick, 	H4L,	Std_SnapView7,	DX18);
+			}
+		else
+			{
+			MapKey	(&Joystick, 	H3R,	DX12);
+			MapKey	(&Joystick, 	H3L,	DX14);
+			MapKey	(&Joystick, 	H4R,	DX16);
+			MapKey	(&Joystick, 	H4L,	DX18);
+			}
+//		if (Script_Debug) printf("...Done!\xa");		
+}
+
+
+
+int MiG19_Switch_Init(int gear = 1, int mult = 1)	//gear is logical gearstate, mult is multiplier for LED Delay
+{
+int mfdlt;
+
+if (gear > 1)		gear = 1;				//error trap adde in 2.40
+else if (gear < 0)	gear = 0;
+
+//MiG19_NDB_Cur = 1;	//Far
+MiG19_RadarMode_Cur = gear;
+MiG21_GearUp_Unlock_Cur	=	abs(gear-1);
+MiG21_GearUp_Map(Force_GearLock,abs(gear-1));
+if (!WarthogThrottle) MiG19_RNG_Map(0);
+
+if ((AirBrkFlash > -1))
+	{
+	if ((gear)  & (Adjust_Backlighting > 0) & (MFD_Count > 1))	//MFD Count because ROSB1 is the only way to do battery
+		{
+		if (MFD_Default_Setting > 0) mfdlt = 2;
+		DeferCall(mult*LED_Delay,&LMFD_Backlight,X(MFD_Lt,mfdlt));
+		DeferCall((mult+1)*LED_Delay,&RMFD_Backlight,X(MFD_Lt,mfdlt));
+		LMFD_Pwr_State = mfdlt;
+		RMFD_Pwr_State = mfdlt;
+		DeferCall((mult+7)*LED_Delay,&WHT_Power,mfdlt);	//added in 1.61, *8 to time after WHT_PowerDN
+		}
+	else
+		{
+		DeferCall(mult*LED_Delay,&LMFD_Backlight,X(MFD_Lt,2));
+		DeferCall((mult+1)*LED_Delay,&RMFD_Backlight,X(MFD_Lt,2));
+		LMFD_Pwr_State = 2;
+		RMFD_Pwr_State = 2;
+		DeferCall((mult+7)*LED_Delay,&WHT_Power,2);	//added in 1.61
+		}
+	DeferCall((mult+12)*LED_Delay,&MiG19_NDB_Sel,WarthogStick);	//defaults to 1 for FAR, *12 to time after WHT_Power_MFD()
+	}
+else MiG19_NDB_Sel(WarthogStick);
+//if (AirBrkFlash > -1) DeferCall(mult*LED_Delay,&Lights_LLED1,gear);	//airbrake state on LED (added in 2.40)
+}
+
+int	MiG19_DF_Init(int wh, int state = 0)
+{
+if (wh > 0)
+	{
+	MapKeyIO(&Throttle,	BSF,	0,PULSE+CHAIN(DX31,D(ModDelay),DX8));	
+	MapKeyR	(&Throttle,	BSF,	0);	
+	MapKeyIO(&Throttle,	BSB,	0,PULSE+CHAIN(DX31,D(ModDelay),DX10));	
+	MapKeyR	(&Throttle,	BSB,	0);	
+	MapKeyIO(&Throttle,	BSM,	0,TEMPO(0,PULSE+CHAIN(DX31,D(ModDelay),DX9),DoubleTap));	
+	}
+else
+	{
+	MiG21_GearUp_Map(Force_GearLock,abs(state-1));
+	TriggerZoom_MapGearDn(TriggerZoom_state, ProfID);	//MapKeyIO(&HCougar, T8, PULSE+DX26, );			//done in TriggerZoom_MapGearDn()						
+	//MapKeyR	(&HCougar, T8, 0);
+	MapKeyIO(&HCougar, DFM, 0,	TEMPO(0,CHAIN(PULSE+MiG19_Gear_Neutral, EXEC("GearStateInd(GearState, ProfID, FixedGear, Helicopter, 0, 1);")), DoubleTap));	//Terminates gear cycling indication if returned to center before timeout
+	
+	}
+}
+
+int MiG19_MFD_Init()
+{
+//===================================
+//		Standard MFD Buttons
+//===================================
+
+	printf("   Map Cougar Left  MFD (DX31)...");	
+//LOSB 1 in Init
+					MapKeyIO(&LMFD, OSB02,	CHAIN(DX31,D(ModDelay),DX2),	TEMPO(CHAIN(DX31,D(ModDelay),DX2), CHAIN(DX30,DX31,D(ModDelay),DX2), DefTempo)	);
+					MapKey	(&LMFD, OSB03,	CHAIN(DX31,D(ModDelay),DX3));
+					MapKey	(&LMFD,	OSB04,	CHAIN(DX31,D(ModDelay),DX4));				
+					MapKeyIO(&LMFD, OSB05,	CHAIN(DX31,D(ModDelay),DX5),	TEMPO(CHAIN(DX31,D(ModDelay),DX5), CHAIN(DX30,DX31,D(ModDelay),DX5), DefTempo)	);
+
+//					MapKeyR	(&LMFD,OSB04,	0);
+//					MapKeyR	(&LMFD,OSB05,	0);	
+
+
+
+					MapKeyIO(&LMFD,	OSB06,	CHAIN(DX31,D(ModDelay),DX6),	TEMPO(CHAIN(DX31,D(ModDelay),DX6), CHAIN(DX30,DX31,D(ModDelay),DX6), DefTempo)	);
+					MapKey	(&LMFD,	OSB07,	CHAIN(DX31,D(ModDelay),DX7));
+//					MapKeyR	(&LMFD,	OSB07,	0);	//for Bf109
+//LOSB 8-10 (Flaps)
+					MapKeyIO(&LMFD,	OSB08,	CHAIN(DX31,D(ModDelay),DX8),	TEMPO(CHAIN(DX31,D(ModDelay),DX8), CHAIN(DX30,DX31,D(ModDelay),DX8), DefTempo)	);
+					MapKeyIO(&LMFD,	OSB09,	CHAIN(DX31,D(ModDelay),DX9),	TEMPO(CHAIN(DX31,D(ModDelay),DX9), CHAIN(DX30,DX31,D(ModDelay),DX9), DefTempo)	);
+					MapKeyIO(&LMFD,	OSB10,	CHAIN(DX31,D(ModDelay),DX10),	TEMPO(CHAIN(DX31,D(ModDelay),DX10), CHAIN(DX30,DX31,D(ModDelay),DX10), DefTempo)	);
+//LOSB 11-15 (Radar)					
+					MapKey	(&LMFD,	OSB11,	CHAIN(DX31,D(ModDelay),DX11));	
+					MapKey	(&LMFD,	OSB12,	CHAIN(DX31,D(ModDelay),DX12));
+					MapKey	(&LMFD,	OSB13,	CHAIN(DX31,D(ModDelay),DX13));
+					MapKey	(&LMFD,	OSB14,	CHAIN(DX31,D(ModDelay),DX14));
+					MapKey	(&LMFD,	OSB15,	CHAIN(DX31,D(ModDelay),DX15));					
+
+//LOSB 16-19 (Radio)
+					MapKeyIO(&LMFD,	OSB16,	EXEC("if (!MSPCheck) Cycle_RdoChannel(5,0,0,6);"),	TEMPO(EXEC("if (!MSPCheck) Cycle_RdoChannel(3,0,0,6);"), EXEC("if (!MSPCheck) Cycle_RdoChannel(5,0,0,6);"), DefTempo)	);
+					MapKeyIO(&LMFD,	OSB17,	EXEC("if (!MSPCheck) Cycle_RdoChannel(4,0,0,6);"),	TEMPO(EXEC("if (!MSPCheck) Cycle_RdoChannel(2,0,0,6);"), EXEC("if (!MSPCheck) Cycle_RdoChannel(4,0,0,6);"), DefTempo)	);
+					MapKeyIO(&LMFD,	OSB18,	CHAIN(DX31,D(ModDelay),DX18),						TEMPO(EXEC("if (!MSPCheck) Cycle_RdoChannel(1,0,0,6);"), CHAIN(DX30,DX31,D(ModDelay),DX18), DefTempo)	);
+					MapKeyIO(&LMFD,	OSB19,	CHAIN(DX31,D(ModDelay),DX19),						TEMPO(EXEC("if (!MSPCheck) Cycle_RdoChannel(0,0,0,6);"), CHAIN(DX30,DX31,D(ModDelay),DX19), DefTempo)	);
+
+//LMFD 20 in Init
+
+//Left Rocker Switches
+//SYM
+		MapKeyIO(&LMFD,	SYMU,	MiG19_NoseBrake_On,		TEMPO(EXEC("MiG19_NDB_Sel(WarthogStick,0);"),MiG19_NoseBrake_On,DefTempo));
+		MapKeyIO(&LMFD,	SYMD,	MiG19_NoseBrake_Off,	TEMPO(EXEC("MiG19_NDB_Sel(WarthogStick,1);"),MiG19_NoseBrake_Off,DefTempo));
+
+//CON
+		MapKey	(&LMFD,	CONU,	EXEC("MiG19_RadarMode_Sel(2, Switch_Delay);"),	KB_LCONU);
+		MapKey	(&LMFD,	COND,	TEMPO(EXEC("MiG19_RadarMode_Sel(1, Switch_Delay);"),EXEC("MiG19_RadarMode_Sel(0, Switch_Delay);"),DefTempo),	KB_LCOND);
+
+//BRT  (Intervalometer)
+		MapKey	(&LMFD,	BRTU,	KB_LBRTU);
+		MapKey	(&LMFD,	BRTD,	KB_LBRTD);
+
+//GAIN in Init
+
+	printf("Done!\xa");
+
+	printf("   Map Cougar Right MFD (DX32)...");
+
+//ROSB 1-10 at first part of routine
+		if (Adjust_Backlighting > 0)
+				MapKeyIO(&RMFD,	OSB01,	CHAIN(DX32,D(ModDelay),DX1,EXEC("MFD_WHT_Power(0);")),
+										CHAIN(DX32,D(ModDelay),DX1,EXEC("MFD_WHT_Power(2);")));
+		else	MapKey	(&RMFD,	OSB01,	CHAIN(DX32,D(ModDelay),DX1));
+		MapKey	(&RMFD,	OSB02,	CHAIN(DX32,D(ModDelay),DX2));
+		MapKey	(&RMFD,	OSB03,	CHAIN(DX32,D(ModDelay),DX3));
+		MapKeyIO(&RMFD,	OSB04,	CHAIN(DX32,D(ModDelay),DX4),	TEMPO(CHAIN(DX32,D(ModDelay),DX4), CHAIN(DX30,DX32,D(ModDelay),DX4),	DefTempo)	);	
+		MapKeyIO(&RMFD,	OSB05,	CHAIN(DX32,D(ModDelay),DX5),	TEMPO(CHAIN(DX32,D(ModDelay),DX5), CHAIN(DX30,DX32,D(ModDelay),DX5),	DefTempo)	);	
+//		MapKeyR	(&RMFD,	OSB05,	0);
+		MapKey	(&RMFD,	OSB06,	CHAIN(DX32,D(ModDelay),DX6));	
+		MapKey	(&RMFD,	OSB07,	CHAIN(DX32,D(ModDelay),DX7));
+//		MapKeyR	(&RMFD, OSB07,	0); 
+		MapKey	(&RMFD,	OSB08,	CHAIN(DX32,D(ModDelay),DX8)); 
+		MapKeyIO(&RMFD,	OSB09,	CHAIN(DX32,D(ModDelay),DX9),	TEMPO(CHAIN(DX32,D(ModDelay),DX9), CHAIN(DX30,DX32,D(ModDelay),DX9),	DefTempo)	);	
+		MapKey	(&RMFD,	OSB10,	CHAIN(DX32,D(ModDelay),DX10)); 	
+//ROSB 11-13, 14-15 in MiG19_NDB_Set()
+		MapKey	(&RMFD,	OSB11,	CHAIN(DX32,D(ModDelay),DX11));	
+		MapKey	(&RMFD,	OSB12,	CHAIN(DX32,D(ModDelay),DX12));
+		MapKeyIO(&RMFD,	OSB13,	CHAIN(DX32,D(ModDelay),DX13),	TEMPO(CHAIN(DX32,D(ModDelay),DX13), CHAIN(DX30,DX32,D(ModDelay),DX13), 	DefTempo)	);	
+
+//		MapKeyR	(&RMFD,	OSB13,	0);	//for Spitfire Engine Start	
+//		MapKeyR	(&RMFD,	OSB14,	0);	//for Spitfire Engine Start			
+//ROSB 16-20
+		MapKeyIO(&RMFD,	OSB16,	CHAIN(DX32,D(ModDelay),DX16),	TEMPO(CHAIN(DX32,D(ModDelay),DX16), CHAIN(DX30,DX32,D(ModDelay),DX16),	DefTempo)	);	
+		MapKey	(&RMFD,	OSB17,	CHAIN(DX32,D(ModDelay),DX17));
+		MapKey	(&RMFD,	OSB18,	CHAIN(DX32,D(ModDelay),DX18));	
+		MapKey	(&RMFD,	OSB19,	CHAIN(DX32,D(ModDelay),DX19));	
+		
+//		if ((NS430_Enabled) & (MFD_Count < 3))
+//			MapKeyIO(&RMFD,	OSB20,	NS430_Toggle,		TEMPO(CHAIN(DX32,D(ModDelay),DX24),	NS430_Toggle,		DefTempo)	);
+//		else if (Scratchpad_Enabled)		
+//			MapKeyIO(&RMFD,	OSB20,	Scratchpad_Hotkey,	TEMPO(CHAIN(DX32,D(ModDelay),DX24),	Scratchpad_Hotkey,	DefTempo)	);
+//		else
+//			MapKey	(&RMFD,	OSB20,	CHAIN(DX32,D(ModDelay),DX24));
+
+
+//Right Rocker Switches
+
+//SYM done in F86_Map_Triple_Switches_MFD()
+	MapKeyIO(&RMFD,	SYMU,	KB_RSYMU,	TEMPO(KB_RSYMU, CHAIN(DX30,KB_RSYMU), DefTempo)	);
+	MapKeyIO(&RMFD,	SYMD,	KB_RSYMD,	TEMPO(KB_RSYMD, CHAIN(DX30,KB_RSYMD), DefTempo)	);
+
+//CON done in F86_Map_Triple_Switches_MFD()
+	MapKey	(&RMFD,	CONU,	KB_RCONU);
+	MapKey	(&RMFD,	COND,	KB_RCOND);
+	
+//BRT
+	MapKey	(&RMFD,	BRTU,	KB_RBRTU);
+	MapKey	(&RMFD,	BRTD,	KB_RBRTD);
+
+//GAIN
+	MapKeyIO(&RMFD,	GAINU,	EXEC("MiG19_BombArm_Set(1,0);"),EXEC("MiG19_BombArm_Set(1,1);"));			//KB_RGAINU);
+	MapKeyIO(&RMFD,	GAIND,	EXEC("MiG19_BombArm_Set(0,0);"),EXEC("MiG19_BombArm_Set(0,1);"));			//KB_RGAIND);
+
+	printf("Done!\xa");	
+}
+
+
+
+
+
+int MiG19_Airbrake_Map(int wh, int flash)
+{
+if (flash > -1)
+	{
+	MiG19_AirbrakeOn	= 	CHAIN(DOWN+DX4, 	EXEC("if (	!(GearState)	|	!((HCougar[S4]) | (Joystick[S4]))	)	Lights_LLED1(1);"));
+	MiG19_AirbrakeOff	=	CHAIN(UP+DX4,		EXEC("if (	!(GearState)	|	!((HCougar[S4]) | (Joystick[S4]))	)	Lights_LLED1(0);"));
+	
+	if (flash > 0)
+		{
+		MiG19_AirbrakeOnF	= 	CHAIN(DOWN+DX4,		D(BrakeOnCycleTime),	EXEC("if (	!(GearState)	|	!((HCougar[S4]) | (Joystick[S4]))	)	{if (!GearCycling) flashLLED1(1,500); else DeferCall(GearCycleTimeDn,&flashLLED1,1);}"));	//S4 conditional to prevent LED while starting Ebrake.  No need for GSD since S4 doesn't do the LED anyway
+		MiG19_AirbrakeOffF	=	CHAIN(UP+DX4,		D(BrakeOffCycleTime),	EXEC("if (	!(GearState)	|	!((HCougar[S4]) | (Joystick[S4]))	)	{if (!GearCycling) flashLLED1(0,0);   else DeferCall(GearCycleTimeUp,&flashLLED1,0);}"));
+		}
+	else if (flash == 0)
+		{
+		MiG19_AirbrakeOnF	= 	CHAIN(DOWN+DX4, 	D(BrakeOnCycleTime),	EXEC("if (	!(GearState)	|	!((HCougar[S4]) | (Joystick[S4]))	)	Lights_LLED1(1);"));
+		MiG19_AirbrakeOffF	=	CHAIN(UP+DX4,		D(BrakeOffCycleTime),	EXEC("if (	!(GearState)	|	!((HCougar[S4]) | (Joystick[S4]))	)	Lights_LLED1(0);"));
+		}
+	}
+else
+	{
+	MiG19_AirbrakeOnF	=	DX4;
+	MiG19_AirbrakeOffF	=	0;
+	MiG19_AirbrakeOn	= 	DX4;
+	MiG19_AirbrakeOff	=	0;
+	}
+
+if (wh > 0)
+	{
+	if ((TrackIR > 1) | (MFD_Count < 1))
+			MapKeyIO(&Throttle,	SPDB, 	TEMPO(DX4, EXEC("DCS_AcftSel(1);"),	SwapTempo),	MiG19_AirbrakeOn);	//DX4 separate from MiG19_AirbrakeOn for E-brake release without LED
+	else	MapKeyIO(&Throttle,	SPDB, 	DX4,MiG19_AirbrakeOn);
+	MapKey	(&Throttle,	SPDF, 	MiG19_AirbrakeOnF);
+	MapKeyRIO(&Throttle,SPDB, 	0,	MiG19_AirbrakeOff);
+	MapKeyR	(&Throttle,	SPDF, 	MiG19_AirbrakeOffF);
+	}
+else
+	{
+	if ((TrackIR > 1) | (MFD_Count < 1))
+			MapKeyIO(&HCougar,	T9, 	TEMPO(DX4, EXEC("DCS_AcftSel(1);"),	SwapTempo),	MiG19_AirbrakeOn);
+	else	MapKey	(&HCougar,	T9, 	DX4,MiG19_AirbrakeOn);
+	MapKey	(&HCougar,	T10, 	MiG19_AirbrakeOnF);
+	MapKeyRIO(&HCougar,	T9, 	0,	MiG19_AirbrakeOff);
+	MapKeyR	(&HCougar,	T10, 	MiG19_AirbrakeOffF);
+	}
+}
+
+int MiG19_BombArm_Set(int posit, int key = 1)
+{
+//if (Script_Debug) printf("MiG19_BombArm_Set(%i,%i):\xa",posit,key);
+
+if (key)
+	{
+	if (posit)	ActKey(KEYON+PULSE+MiG19_BombArm_Arm);
+	else		ActKey(KEYON+PULSE+MiG19_BombArm_Safe);
+	}
+if (AirBrkFlash > -1)
+	{
+	if (WarthogThrottle > 0)	Lights_WHT5(posit);
+	//if (MFD_Count > 1)		DeferCall(LED_Delay,&Lights_RLED1,posit);
+	}
+}
+
+int MiG19_ExtLts_Set(int posit, int key = 1, int index = 3)
+{
+//if (Script_Debug) printf("MiG19_ExtLts_Set(%i,%i):\xa",posit,key);
+if ((posit < 0) | (posit >= index)) 
+	{
+	if (posit > 1) posit = 0;	//2 setting for "nav toggle" requires ext lights toggle to off to change
+	else posit = abs(MiG21_Nav_Lts_Cur - 1);
+	}
+//if (Script_Debug) printf(" posit = %i\xa MiG21_Nav_Lts_Cur = %i\xa",posit,MiG21_Nav_Lts_Cur);
+if ((posit != MiG21_Nav_Lts_Cur) & (key))
+	{
+	if (posit == 2)	ActKey(KEYON+PULSE+MiG19_Nav_Lts_Toggle);
+	else			ActKey(KEYON+PULSE+MiG19_Ext_Lts_Toggle);
+	}
+MiG21_Nav_Lts_Cur = posit;
+
+//if (Script_Debug) printf(" Complete: MiG21_Nav_Lts_Cur = %i\xa",MiG21_Nav_Lts_Cur);
+
+}
+
+int	MiG19_RadarMode_Sel(int posit, int delay = 200, int index=3, int time=0)
+{
+//if (Script_Debug) printf("MiG19_RadarMode_Cur: %i  posit: %i  \xa",MiG19_RadarMode_Cur,posit);
+if (	(posit > index-1) | (posit < 0)	)
+	{
+	if (posit > index-1) 
+		{
+		posit = (MiG19_RadarMode_Cur+1);					//no out of bounds
+		if (posit > index-1) posit = index-1;
+		}
+	else if (posit < 0)
+		{
+		posit = (MiG19_RadarMode_Cur-1);				//no out of bounds
+		if (posit < 0) posit = 0;
+		}
+	}
+while (MiG19_RadarMode_Cur != posit)					//do loop with if/then based on </>
+	{
+	if (MiG19_RadarMode_Cur > posit)					
+		{
+		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+MiG19_Radar_Pwr_Dn);	
+		MiG19_RadarMode_Cur = (MiG19_RadarMode_Cur-1);
+		if (MiG19_RadarMode_Cur < 0) MiG19_RadarMode_Cur = 0;
+		}
+	else if (MiG19_RadarMode_Cur < posit)
+		{
+		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+MiG19_Radar_Pwr_Up);	
+		MiG19_RadarMode_Cur = (MiG19_RadarMode_Cur+1);
+		if (MiG19_RadarMode_Cur > index-1) MiG19_RadarMode_Cur = index-1;
+		}
+//	if (Script_Debug) printf("MiG19_RadarMode_Cur: %i  posit: %i  delay: %i  time: %i \xa",MiG19_RadarMode_Cur,posit,delay,time);
+	time = time + delay;
+	}
+}
+
+int MiG19_RNG_Map(int state)
+{
+if (state)	//radar
+	{
+	MapAxis(&HCougar, MAN_RNG, DX_YROT_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);	
+	MapKey	(&HCougar, T4, MiG19_Radar_Horizon_Decr);					
+	MapKey	(&HCougar, T5, MiG19_Radar_Horizon_Incr);		
+	}
+else		//optical
+	{
+	MapAxis(&HCougar, MAN_RNG, DX_SLIDER_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
+	MapKey	(&HCougar, T4, DX14);							
+	MapKey	(&HCougar, T5, DX12);		
+	}
+	
+}
+
+int MiG19_NDB_Sel(int wh, int posit = 1, int key = 1)	//posit defaults to 1 for defercall (far)
+{
+int ndbh4u;
+int ndbh4d;
+
+//if (Script_Debug) printf("MiG19_NDB_Sel(%i,%i,%i)\xa MiG19_NDB_Cur = %i\xa",wh,posit,key,MiG19_NDB_Cur);
+
+if (posit)	//Far
+	{
+	if (key) ActKey(KEYON+PULSE+KB_LSYMD);
+	ndbh4u = MiG19_NDB_Band_Far_Next;
+	ndbh4d = MiG19_NDB_Band_Far_Prev;
+	printf ("NDB Far Selected.\xa");	
+	}
+else		//Near
+	{
+	if (key) ActKey(KEYON+PULSE+KB_LSYMU);
+	ndbh4u = MiG19_NDB_Band_Near_Next;
+	ndbh4d = MiG19_NDB_Band_Near_Prev;
+	printf ("NDB Near Selected.\xa");
+	}
+
+if (wh > 0)
+	{
+	MapKeyIO(&Joystick, 	H4U,	TEMPO(ndbh4u,EXEC("MiG19_NDB_Sel(1,0);"),DefTempo),	DX15);
+	MapKeyIO(&Joystick, 	H4D,	TEMPO(ndbh4d,EXEC("MiG19_NDB_Sel(1,1);"),DefTempo),	DX17);
+	}
+else
+	{
+	MapKeyIO(&HCougar, 		H4U,	TEMPO(ndbh4u,EXEC("MiG19_NDB_Sel(0,0);"),DefTempo),	DX15);
+	MapKeyIO(&HCougar, 		H4D,	TEMPO(ndbh4d,EXEC("MiG19_NDB_Sel(0,1);"),DefTempo),	DX17);
+	}
+MapKey	(&RMFD,	OSB14,	ndbh4u);
+MapKey	(&RMFD,	OSB15,	ndbh4d);
+
+if (AirBrkFlash > -1)
+	{
+	if (MFD_Count > 1)		Lights_RLED1(posit);
+	if (WarthogThrottle > 0)
+		{
+		DeferCall(LED_Delay,&Lights_WHT3,abs(posit-1));
+		DeferCall(2*LED_Delay,&Lights_WHT4,posit);
+		}
+	}
+
+MiG19_NDB_Cur = posit;
+//if (Script_Debug) printf(" MiG19_NDB_Cur = %i\xa",MiG19_NDB_Cur);
+}

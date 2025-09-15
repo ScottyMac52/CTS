@@ -1,0 +1,580 @@
+//=============================================================================
+//			A-4E Skyhawk for DCS for HOTAS Cougar/Warthog and Cougar MFDs
+//					by Don "Home Fries" Heumphreus
+//						last updated: 19JUN2023
+//
+//	Change Log:
+//	2.26	Initial Release
+//	2.27	Added discrete lightswitches to RMFD
+//			Added CM functionality to H4 and WHT/TQS
+//			Added SnapView3 for Doppler Nav
+//	2.29	Added MFDisplay module selection
+//			Replaced 4 MFD Led functions with Lights_Four()
+//	2.34	Added and replaced control mappings for A-4E_C v1.3.1
+//	2.42	Replaced hard 1000ms with EmerJett_Cycle_Delay for FC3 style jettison
+//	2.43	Removed SnapView for VR users
+//	2.46	Added SRS Overlay to ROSB20
+//	2.47	Removed NWS, added NVG
+//			Fixed BDHI MFD buttons and removed /I PS function
+//			Moved carrier ops to S1 and relocated hide stick/tailhook to H3
+//	2.50b	Removed duplicate MapKeyR(0) mappings to free stack space.
+//	2.67	Updated for A-4E_C v2.1.1
+//
+//=============================================================================
+// Free DX 7-10
+
+
+//DX12 for Master Ext Light (PS)
+//DX25-6 for Radar Mode (DF)
+//DX14/15 BDHI Modes
+//DX16/17 Flaps
+//DX11 Taxi Lt
+//DX13 Ext Lights Flash
+//DX18 AntiColl Lt
+//DX19 Engine IGN (Idle)
+//DX8 push wind buttons on ASN-41 (can be changed to "I" if DX needed)
+
+
+int	A4EC_Weap_Jett_Cmd;	//added in 2.34
+
+int A4EC_Array_Init(int gear = 1)	
+{
+A4EC_DF_Init(WarthogThrottle,0);
+if (!WarthogThrottle)
+	{
+	ActKey(DX13);	//lights steady
+	}
+}
+
+
+
+
+int DCS_A4EC(int led, int sp)
+{
+printf("A-4E Skyhawk for DCS\xa");
+
+
+
+if (WarthogStick > 0)
+	{
+	MapKeyR(&Joystick, S2, EXEC("DCS_A4EC_Init();"));
+	}
+else
+	{
+	MapKeyR(&HCougar, S2, EXEC("DCS_A4EC_Init();"));
+	}
+if (sp > 0)	PlayWav("a4e.wav");
+if (led > 0)
+	{
+	//should see 0 0 * * to indicate that A-4E has been selected.
+	Lights_Four(0,0,1,1,	ProfileSwapDelay+LED_Delay);
+//	DeferCall(ProfileSwapDelay+LED_Delay,&Lights_LLED1,0);	//Changed to Binary 4 in 1.28
+//	DeferCall(ProfileSwapDelay+2*LED_Delay,&Lights_LLED2,0);
+//	DeferCall(ProfileSwapDelay+3*LED_Delay,&Lights_RLED1,1);
+//	DeferCall(ProfileSwapDelay+4*LED_Delay,&Lights_RLED2,1);
+	}
+}
+
+int	SetMenu_A4EC()
+{
+Set_Acft_Array_Cur(2604);
+}
+
+//program startup
+int DCS_A4EC_Init()
+{
+							
+Determine_Differential_Braking(DiffBraking_Enabled,CougarToeBrakes);
+
+FkeyPress			=	1;	//added in 2.02 to prevent Commswitch key activation on profile load.
+GraceFlag			=	0;
+Eng_Start_x			=	0;
+Eng_Stop_x			=	0;
+Starter_Ind_x		=	0;	//Starter_Ind_A4EC;
+MFD_Eng_Start		=	0;
+ProfID				=	2604;
+FixedGear			=	0;
+Helicopter			=	0;
+T6WheelBrake		=	0;
+TriggerZoomEnabled	=	1;	//Value at 2 forces DX30 with KP*/ and KPENT.  Useful if KP*/ KPENT used with UFC.
+GearCycleTimeUp		=	Gear_Retract_A4EC;
+GearCycleTimeDn		=	Gear_Deploy_A4EC;
+BrakeOnCycleTime	=	Airbrake_Out_A4EC;
+BrakeOffCycleTime	=	Airbrake_In_A4EC;
+S4AnalogBrake		=	0;	//JoyAsAnalogBrake;	//added in 1.33
+AnalogParkingBrake	=	JoyYParkingBrake;	//added in 1.33
+S4asNWS				=	0;	//NWSwithBrake;			//added in 1.33 for analog braking with NWS engaged
+S3holdNWS 			= 	0;	//added in 2.05
+XYAxisTrim			=	0;	//added in 1.34
+DMS_SnapView		=	0;	//added in 1.34
+WheelBrakeFull		=	1;	//added in 1.35
+ToeBrakesAvailable	=	2;	//added in 1.40; 2 applies a modifier to deconflict with SC
+NVG_Capable			=	1;	//added in 1.40
+AB_Capable			=	0;	//added in 1.61
+Adjust_Backlighting	=	0;	//Adjust_Backlight_A4EC;	//added in 1.62
+TriggerZoom_state  	= 	0;		//reset TriggerZoom
+NS430_Enabled		=	NS430_Installed*NS430_Enabled_A4EC;	//added in 2.21
+CrewCount			=	1;
+StationChangeModifier	=	0;
+WH_Use_TQS			=	0;	//added in 2.43
+Analog_TDC			=	1;	//added in 2.43
+EngineCount			=	1;	//added in 2.43
+Airbrake_Type_Cur	=	Airbrake_Type_A4EC;	//added in 2.43
+CommInitType		=	2;	//0 for none/custom, 1 for single channel (P-51), 2 for simple (dual channel), 3 for complex (3 channel).  added in 2.43
+StnCheckDisabled	=	2;	//added in 2.43.  Forced for single seat
+CurrentStation 		=	1;	//moved here in 2.43
+
+
+if (Airbrake_Type_Cur > 1) Airbrake_Type_Cur = 1;	//error trap
+else if (Airbrake_Type_Cur < 0) Airbrake_Type_Cur = 0;
+
+if ((Real_Jett_A4EC > 0) | (EmerJett_Cycle_Delay < KBDelay))	A4EC_Weap_Jett_Cmd	=	A4E_Weap_Jett;
+else					A4EC_Weap_Jett_Cmd	=	REXEC(6,EmerJett_Cycle_Delay,"ActKey(KEYON+PULSE+Weapons_Jettison);");	//Emer Jett FC3 Style
+
+
+printf("A-4E Skyhawk for DCS Config (Profile v%i.%i):\xa",MajorVersion,MinorVersion);
+PlayWavSel(ProfID,abs(Init_Run - 1),DCSFP_Enabled,MFDisplayEnabled);	//added in 1.61, DCSFP added in 2.05, MFDisplay added in 2.29
+Pause_TrackIR(0);
+AirBrake_Init(AirBrkFlash);	//moved to individual modules in 1.22
+MFD_Init(ProfID);
+	printf("   Map HOTAS for A-4E Skyhawk for DCS:\xa");
+
+//Set 0 to 1 once Analog TDC Enabled
+	DCS_Axis_Init(ProfID,EngineCount,Analog_TDC);	
+
+		printf("      Button Mapping:\xa");
+			printf("         Shift Commands: S3 momentary...");
+			if (WarthogStick > 0)
+				{
+				if (WarthogThrottle > 0) SetShiftButton (&Joystick, S3, &Throttle, 0, 0);
+				else SetShiftButton (&Joystick, S3, &HCougar, 0, 0);
+				MapKey	(&Joystick, S3, BTN_S3P);		//DX3 short, long(er) for modifier and eject check, moved here in 0.53, removed S4 and changed argument to "RudderPedals"
+				MapKeyR	(&Joystick, S3, BTN_S3R);		//added in 0.53 to release "RudderPedals" argument in S3Shifted
+				}
+			else SetShiftButton(&HCougar, S3, &HCougar, 0, 0);
+				MapKey	(&HCougar, S3, BTN_S3P);		//DX3 short, long(er) for modifier and eject check, moved here in 0.53, removed S4 and changed argument to "RudderPedals"
+				MapKeyR	(&HCougar, S3, BTN_S3R);		//added in 0.53 to release "RudderPedals" argument in S3Shifted
+			//S3_NWS(GearDn_Ind_Default,ProfID);
+			printf("Done!\xa");	
+			printf("         Stick Buttons...");
+			if (WarthogStick > 0)	
+				{
+				MapKeyIO(&Joystick, TG1, EXEC("TriggerZoom_toggle(-1,AirBrkFlash,GearState,ACPActive);"), CHAIN(DX1,EXEC("TriggerZoom_in();"))	);	
+				MapKeyRIO(&Joystick,TG1, UP+DX1, EXEC("ActKey(ZoomIn_slow); DeferCall(KBDelay,&TriggerZoom_out,0);"));				//ActKey(DX1) added in 1.21 to force DX1 release if stuck
+
+				MapKey	(&Joystick,	TG2,	DX6);
+//				MapKeyR	(&Joystick,	TG2,	0);
+				MapKeyIO(&Joystick,	S1,		TEMPO(F14_Cat_Hookup, F14_Cat_Launch, DefTempo),	TEMPO(A4E_AFCS_Engage,	DX5,	DefTempo)	);
+				MapKey	(&Joystick,	S2, 	DX2);
+				MapKeyR	(&Joystick,	S2, 	0);
+				MapKeyIO(&Joystick,	S4, 	EXEC("S3S4Shifted();"), EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,0); if ((GearState) & (S4Brake_USN)) {Grace_Flag(1);DeferCall(ModTempo+50,&Grace_Flag,0);}"));	//allows DX4 or wheelbrakes; diffbraking added in 0.24, dx 30 removed for test in 26, DX4 incorporated into DiffBraking in 0.32
+				MapKeyRIO(&Joystick,S4,	0,	EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,1); if ((GearState) & (S4Brake_USN) & (GraceFlag)) ActKey(KEYON+PULSE+DX19);"));
+				}
+			else
+				{
+				MapKeyIO(&HCougar, TG1, EXEC("TriggerZoom_toggle(-1,AirBrkFlash,GearState,ACPActive);"), CHAIN(DX1,EXEC("TriggerZoom_in();"))	);	
+				MapKeyRIO(&HCougar,TG1, UP+DX1, EXEC("ActKey(ZoomIn_slow); DeferCall(KBDelay,&TriggerZoom_out,0);"));				//ActKey(DX1) added in 1.21 to force DX1 release if stuck
+
+				MapKey	(&HCougar,	TG2,	DX6);
+//				MapKeyR	(&HCougar,	TG2,	0);
+				MapKeyIO(&HCougar,	S1,		TEMPO(F14_Cat_Hookup, F14_Cat_Launch, DefTempo),	TEMPO(A4E_AFCS_Engage,	DX5,	DefTempo)	);
+				MapKey	(&HCougar,	S2,		DX2);
+				MapKeyR	(&HCougar,	S2,		0);
+				MapKeyIO(&HCougar,	S4,		EXEC("S3S4Shifted();"), EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,0); if ((GearState) & (S4Brake_USN)) {Grace_Flag(1);DeferCall(ModTempo+50,&Grace_Flag,0);}"));	//allows DX4 or wheelbrakes; diffbraking added in 0.24, dx 30 removed for test in 26, DX4 incorporated into DiffBraking in 0.32
+				MapKeyRIO(&HCougar,	S4,	0,	EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,1); if ((GearState) & (S4Brake_USN) &  (GraceFlag)) ActKey(KEYON+PULSE+DX19);"));
+				}
+			printf("Done!\xa");	
+			
+			H1_Init(TrackIR, PadlockEnabled, ProfID);	//moved to individual routines in 1.27 for trim reset removal on helos
+			CommState_Off(1,ProfID,1,0,1); //Maps Hats 2-4
+			A4EC_Throttle_Init();
+
+printf("Done.\xa");
+
+printf(" A-4E Skyhawk for DCS Init Complete!\xa");	
+
+ActKey(DX1);				//just in case DX1 lingers from trigger activation
+//Lights_ALL(0);				//Says Init Complete
+//	DeferCall(LED_Delay,&Lights_RLED1,0);	//changed to binary in 1.28
+//	DeferCall(2*LED_Delay,&Lights_RLED2,0);
+//	DeferCall(3*LED_Delay,&Lights_LLED1,0);
+
+if (Init_Run == 0) Gear_Ind_Init(GearDn_Ind_Default,FixedGear,Helicopter,AirBrkFlash);
+
+//if (Adjust_Backlighting > 0)	//A-10C version added in 2.24
+//	{
+//	LMFD_Backlight(X(MFD_Lt,MFD_Default_Setting));
+//	DeferCall(LED_Delay,&RMFD_Backlight,X(MFD_Lt,MFD_Default_Setting));
+//	LMFD_Pwr_State = MFD_Default_Setting;
+//	RMFD_Pwr_State = MFD_Default_Setting;
+//	DeferCall(2*LED_Delay,&WHT_Power,MFD_Default_Setting);	//added in 1.61
+//	}
+//else 
+DeferCall(LED_Delay,&Backlight_Max_Init,0);
+
+if (WarthogThrottle > 0) DeferCall(3*LED_Delay,&WHT_Lights_Dn_D,0);
+
+if (GearDn_Ind_Default > 0) Map_Cougar_ToeBrakes(ToeBrakesAvailable);//added in 1.40;
+else
+	{
+	//CMSP_Mode_Cur = 3;		//added in 0.52: Defaults CMSP Mode to Semi if gear defaults to up (air start)
+	Map_Cougar_ToeBrakes(0);//added in 1.40
+	}
+
+A4EC_Array_Init(GearDn_Ind_Default);	
+
+printf("A-4E Skyhawk for DCS MFD Defaults (%i,%i):\xa",LMFD_Pwr_State,RMFD_Pwr_State);
+printf("A-4E Skyhawk Config Complete!\xa");	
+Set_Acft_Array_Cur(ProfID);
+
+//DeferCall(LED_Delay,&flashRLED2,1);	//added in 1.28 since you can't see LED shift after profile selection
+//DeferCall(LED_Delay+2000,&flashRLED2,0);
+}
+
+
+int	A4EC_Throttle_Init()
+{
+if (WarthogThrottle > 0)
+	{		
+				printf("         Throttle Buttons...");	
+//				if (WHIdle_Enabled > 0)
+//					MapKeyIO(&Throttle,	SC,	TEMPO(Engine_Single_RSStop,DOWN+DX19,LongTempo),TEMPO(UP+DX19,Engine_Single_RSStart,DefTempo));	// starter button, dx for throttle off/ign				
+					MapKeyIO(&Throttle,	SC,	A4E_APCPwr_Engage,TEMPO(A4E_APCPwr_Stby,A4E_APCPwr_Engage,SwTempo));	
+
+//				else
+//					MapKeyIO(&Throttle,	SC,	TEMPO(Engine_Single_RSStop,UP+DX10, LongTempo),TEMPO(Engine_Single_RSStart,DOWN+DX10,LongTempo));	// starter button, dx for throttle off/ign
+//				MapKeyR	(&Throttle, SC, 0);							//Added in 0.51 to prevent P-51D CommState Release.
+
+				MapKey	(&Throttle,	LTB,	DX24);	// /I CM Auto, /O CM
+//				MapKeyR	(&Throttle,	LTB,	0);
+
+//Poss change if TDC keys/DX changes
+				MapKey	(&Throttle,	CSU,	DisplayZoom_In);	//Radar Elev, shift for AWRS interval
+				MapKey	(&Throttle,	CSD,	DisplayZoom_Out);
+				MapKeyIO(&Throttle,	CSL,	REXEC(6, KBDelay, "ActKey(KEYON+PULSE+KB_LSYMD);"),	TEMPO(KB_LSYMD, REXEC(6, Switch_Delay, "ActKey(KEYON+PULSE+KB_LSYMD);"), DefTempo));		//Sel Heading
+				MapKeyIO(&Throttle,	CSR,	REXEC(6, KBDelay, "ActKey(KEYON+PULSE+KB_LSYMU);"),	TEMPO(KB_LSYMU, REXEC(6, Switch_Delay, "ActKey(KEYON+PULSE+KB_LSYMU);"), DefTempo));
+				//Simple_Comm_Init(ProfID,1,0);			//Set Comms routine (DX21, PTTLED, and simple commmenu (\)
+			printf("continued...");
+						MapKeyIO(&Throttle,	CHB,	TEMPO(0,Gear_Up,GearUpTempo),	REXEC(8, KBDelay,"ActKey(KEYON+PULSE+RDRScan_Decr);")	);	//radalt danger altitude
+						MapKeyR	(&Throttle,	CHF,	EXEC("StopAutoRepeat(8);"));	
+						MapKeyR	(&Throttle,	CHB,	EXEC("StopAutoRepeat(8);"));	
+
+				//TriggerZoom_MapGearDn_WH(0, ProfID, 0, 1);	//triggerzoom here (forced) to map CHF since TGZ currently disabled
+
+					MapKey	(&Throttle,	PSF,	//PULSE+A4E_CM_1,	
+												CHAIN(DOWN+DX12,DOWN+DX13));	//forward lights on (DX12) with flash (DX13)
+					MapKey	(&Throttle,	PSB,	//PULSE+A4E_CM_2,
+												CHAIN(DOWN+DX12,UP+DX13));		//aft lights on (DX12) with steady (no DX13)
+					MapKey	(&Throttle,	PSM,	//TEMPO(0,	PULSE+A4E_CM_B,	DoubleTap),
+												TEMPO(0,	CHAIN(UP+DX12),	DoubleTap));		//lights off
+					
+					//MapKey	(&Throttle,	EACON,	DX15);	//Master Arm
+					//MapKey	(&Throttle,	EACOFF,	0);	
+					MapKeyIO(&Throttle,	EACON,	0,	PULSE+A4E_MasterArm_On);
+					MapKeyIO(&Throttle,	EACOFF,	0,	PULSE+A4E_MasterArm_Off);
+					
+					MapKey	(&Throttle,	FLAPU,	DX16);
+//					MapKey	(&Throttle,	FLAPM,	0);
+					MapKey	(&Throttle,	FLAPD,	DX17);
+					
+					MapKeyIO(&Throttle,	RDRNRM,	0,PULSE+A4E_GunArm_On);	
+					MapKeyIO(&Throttle,	RDRDIS,	0,PULSE+A4E_GunArm_Off);
+					
+					MapKey	(&Throttle,	EFLNORM,	DX11);	//	0,DOWN+DX11);	//Taxi Light
+//					MapKey	(&Throttle,	EFLOVER,	0);	//	0,UP+DX11);		
+
+					MapKeyIO(&Throttle,	APUON,	0,PULSE+A10A_EAC_On);	//Tailhook Up
+					MapKeyIO(&Throttle,	APUOFF,	0,PULSE+A10A_EAC_Off);	//Tailhook Down
+
+
+//				MapKeyR	(&Throttle,	FLAPU,	0);
+//				MapKeyR	(&Throttle,	FLAPD,	0);
+				
+//				MapKeyR	(&Throttle,	EFLNORM,	0);
+//				MapKeyR	(&Throttle,	EFRNORM,	0);
+
+				MapKey	(&Throttle,	EFRNORM,	DX18);	//DOWN+DX18);		
+//				MapKey	(&Throttle,	EFROVER,	0);	//UP+DX18);		//AntiColl Lights
+				
+//engine start			
+if (WHIdle_Enabled > 0)
+				MapKey	(&Throttle,	IDLERON,	DX19);	//,CHAIN(DOWN+Engine_Right_Stop, EXEC("Engine_Shutdown_Ind(2, Engine_Shutdown_Ind_Time, 1);if ((Adjust_Backlighting > 0) & (Throttle[APUOFF]) & (Throttle[IDLELON])) WHT_Pwr_Set(0);"),D(Switch_Delay),UP+Engine_Right_Stop));
+//				MapKey	(&Throttle,	IDLEROFF,	DX19);	//,CHAIN(DOWN+Engine_Right_Start, EXEC("Engine_Start_Ind(2, Starter_Ind_x, 1);if (Adjust_Backlighting > 0) WHT_Pwr_Set(3);"),D(Switch_Delay),UP+Engine_Right_Start));
+else			MapKey	(&Throttle,	IDLERON,	0);
+//				MapKey	(&Throttle,	IDLEROFF,	0);
+//				MapKey	(&Throttle,	IDLELON,	0);
+//				MapKey	(&Throttle,	IDLELOFF,	0);
+
+
+			
+				
+			printf("Base Switches...");
+				MapKeyIO(&Throttle,	EOLIGN,		0,CHAIN(M2k_NavLts_On,EXEC("if (!IgnLState){ Grace_Flag(1); IgnLState = 1;}"))	);
+				MapKeyIO(&Throttle,	EOLNORM,	0,EXEC("if (!IgnLState) ActKey(KEYON+M2k_NavLts_Off);DeferCall(Switch_Delay,&ActKey,M2k_NavLts_Off);")	);
+				MapKeyIO(&Throttle,	EOLMOTOR,	0,CHAIN(DOWN+M2k_NavLts_Dim, EXEC("IgnLState = 0;"),D(Switch_Delay),UP+M2k_NavLts_Dim)	);
+								
+				MapKeyIO(&Throttle,	EORIGN,		0,CHAIN(A4E_TailLts_On,EXEC("if (!IgnRState){ Grace_Flag(1); IgnRState = 1;}"))	);
+				MapKeyIO(&Throttle,	EORNORM,	0,EXEC("if (!IgnRState) ActKey(KEYON+A4E_TailLts_Off);DeferCall(Switch_Delay,&ActKey,A4E_TailLts_Off);")	);
+				MapKeyIO(&Throttle,	EORMOTOR,	0,CHAIN(DOWN+A4E_TailLts_Dim, EXEC("IgnRState = 0;"),D(Switch_Delay),UP+A4E_TailLts_Dim)	);
+	
+				MapKeyRIO(&Throttle,EOLIGN,		EXEC("IgnLState = 1;"),	EXEC("if ((IgnLState) & (!GraceFlag)) IgnLState = 0; else Grace_Flag(0);")	);
+				MapKeyRIO(&Throttle,EORIGN,		EXEC("IgnRState = 1;"),	EXEC("if ((IgnRState) & (!GraceFlag)) IgnRState = 0; else Grace_Flag(0);")	);
+				
+				MapKey	(&Throttle,	APPAT,	DX14);
+//				MapKey	(&Throttle,	APAH,	0);	
+				MapKey	(&Throttle,	APALT,	DX15);
+
+				MapKeyIO(&Throttle,	APENG,	A4E_AFCS_Alt, TEMPO(A4E_AFCS_Hdg, A4E_AFCS_Alt, DefTempo)	);	//heading hold, shift or long for alt hold
+				MapKeyIO(&Throttle,	LDGH,	TEMPO(A4EC_Weap_Jett_Cmd,EXEC("EjectCheckLDGH(ProfID);"), DefTempo),	TEMPO(Engine_Single_RSStart, A4EC_Weap_Jett_Cmd, 	LongTempo));
+
+//change candidate				
+		
+			printf("...Done!\xa");
+	printf("   HOTAS Warthog Throttle Mapping Complete.\xa\xa");			
+	}
+else
+	{
+			printf("         TQS Buttons...");	
+
+				MapKeyIO(&HCougar, T1, A4E_APCPwr_Engage,TEMPO(A4E_APCPwr_Stby,A4E_APCPwr_Engage,SwTempo));
+//				MapKeyR	(&HCougar, T1, 0);							//Added in 0.51 to prevent P-51D CommState Release.
+
+
+				MapKeyIO(&HCougar,	T6, TEMPO(DX24, 			EXEC("EjectCheckT6(ProfID);"), DefTempo), DX24	);		// poss A4E_CM_Cyc for /I.  
+//				MapKeyR	(&HCougar,	T6, 0);
+			//TriggerZoom_MapGearDn(0, ProfID,0,1);	//triggerzoom here (forced) to map H3D since TGZ currently disabled
+			printf("Switch Initial Check...");
+				//AV8B_Switch_Initial_Check();
+			printf("...Done!\xa");
+	printf("   HOTAS Cougar Mapping Complete.\xa\xa");			
+	}
+//			printf("comm init...");
+Simple_Comm_Init(ProfID,1,1);			//Set Comms routine (DX21, PTTLED, and micsw commmenu (ralt+\)
+
+Airbrake_Map_Set(Airbrake_Type_Cur,1);	//selected binary, swappable
+A4EC_DF_Init(WarthogThrottle,0,12*LED_Delay);
+}
+
+int A4EC_HCS_Init(int prof = 2604, int force = 0)	//force added in 1.69 as passthru to allow for initial TGZ_MapGearDn if TGZ disabled.
+{
+		if (Script_Debug) printf("         Hat2 (TMS)...");	
+			MapKeyIO(&HCougar, 	H2U,	TEMPO(A4E_MasterArm_On,	A4E_AWRSx1,			DefTempo),	TEMPO(A4E_MasterArm_On,		A4E_GunArm_On,	DefTempo));	//shifted for AWRS panel
+			MapKeyIO(&HCougar, 	H2R,	TEMPO(A4E_ArmSel_CW,	DisplayZoom_In,		SwTempo),	A4E_ArmSel_CW);			//DisplayZoom shifted for AWRS interval
+			MapKeyIO(&HCougar, 	H2L,	TEMPO(A4E_ArmSel_CCW,	DisplayZoom_Out,	SwTempo),	A4E_ArmSel_CCW);		//DisplayZoom shifted for AWRS interval
+			MapKeyIO(&HCougar,	H2D,	TEMPO(A4E_MasterArm_Off,A4E_AWRSx10,		DefTempo),	TEMPO(A4E_MasterArm_Off,	A4E_GunArm_Off,	DefTempo));	//shifted for AWRS panel
+			
+		if (Script_Debug) printf("...Done!\xa");	
+		if (Script_Debug) printf("         Hat3 (Nav)...");	
+			if (TrackIR < 2)
+					MapKeyIO(&HCougar, 	H3R,	Std_SnapView3,	A4E_Doppler_Sea);
+			else	MapKeyIO(&HCougar, 	H3R,	TEMPO(A4E_Doppler_Land,A4E_Doppler_Stby,DefTempo),	A4E_Doppler_Sea);				
+			MapKeyIO(&HCougar, 	H3U,	Gear_Flaps_Up,	A4E_NavSel_D1);	
+			//H3L in TriggerZoom_MapGearDn()			
+			TriggerZoom_MapGearDn(TriggerZoom_state, prof, 0, force);		//restore force when TGZ enabled
+		if (Script_Debug) printf("...Done!\xa");	
+		if (Script_Debug) printf("         Hat4 (CMS)...");	
+			MapKeyIO(&HCougar, 	H4U,	TEMPO(A4E_CM_1,		A4E_ECM_PRFVol_Incr,	SwTempo),	TEMPO(A4E_CM_1,		A4E_CM_B,		SwTempo)	);	//shifted ALQ_APR27 Audio
+			MapKeyIO(&HCougar, 	H4D,	TEMPO(A4E_CM_2,		A4E_ECM_PRFVol_Decr,	SwTempo),	TEMPO(A4E_CM_2,		A4E_CM_B,		SwTempo)	);	//shifted ALQ_APR25 Audio
+			MapKeyIO(&HCougar, 	H4L,	TEMPO(A4E_APR25_RCV,A4E_ECM_MisVol_Decr,	SwTempo),	TEMPO(A4E_APR25_RCV,A4E_APR25_Stby,	LongTempo)	);	//shifted A4E_CM_Pwr
+			MapKeyIO(&HCougar,	H4R,	TEMPO(A4E_ECM_On,	A4E_ECM_MisVol_Incr,	SwTempo),	TEMPO(A4E_APR25_RPT,A4E_APR25_Stby,	LongTempo)	);	//shifted A4E_ECM_On macro
+			
+			//AV8_ACP_Sw_Cycle(AV8_ACP_Sw_Cur);
+		if (Script_Debug) printf("...Done!\xa");		
+}
+int A4EC_WHS_Init(int prof = 2604, int force = 0)	//force added in 1.69 as passthru to allow for initial TGZ_MapGearDn if TGZ disabled. must force if no wh throttle
+{
+		if (Script_Debug) printf("         Hat2 (TMS)...");	
+			MapKeyIO(&Joystick, 	H2U,	TEMPO(A4E_MasterArm_On,	A4E_AWRSx1,			DefTempo),	TEMPO(A4E_MasterArm_On,		A4E_GunArm_On,	DefTempo));	//shifted for AWRS panel
+			MapKeyIO(&Joystick, 	H2R,	TEMPO(A4E_ArmSel_CW,	DisplayZoom_In,		SwTempo),	A4E_ArmSel_CW);			//DisplayZoom shifted for AWRS interval
+			MapKeyIO(&Joystick, 	H2L,	TEMPO(A4E_ArmSel_CCW,	DisplayZoom_Out,	SwTempo),	A4E_ArmSel_CCW);		//DisplayZoom shifted for AWRS interval
+			MapKeyIO(&Joystick,		H2D,	TEMPO(A4E_MasterArm_Off,A4E_AWRSx10,		DefTempo),	TEMPO(A4E_MasterArm_Off,	A4E_GunArm_Off,	DefTempo));	//shifted for AWRS panel
+		if (Script_Debug) printf("...Done!\xa");	
+		if (Script_Debug) printf("         Hat3 (Nav)...");		
+			if (TrackIR < 2)
+					MapKeyIO(&Joystick, 	H3R,	Std_SnapView3,	A4E_Doppler_Sea);
+			else	MapKeyIO(&Joystick, 	H3R,	TEMPO(A4E_Doppler_Land,A4E_Doppler_Stby,DefTempo),	A4E_Doppler_Sea);
+			//H3L in TriggerZoom_MapGearDn_WH()
+			TriggerZoom_MapGearDn_WH(TriggerZoom_state, prof, 0, force);	//restore force when TGZ enabled
+		if (Script_Debug) printf("...Done!\xa");	
+		if (Script_Debug) printf("         Hat4 (CMS)...");	
+			MapKeyIO(&Joystick, 	H4U,	TEMPO(A4E_CM_1,		A4E_ECM_PRFVol_Incr,	SwTempo),	TEMPO(A4E_CM_1,		A4E_CM_B,		SwTempo)	);	//shifted ALQ_APR27 Audio
+			MapKeyIO(&Joystick, 	H4D,	TEMPO(A4E_CM_2,		A4E_ECM_PRFVol_Decr,	SwTempo),	TEMPO(A4E_CM_2,		A4E_CM_B,		SwTempo)	);	//shifted ALQ_APR25 Audio
+			MapKeyIO(&Joystick, 	H4L,	TEMPO(A4E_APR25_RCV,A4E_ECM_MisVol_Decr,	SwTempo),	TEMPO(A4E_APR25_RCV,A4E_APR25_Stby,	LongTempo)	);	//shifted A4E_CM_Pwr
+			MapKeyIO(&Joystick,		H4R,	TEMPO(A4E_ECM_On,	A4E_ECM_MisVol_Incr,	SwTempo),	TEMPO(A4E_APR25_RPT,A4E_APR25_Stby,	LongTempo)	);	//shifted A4E_ECM_On macro
+			MapKey	(&Joystick,		H4P,	DX24); //CM / CM Auto				
+		if (Script_Debug) printf("...Done!\xa");		
+}
+
+int	A4EC_DF_Init(int wh, int apu = 0, int delay = 0)
+{
+if (wh > 0)
+	{
+
+		if (AirBrkFlash > -1) DeferCall(delay,&Lights_WHT5,0);
+		MapKeyIO(&Throttle,	BSB,	0,	DOWN+DX25	);	//Down and Up to allow DX to stay in position even if APU engaged
+		MapKeyIO(&Throttle,	BSF,	0,	DOWN+DX26	);
+		MapKeyIO(&Throttle,	BSM,	PULSE+A4E_Radar_Stby,	0);
+		MapKeyR	(&Throttle,	BSB,	UP+DX25);
+		MapKeyR	(&Throttle,	BSF,	UP+DX26);		
+	}
+else
+	{
+		MapKeyIO(&HCougar,	T7,		PULSE+A4E_Ext_Lts_Off,	DOWN+DX25	);	//flaps; Down and Up to allow DX to stay in position even if APU engaged
+		MapKeyIO(&HCougar,	T8,		PULSE+A4E_Ext_Lts_On,	DOWN+DX26	);
+		MapKey	(&HCougar,	DFM,	0);
+		MapKeyRIO(&HCougar,	T7,		0,	UP+DX25);
+		MapKeyRIO(&HCougar,	T8,		0,	UP+DX26);		
+	}
+}
+
+
+
+int	A4EC_MFD_Init()
+{
+//===================================
+//		Standard MFD Buttons
+//===================================
+
+	printf("   Map Cougar Left  MFD (DX31)...");	
+//LOSB 1 in Init
+					MapKeyIO(&LMFD, OSB02,	DX_LOSB02,	DX_LOSB02T);
+					MapKeyIO(&LMFD, OSB03,	DX_LOSB03,	DX_LOSB03T);
+					MapKeyIO(&LMFD, OSB04,	DX_LOSB04,	DX_LOSB04T);
+//					MapKeyR	(&LMFD,	OSB04,	0);	//for A-10C
+					MapKey	(&LMFD, OSB05,	DX_LOSB05);
+//					MapKeyR	(&LMFD,	OSB05,	0);	//For F-5E			
+//LOSB 6-9
+					MapKeyIO(&LMFD,	OSB06,	DX_LOSB06,	DX_LOSB06T);
+					MapKeyIO(&LMFD,	OSB07,	DX_LOSB07,	DX_LOSB07T);
+//					MapKeyR	(&LMFD,	OSB07,	0);	//for Bf109
+					MapKeyIO(&LMFD,	OSB08,	DX_LOSB08,	DX_LOSB08T);
+					MapKeyIO(&LMFD,	OSB09,	DX_LOSB09,	DX_LOSB09T);
+					
+//LOSB 10
+					MapKeyIO(&LMFD,	OSB10,	DX_LOSB10,	DX_LOSB10T);
+
+								
+//LOSB11-15 (switch deconflict)
+
+					MapKeyIO(&LMFD,	OSB11,	KB_LOSB11,	TEMPO(A4E_Stn5_Off,	A4E_Stn5_On,	SwTempo));
+					MapKeyIO(&LMFD,	OSB12,	KB_LOSB12,	TEMPO(A4E_Stn4_Off,	A4E_Stn4_On,	SwTempo));
+					MapKeyIO(&LMFD,	OSB13,	KB_LOSB13,	TEMPO(A4E_Stn3_Off,	A4E_Stn3_On,	SwTempo));
+					MapKeyIO(&LMFD,	OSB14,	KB_LOSB14,	TEMPO(A4E_Stn2_Off,	A4E_Stn2_On,	SwTempo));
+					MapKeyIO(&LMFD,	OSB15,	KB_LOSB15,	TEMPO(A4E_Stn1_Off,	A4E_Stn1_On,	SwTempo));
+//LOSB16-19						
+					MapKeyIO(&LMFD,	OSB16,	TEMPO(0, A4EC_Weap_Jett_Cmd, 	ModTempo),	TEMPO(KB_LOSB16, CHAIN(DX30,D(ModDelay),KB_LOSB16), 	SwTempo));	// /I Long Emer Jett
+					MapKey	(&LMFD,	OSB18,	TEMPO(KB_LOSB18,	A4E_APCPwr_Off,	SwTempo)	);	//shift APCPwr for cold 
+					MapKey	(&LMFD,	OSB19,	KB_LOSB19);
+					
+				if ((Discrete_AuxSwitches_A4EC))
+					MapKeyIO(&LMFD,	OSB17,	KB_LOSB17,	TEMPO(KB_LOSB17,	A4E_TankPress_Refuel,	SwTempo)	);	
+				else
+					MapKeyIO(&LMFD,	OSB17,	KB_LOSB17,	A4E_TankPress_Cycle);				
+			
+//LMFD 20 in Init
+
+//Left Rocker Switches
+//SYM (A/P Heading Select)
+
+		MapKeyIO(&LMFD,	SYMU,	REXEC(6, KBDelay, "ActKey(KEYON+PULSE+KB_LSYMU);"),	TEMPO(KB_LSYMU, REXEC(6, Switch_Delay, "ActKey(KEYON+PULSE+KB_LSYMU);"), DefTempo));	//heading sel
+		MapKeyIO(&LMFD,	SYMD,	REXEC(6, KBDelay, "ActKey(KEYON+PULSE+KB_LSYMD);"),	TEMPO(KB_LSYMD, REXEC(6, Switch_Delay, "ActKey(KEYON+PULSE+KB_LSYMD);"), DefTempo));
+
+//CON (jettison sel sw)
+
+
+//BRT & CON
+
+		MapKeyIO(&LMFD,	BRTU,	A4E_GunArm_On,	TEMPO(A4E_MasterArm_On,		A4E_GunArm_On,	DefTempo)	);	//Long gunarm, short MA
+		MapKeyIO(&LMFD,	BRTD,	A4E_GunArm_Off,	TEMPO(A4E_MasterArm_Off,	A4E_GunArm_Off,	DefTempo)	);		
+//		MapKeyIO(&LMFD,	BRTU,	KB_LBRTU,	TEMPO(KB_LBRTU,	CHAIN(DX30,D(ModDelay),KB_LBRTU),	DefTempo)	);	//Long gunarm, short MA
+//		MapKeyIO(&LMFD,	BRTD,	KB_LBRTD,	TEMPO(KB_LBRTD,	CHAIN(DX30,D(ModDelay),KB_LBRTD),	DefTempo)	);				
+		
+
+		MapKeyIO(&LMFD,	CONU,	KB_LCONU,	TEMPO(KB_LCONU,	CHAIN(DX30,D(ModDelay),KB_LCONU),	DefTempo)	);	//fuse setting
+		MapKeyIO(&LMFD,	COND,	KB_LCOND,	TEMPO(KB_LCOND,	CHAIN(DX30,D(ModDelay),KB_LCOND),	DefTempo)	);	//fuse setting
+
+	printf("Done!\xa");
+
+	printf("   Map Cougar Right MFD (DX32)...");
+
+
+//ROSB 1-10 at first part of routine
+		MapKey	(&RMFD,	OSB01,	DX_ROSB01);
+		MapKey	(&RMFD,	OSB02,	DX_ROSB02);
+		MapKey	(&RMFD,	OSB03,	DX_ROSB03);
+		MapKeyIO(&RMFD,	OSB04,	DOWN+DX11,	TEMPO(UP+DX11,	DOWN+DX11,	SwTempo)	);	//taxi
+		MapKeyIO(&RMFD,	OSB05,	DOWN+DX18,	TEMPO(UP+DX18,	DOWN+DX18,	SwTempo)	);	//anticoll		
+
+//		MapKeyIO(&RMFD,	OSB06,	CHAIN(DX32,D(ModDelay),DX6),	TEMPO(CHAIN(DX32,D(ModDelay),DX6),	CHAIN(DX30,DX32,D(ModDelay),DX6),	DefTempo)	);
+//		MapKeyIO(&RMFD,	OSB07,	CHAIN(DX32,D(ModDelay),DX7),	TEMPO(CHAIN(DX32,D(ModDelay),DX7),	CHAIN(DX30,DX32,D(ModDelay),DX7),	DefTempo)	);
+//		MapKeyIO(&RMFD,	OSB08,	CHAIN(DX32,D(ModDelay),DX8),	TEMPO(CHAIN(DX32,D(ModDelay),DX8),	CHAIN(DX30,DX32,D(ModDelay),DX8),	DefTempo)	);
+		MapKeyIO(&RMFD,	OSB08,	DOWN+DX13,	TEMPO(UP+DX13,	DOWN+DX13,	SwTempo)	);	//flash
+	if ((Discrete_NavSwitches_A4EC))
+		{
+		MapKeyIO(&RMFD,	OSB06,	DX_ROSB04,	TEMPO(A4E_ProbeLt_Dim,	A4E_ProbeLt_On,	SwTempo));
+		MapKeyIO(&RMFD,	OSB07,	DX_ROSB05,	TEMPO(A4E_FuseLts_Dim,	A4E_FuseLts_On,	SwTempo));		
+		MapKeyIO(&RMFD,	OSB09,	DX_ROSB09,	TEMPO(M2k_NavLts_Dim,	M2k_NavLts_On,	SwTempo));
+		MapKeyIO(&RMFD,	OSB10,	DX_ROSB10,	TEMPO(A4E_TailLts_Dim,	A4E_TailLts_On,	SwTempo));	
+		}
+	else
+		{
+		MapKey	(&RMFD,	OSB06,	DX_ROSB04);
+		MapKey	(&RMFD,	OSB07,	DX_ROSB05);		
+		MapKey	(&RMFD,	OSB09,	DX_ROSB09);	//cycles, shift for off
+		MapKey	(&RMFD,	OSB10,	DX_ROSB10);	
+		}
+//ROSB 11-15
+		MapKey	(&RMFD,	OSB11,	CHAIN(A4E_Wind_Push,D(KBDelay),A4E_Wind_CW)	);	//KB_ROSB11);
+		MapKey	(&RMFD,	OSB12,	CHAIN(A4E_Wind_Push,D(KBDelay),A4E_Wind_CCW));	//KB_ROSB12);
+		MapKey	(&RMFD,	OSB13,	KB_ROSB13);
+		MapKey	(&RMFD,	OSB14,	KB_ROSB14);
+		MapKey	(&RMFD,	OSB15,	KB_ROSB15);	
+
+//ROSB 11-15
+		MapKeyIO(&RMFD,	OSB16,	KB_ROSB16,	TEMPO(KB_ROSB16, CHAIN(DX30,D(ModDelay),KB_ROSB16), SwTempo)	);	
+		MapKeyIO(&RMFD,	OSB17,	KB_ROSB17,	TEMPO(KB_ROSB17, CHAIN(DX30,D(ModDelay),KB_ROSB17), SwTempo)	);	
+
+
+
+//ROSB 18-20
+
+//		MapKey	(&RMFD,	OSB18,	KB_ROSB18);
+//		MapKey	(&RMFD,	OSB19,	KB_ROSB19);	
+//		MapKey	(&RMFD,	OSB20,	CHAIN(DX32,D(ModDelay),DX24)	);
+		MapKey	(&RMFD,	OSB18,	CHAIN(UP+DX15,DOWN+DX14));	//nav comp
+		MapKey	(&RMFD,	OSB19,	CHAIN(UP+DX14,UP+DX15)	);	//tacan
+		
+		if ((TARS > 0) & (Overlay_Enable_SRS > 0))
+				MapKeyIO(&RMFD,	OSB20,	Rdo_Ovly,	CHAIN(UP+DX14,DOWN+DX15));	//nav pac
+		else	MapKey	(&RMFD,	OSB20,	CHAIN(UP+DX14,DOWN+DX15));	//nav pac
+
+//Right Rocker Switches
+//CON/BRT
+		MapKeyIO(&RMFD,	CONU,	CHAIN(A4E_PresLong_Push,D(ModDelay),A4E_PresLong_CCW),	KB_RCONU);	//Shifted for Push Dest Lat/Long		
+		MapKeyIO(&RMFD,	COND,	CHAIN(A4E_PresLong_Push,D(ModDelay),A4E_PresLong_CW),	KB_RCOND);
+//		MapKeyR	(&RMFD,	CONU,	0);	//added in 1.24 to account for context sensitive R in UH-1
+//		MapKeyR	(&RMFD,	COND,	0);
+		MapKeyIO(&RMFD,	BRTU,	CHAIN(A4E_PresLat_Push,D(ModDelay),A4E_PresLat_CCW),	KB_RBRTU);		
+		MapKeyIO(&RMFD,	BRTD,	CHAIN(A4E_PresLat_Push,D(ModDelay),A4E_PresLat_CW),		KB_RBRTD);
+//SYM
+//		MapKey	(&RMFD,	SYMU,	KB_RSYMU);
+//		MapKey	(&RMFD,	SYMD,	KB_RSYMD);
+		MapKeyIO(&RMFD,	SYMU,	KB_RSYMU,	CHAIN(A4E_PresLong_Push,D(ModDelay),A4E_PresLong_CCW)	);
+		MapKeyIO(&RMFD,	SYMD,	KB_RSYMD,	CHAIN(A4E_PresLong_Push,D(ModDelay),A4E_PresLong_CW)	);
+	
+//GAIN
+//		MapKey	(&RMFD,	GAINU,	KB_RGAINU);
+//		MapKey	(&RMFD,	GAIND,	KB_RGAIND);
+		MapKeyIO(&RMFD,	GAINU,	KB_RGAINU,	CHAIN(A4E_PresLat_Push,D(ModDelay),A4E_PresLat_CCW)	);
+		MapKeyIO(&RMFD,	GAIND,	KB_RGAIND,	CHAIN(A4E_PresLat_Push,D(ModDelay),A4E_PresLat_CW)	);
+
+//		MapKeyR	(&RMFD,	OSB05,	0);
+//		MapKeyR	(&RMFD,	OSB07,	0);
+//		MapKeyR	(&RMFD,	OSB13,	0);	//for Spitfire Engine Start	
+//		MapKeyR	(&RMFD,	OSB14,	0);	//for Spitfire Engine Start
+//		MapKeyR	(&RMFD,	SYMU,	0);	//added in 1.61 to account for context sensitive R in M2000C
+//		MapKeyR	(&RMFD,	SYMD,	0);
+		
+	printf("Done!\xa");	
+}
+

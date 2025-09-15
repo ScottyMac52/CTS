@@ -1,0 +1,745 @@
+//=============================================================================
+//			DCS A-10C Warthog for HOTAS Cougar/Warthog and Cougar MFDs
+//					by Don "Home Fries" Heumphreus
+//						last updated: 27OCT2021
+//
+//	Change Log:
+//	0.1		Initial Framework
+//	0.25	Integration into profile and major revision
+//	0.30	Removed S4 from SetShift capability for diff braking compatibility
+//			Updated S3S4Shifted and T6EjectCheck function arguments to (0) because S4 is no longer a shift
+//	0.31	Added DX19 to TEMPO on T1 (for T/O Trim)
+//	0.32	Moved DX4 from S4 to DiffBraking() to prevent MFD conflict with differential braking
+//	0.33	Converted Boat/Pinky switch to DX (uses 25/26/29 and 30 modifier for pinky)
+//			Converted DiffBrakes() arguments to new function format
+//	0.36	Incorporated MFD backlighting routine
+//	0.40	Minor cosmetic adjustments
+//	0.41	Moved GearDn_Ind_Default() to DCS World.tmc
+//	0.50	MapAxis added to init for P-51D error trap
+//	0.51	Added MapKeyR to T1 for compatibility with P-51D CommState
+//	0.52	Added CMSP Mode discrete function array
+//			Applied LongTempo to 800ms TEMPO commands
+//	0.55	Moved S3 to DCS_Init, adjusted S3S4Shifted args for S4
+//	0.57	Added different gear deploy/extend times
+//	0.59	Moved Analog Throttle Axis from DCS_Init to module
+//	0.68	Added Helicopter Variable
+//	0.71	Added KBPress to SnapView calls
+//	0.74	Added MapKeyR null for T6 to clear UH1 MapKeyR
+//	1.00	Initial Release/Rebaseline
+//	1.02	Moved A10C_CommState_Off to CommState_Off(4)
+//	1.04	Moved S3 mapping from DCS_Init to local
+//	1.11	Updated for new S3Release() params
+//			Moved Microstick and ManRng Analog and Digital Axis mapping to Aux_Axis_Init()
+//	1.13	Replaced all TEMPO() and TEMPO(500) with TEMPO(DefTempo)
+//			Replaced DFM TEMPO(100) with TEMPO(KBPress*2)
+//	1.23	Applied new analog airbrake routine to A-10C
+//	1.24	Added A10CMapT10() for E-brake (DX29) when gear is Down
+//			DFM changed from DX29 to key macros.
+//	1.25	Added delays to "simultaneous" profile start LED use to minimize profile crashes
+//	1.26	Moved major axis mapping to DCS_Axis_Init()
+//			Added T6WheelBrake = 0 and TriggerZoomEnabled = 1 to init
+//	1.28	Revised LED indications for profile swap
+//	1.29	Updated airbrake mapping for new type (analog now type 3)
+//			Moved MFD mappings from DCS_Init
+//	1.33	Analog braking option added
+//	1.34	DX1 added to TG1 command (removed from TriggerZoom)
+//	1.35	Updated WheelBrakeFull argument for new DiffBraking() routine
+//			Added arrays and cycle routines for AAP switches
+//
+//	1.50	Converted to Warthog
+//	1.53	Adjusted for new 2.0 module selection
+//	1.56	Enabled WAV files for aircraft selection
+//	1.61	Added Warthog Lighting init
+//	1.66	Moved A-10C CommState_Off routines here
+//			Added MapKeyR for ROSB13-14 for compatibilty with Spitfire
+//	1.68	Added WH Throttle LEDs for Fuel Override, Laser Arm, GunPAC, and Master Arm
+//	1.69	Updated CommState_Off() call and force argument to HCS/WCS Init
+//	2.00	Added AV-8B to A10CMapEbrk(), A10CMapT10(), A10CMapSPDF()
+//	2.02	Set FkeyPress=1 on init to prevent Commswitch activation on profile load
+//	2.10	Improved VAICOM/SRS Compatibility
+//	2.20b	Added Airbrkflash to WHT LED routines
+//	2.21	Added NS430 as 0
+//	2.28	Added DCS Scratchpad to ROSB20
+//	2.29	Added MFDisplay module selection
+//			Replaced 4 MFD Led functions with Lights_Four()
+//	2.41	Updated/moved CMSP_Modes array to Global and modified SetCMSPMode() to support F-16C bypass mode
+//	2.43	Removed SnapViews for VR
+//	2.44	Added Spyglass Zoom to VR (Cougar T1)
+//	2.46	Added SRS Overlay to ROSB06
+//	2.50a	Moved DF_Init to Global (reduced stack) and set GunPac/Arm to keyboard instead of DX21/22
+//	2.50b	Removed duplicate MapKeyR(0) mappings to free stack space.
+//	2.51	Removed Script_Debug print commands to free stack space.
+//	2.52	Added Flashlight to S3+LOSB02 Long
+//	2.63	Added WHIdle_Enabled parameter to WH Idle commands
+//
+//
+//=============================================================================
+
+
+
+int A10C_EngineStart;
+int A10C_EngineStop;
+int SwitchPosit;
+int A10CJett;			//added in 1.24 to track whether emergency stores jettison is currently pressed
+//int A10C_E_Brake_Curr;	//added in 1.33 for E-Brake discrete state
+int AAP_Page_Array;
+int AAP_Stpt_Array;
+int	AAP_Page_Cur;
+int	AAP_Stpt_Cur;
+
+
+
+int DCS_A10C(int led, int sp)
+{
+printf("DCS A-10C Warthog\xa");
+
+if (WarthogStick > 0)
+	{
+	MapKeyR(&Joystick, S2, EXEC("DCS_A10C_Init();"));
+	}
+else
+	{
+	MapKeyR(&HCougar, S2, EXEC("DCS_A10C_Init();"));
+	}
+if (sp > 0)	PlayWav("a10c.wav");
+if (led > 0)
+	{
+	//should see 0 * 0 0 to indicate that A-10C has been selected.
+	//Lights_RMFD(1);
+	Lights_Four(0,1,0,0,	ProfileSwapDelay+LED_Delay);
+//	DeferCall(ProfileSwapDelay+LED_Delay,&Lights_RLED1,0);	//Changed to Binary 4 in 1.28
+//	DeferCall(ProfileSwapDelay+2*LED_Delay,&Lights_RLED2,0);
+//	DeferCall(ProfileSwapDelay+3*LED_Delay,&Lights_LLED1,0);
+//	DeferCall(ProfileSwapDelay+4*LED_Delay,&Lights_LLED2,1);
+	
+	//DeferCall(ProfileSwapDelay+5*LED_Delay,&flashLLED1,1);
+	//DeferCall(ProfileSwapDelay+5*LED_Delay+2000,&flashLLED1,0);
+	}
+}
+
+int	SetMenu_A10C()
+{
+Set_Acft_Array_Cur(2510);
+}
+
+//program startup
+int DCS_A10C_Init()
+{
+Determine_Differential_Braking(DiffBraking_Enabled,CougarToeBrakes);
+
+SwitchPosit	 =	SEQ(						//Array for positions of pinky and boat switch
+						BoatSwitch_Fwd,		//0
+						BoatSwitch_Ctr,		//1
+						BoatSwitch_Aft,		//2
+						PinkySwitch_Fwd,	//3
+						PinkySwitch_Ctr,	//4
+						PinkySwitch_Aft		//5
+						);	
+
+//CMSP_Modes array moved to Global in 2.41
+
+FkeyPress			=	1;	//added in 2.02 to prevent Commswitch key activation on profile load.
+GraceFlag			=	0;
+Eng_Start_x			=	Eng_Start_A10C;
+Eng_Stop_x			=	Eng_Stop_A10C;
+Starter_Ind_x		=	Starter_Ind_A10C;
+MFD_Eng_Start		=	0;
+ProfID				=	2510;
+FixedGear			=	0;
+Helicopter			=	0;
+T6WheelBrake		=	0;
+TriggerZoomEnabled	=	1;
+GearCycleTimeUp		=	Gear_Retract_A10C;
+GearCycleTimeDn		=	Gear_Deploy_A10C;
+BrakeOnCycleTime	=	Airbrake_Out_A10C;
+BrakeOffCycleTime	=	Airbrake_In_A10C;
+S4AnalogBrake		=	JoyAsAnalogBrake;	//added in 1.33
+AnalogParkingBrake	=	JoyYParkingBrake;	//added in 1.33
+S4asNWS				=	0;					//added in 1.33
+S3holdNWS 			= 	0;	//added in 2.05
+XYAxisTrim			=	0;	//added in 1.34
+DMS_SnapView		=	0;	//added in 1.34
+WheelBrakeFull		=	1;	//added in 1.35
+ToeBrakesAvailable	=	2;	//added in 1.40; 2 applies a modifier to deconflict with SC
+NVG_Capable			=	1;	//added in 1.40, though not needed (A-10C exception)
+AB_Capable			=	0;	//added in 1.61
+Adjust_Backlighting	=	Adjust_Backlight_A10C;	//added in 1.62
+TriggerZoom_state  	= 	0;	//reset TriggerZoom
+NS430_Enabled		=	0;	//added in 2.21; not applicable to A-10C
+CrewCount			=	1;
+StationChangeModifier	=	0;
+WH_Use_TQS			=	0;	//added in 2.43
+Analog_TDC			=	1;	//added in 2.43
+EngineCount			=	2;	//added in 2.43
+Airbrake_Type_Cur	=	3;	//added in 2.43
+Airbrake_Swap		=	4;	//added in 2.43
+CommInitType		=	3;	//0 for none/custom, 1 for single channel (P-51), 2 for simple (dual channel), 3 for complex (3 channel).  added in 2.43
+StnCheckDisabled	=	2;	//added in 2.43.  Forced for single seat
+CurrentStation 		=	1;	//moved here in 2.43
+
+
+//Array Init (added in 1.35)
+AAP_Stpt_Array	= SEQ(	AAP_Stpt_Fpln,
+						AAP_Stpt_Mark,
+						AAP_Stpt_Msn	);
+AAP_Page_Array	= SEQ(	AAP_Page_Other,
+						AAP_Page_Posit,
+						AAP_Page_Steer,
+						AAP_Page_Waypt	);
+
+
+
+printf("DCS A-10C Warthog Config (Profile v%i.%i):\xa",MajorVersion,MinorVersion);
+PlayWavSel(ProfID,abs(Init_Run - 1),DCSFP_Enabled,MFDisplayEnabled);	//added in 1.61, DCSFP added in 2.05, MFDisplay added in 2.29
+Pause_TrackIR(0);
+AirBrake_Init(AirBrkFlash);	//moved to individual modules in 1.22
+MFD_Init(ProfID);
+	printf("   Map HOTAS for DCS A-10C Warthog:\xa");
+	DCS_Axis_Init(ProfID,EngineCount,Analog_TDC);
+
+		printf("      Button Mapping:\xa");
+			printf("         Shift Commands: S3 momentary...");
+			if (WarthogStick > 0)
+				{
+				if (WarthogThrottle > 0) SetShiftButton (&Joystick, S3, &Throttle, 0, 0);
+				else SetShiftButton (&Joystick, S3, &HCougar, 0, 0);
+				MapKey	(&Joystick, S3, BTN_S3P);		//DX3 short, long(er) for modifier and eject check, moved here in 0.53, removed S4 and changed argument to "RudderPedals"
+				MapKeyR	(&Joystick, S3, BTN_S3R);		//added in 0.53 to release "RudderPedals" argument in S3Shifted
+				}
+			else SetShiftButton(&HCougar, S3, &HCougar, 0, 0);
+				MapKey	(&HCougar, S3, BTN_S3P);		//DX3 short, long(er) for modifier and eject check, moved here in 0.53, removed S4 and changed argument to "RudderPedals"
+				MapKeyR	(&HCougar, S3, BTN_S3R);		//added in 0.53 to release "RudderPedals" argument in S3Shifted
+			printf("Done!\xa");	
+			printf("         Stick Buttons...");
+			if (WarthogStick > 0)	
+				{
+				MapKeyIO(&Joystick, TG1, EXEC("TriggerZoom_toggle(-1,AirBrkFlash,GearState);"), CHAIN(DX1,EXEC("TriggerZoom_in();"))	);
+				MapKeyRIO(&Joystick,TG1, UP+DX1, EXEC("ActKey(ZoomIn_slow); DeferCall(KBDelay,&TriggerZoom_out,0);"));				//ActKey(DX1) added in 1.21 to force DX1 release if stuck
+
+				MapKey(&Joystick, TG2, DX6);
+//				MapKeyR(&Joystick, TG2, 0);
+				MapKey(&Joystick, S1, DX5);
+				MapKey(&Joystick, S2, DX2);
+				MapKeyR	(&Joystick,	S2, 0);
+				MapKeyIO(&Joystick, S4, EXEC("S3S4Shifted();"), EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,0);"));	//allows DX4 or wheelbrakes; diffbraking added in 0.24, dx 30 removed for test in 26, DX4 incorporated into DiffBraking in 0.32
+				MapKeyRIO(&Joystick, S4, 0, EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,1);"));
+				}
+			else
+				{
+				MapKeyIO(&HCougar, TG1, EXEC("TriggerZoom_toggle(-1,AirBrkFlash,GearState);"), CHAIN(DX1,EXEC("TriggerZoom_in();"))	);
+				MapKeyRIO(&HCougar,TG1, UP+DX1, EXEC("ActKey(ZoomIn_slow); DeferCall(KBDelay,&TriggerZoom_out,0);"));				//ActKey(DX1) added in 1.21 to force DX1 release if stuck
+
+				MapKey(&HCougar, TG2, DX6);
+//				MapKeyR(&HCougar, TG2, 0);
+				MapKey(&HCougar, S1, DX5);
+				MapKey(&HCougar, S2, DX2);
+				MapKeyR	(&HCougar,	S2, 0);
+				MapKeyIO(&HCougar, S4, EXEC("S3S4Shifted();"), EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,0);"));	//allows DX4 or wheelbrakes; diffbraking added in 0.24, dx 30 removed for test in 26, DX4 incorporated into DiffBraking in 0.32
+				MapKeyRIO(&HCougar, S4, 0, EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,1);"));
+				}
+			printf("Done!\xa");	
+			
+			H1_Init(TrackIR, PadlockEnabled, ProfID);	//moved to individual routines in 1.27 for trim reset removal on helos
+			CommState_Off(1,ProfID,1,0,1); //Maps Hats 2-4
+			A10C_Throttle_Init();
+
+printf("Done.\xa");
+
+printf(" DCS A-10C Warthog Init Complete!\xa");	
+
+ActKey(DX1);				//just in case DX1 lingers from trigger activation
+//Lights_ALL(0);				//Says Init Complete
+//	DeferCall(LED_Delay,&Lights_RLED1,0);	//changed to binary in 1.28
+//	DeferCall(2*LED_Delay,&Lights_RLED2,0);
+//	DeferCall(3*LED_Delay,&Lights_LLED1,0);
+
+if (Init_Run == 0) Gear_Ind_Init(GearDn_Ind_Default,FixedGear,Helicopter,AirBrkFlash);
+
+if (Adjust_Backlighting > 0)
+	{
+	LMFD_Backlight(X(MFD_Lt,MFD_Default_Setting));
+	DeferCall(LED_Delay,&RMFD_Backlight,X(MFD_Lt,MFD_Default_Setting));
+	LMFD_Pwr_State = MFD_Default_Setting;
+	RMFD_Pwr_State = MFD_Default_Setting;
+	DeferCall(2*LED_Delay,&WHT_Power,MFD_Default_Setting);	//added in 1.61
+	}
+else DeferCall(LED_Delay,&Backlight_Max_Init,0);
+
+if (WarthogThrottle > 0) DeferCall(3*LED_Delay,&WHT_Lights_Dn_D,0);
+
+if (GearDn_Ind_Default > 0) Map_Cougar_ToeBrakes(ToeBrakesAvailable);//added in 1.40;
+else
+	{
+	CMSP_Mode_Cur = 3;		//added in 0.52: Defaults CMSP Mode to Semi if gear defaults to up (air start)
+	Map_Cougar_ToeBrakes(0);//added in 1.40
+	}
+
+printf("DCS A-10C MFD Defaults (%i,%i):\xa",LMFD_Pwr_State,RMFD_Pwr_State);
+printf("A-10C Warthog Config Complete!\xa");	
+Set_Acft_Array_Cur(ProfID);
+//DeferCall(LED_Delay,&flashRLED2,1);	//added in 1.28 since you can't see LED shift after profile selection
+//DeferCall(LED_Delay+2000,&flashRLED2,0);
+}
+
+
+int	A10C_Throttle_Init()
+{
+if (WarthogThrottle > 0)
+	{		
+				printf("         Throttle Buttons...");	
+				MapKey	(&Throttle,	SC,	DX19);
+//				MapKeyR	(&Throttle, SC, 0);							//Added in 0.51 to prevent P-51D CommState Release.
+
+				MapKey	(&Throttle,	LTB,	DX24);
+//				MapKeyR	(&Throttle,	LTB,	0);
+				MapKey	(&Throttle,	APENG,	DX24);
+
+				MapKey	(&Throttle,	CSU,	A10C_CSU_DX);
+				MapKey	(&Throttle,	CSD,	A10C_CSD_DX);
+				MapKey	(&Throttle,	CSL,	A10C_CSL_DX);
+				MapKey	(&Throttle,	CSR,	A10C_CSR_DX);
+			printf("comm init...");
+				Complex_A10C_Comm_Init_WH(TS3_DX,TS3_DX);
+			printf("continued...");
+				//MapKey	(&Throttle,	CHF,	); //factored with TriggerZoom_MapGearDn_WH()
+				MapKeyIO(&Throttle,	CHB,	TEMPO(0,Gear_Up,GearUpTempo),	A10C_CHB);
+//				MapKeyR	(&Throttle,	CHF,	0);	//Added for F-86 in 1.69
+//				MapKeyR	(&Throttle,	CHB,	0);	//Added for F-86 in 1.69
+				
+				MapKey	(&Throttle,	PSF,	PULSE+PinkySwitch_Fwd);
+				MapKey	(&Throttle,	PSB,	PULSE+PinkySwitch_Aft);	
+				MapKey	(&Throttle,	PSM,	TEMPO(0,PULSE+PinkySwitch_Ctr,DoubleTap));		
+			
+			if (WHIdle_Enabled > 0)
+				{
+				MapKeyIO(&Throttle,	IDLERON,	0,	CHAIN(PULSE+Engine_Right_Stop, EXEC("Engine_Shutdown_Ind(2, Engine_Shutdown_Ind_Time, 1);if ((Adjust_Backlighting > 0) & (Throttle[APUOFF]) & (Throttle[IDLELON])) WHT_Pwr_Set(0);")));
+				MapKeyIO(&Throttle,	IDLEROFF,	0,	CHAIN(PULSE+Engine_Right_Start, EXEC("Engine_Start_Ind(2, Starter_Ind_x, 1);if (Adjust_Backlighting > 0) WHT_Pwr_Set(3);")));
+				MapKeyIO(&Throttle,	IDLELON,	0,	CHAIN(PULSE+Engine_Left_Stop, EXEC("Engine_Shutdown_Ind(1, Engine_Shutdown_Ind_Time, 1);if ((Adjust_Backlighting > 0) & (Throttle[APUOFF]) & (Throttle[IDLERON])) WHT_Pwr_Set(0);")));
+				MapKeyIO(&Throttle,	IDLELOFF,	0,	CHAIN(PULSE+Engine_Left_Start, EXEC("Engine_Start_Ind(1, Starter_Ind_x, 1);if (Adjust_Backlighting > 0) WHT_Pwr_Set(3);")));
+				}
+				
+				MapKeyIO(&Throttle,	LDGH,	TEMPO(0,EXEC("EjectCheckLDGH(ProfID);"), DefTempo), CHAIN(DX30,DX31,D(ModDelay),DX5,DX17));	//DX Master Caution and Landing Gear Horn Silence together
+																								//TEMPO(A10C_LDGH,USB_C,DefTempo)	);		//I Long Eject/Toggle Gearstate, /O Short Gear Horn, Long for Master Caution
+
+			printf("Base Switches...");
+				MapKeyIO(&Throttle,	EFLNORM,	CHAIN(PULSE+A10C_EFLNORM,EXEC("if (AirBrkFlash > -1) Lights_WHT4(0);")),		CHAIN(PULSE+MasterArm_On_DX,EXEC("if (AirBrkFlash > -1) Lights_WHT1(1);")));
+//				MapKeyR	(&Throttle,	EFLNORM,	0);
+				MapKeyIO(&Throttle,	EFLOVER,	CHAIN(PULSE+A10C_EFLOVER,EXEC("if (AirBrkFlash > -1) Lights_WHT4(1);")),		CHAIN(PULSE+MasterArm_Safe,	EXEC("if (AirBrkFlash > -1) Lights_WHT1(0);")));
+				MapKeyIO(&Throttle,	EFRNORM,	CHAIN(PULSE+A10C_EFRNORM,EXEC("if (AirBrkFlash > -1) Lights_WHT5(0);")),		CHAIN(PULSE+GunPac_On,	EXEC("if (AirBrkFlash > -1) Lights_WHT2(1);")));
+//				MapKeyR	(&Throttle,	EFRNORM,	0);
+				MapKeyIO(&Throttle,	EFROVER,	CHAIN(PULSE+A10C_EFROVER,EXEC("if (AirBrkFlash > -1) Lights_WHT5(1);")),		CHAIN(PULSE+GunPac_Arm,	EXEC("if (AirBrkFlash > -1) Lights_WHT2(0);")));
+				
+				MapKeyIO(&Throttle,	EOLIGN,		CHAIN(LaserSwitch_On_DX,EXEC("if (AirBrkFlash > -1) Lights_WHT3(1);")),		A10C_EOLIGN);
+				MapKeyIO(&Throttle,	EOLNORM,	0,						PULSE+A10C_EOLNORM);
+				MapKeyIO(&Throttle,	EOLMOTOR,	CHAIN(PULSE+LaserSwitch_Safe,EXEC("if (AirBrkFlash > -1) Lights_WHT3(0);")),	PULSE+A10C_EOLMOTOR);
+				MapKeyIO(&Throttle,	EORIGN,		TGP_Toggle_DX,			A10C_EORIGN);
+				MapKey	(&Throttle,	EORNORM,							PULSE+A10C_EORNORM);
+				MapKey	(&Throttle,	EORMOTOR,							PULSE+A10C_EORMOTOR);
+//				MapKeyR	(&Throttle,	EOLIGN,		0);
+//				MapKeyR	(&Throttle,	EORIGN,		0);
+				
+				MapKey	(&Throttle,	APUON,	CHAIN(PULSE+A10C_APU_On_DX,	EXEC("if (Adjust_Backlighting > 0) WHT_Pwr_Set(3);"))	);
+				MapKey	(&Throttle,	APUOFF,	CHAIN(PULSE+A10C_APU_Off,	EXEC("if ((Adjust_Backlighting > 0) & (Throttle[IDLELON]) & (Throttle[IDLERON])) WHT_Pwr_Set(0);"))	);
+				
+				MapKeyIO(&Throttle,	APPAT,	PULSE+IFFCC_On,				PULSE+A10C_AP_Path);
+				MapKeyIO(&Throttle,	APAH,	PULSE+IFFCC_Test,			PULSE+A10C_AP_AltHdg);
+				MapKeyIO(&Throttle,	APALT,	PULSE+IFFCC_Off,			PULSE+A10C_AP_Alt);
+				
+				MapKey	(&Throttle,	RDRNRM,	PULSE+RadAlt_Norm_DX);
+				MapKey	(&Throttle,	RDRDIS,	PULSE+RadAlt_Disable);
+				
+				MapKey	(&Throttle,	EACON,	PULSE+EAC_On_DX);
+				MapKey	(&Throttle,	EACOFF,	PULSE+EAC_Off);
+			
+				FC3_Map_Flaps_WH(1);	//maps same as A-10A
+				
+			printf("...Done!\xa");
+	printf("   HOTAS Warthog Throttle Mapping Complete.\xa\xa");			
+	}
+else
+	{
+			printf("         TQS Buttons...");	
+
+				if (TrackIR < 2)	//TIR/POV
+						MapKeyIO(&HCougar, T1, TEMPO(EXEC("SnapViewModRelease(KBPress, ProfID);"), EXEC("SetSnapViewT(3,KBPress*2, ProfID);"), DefTempo), TEMPO(0, DX19, DefTempo));	//ProfID added to release in 1.35
+				else	MapKeyIO(&HCougar, T1, DX19,VR_Spyglass);	//ProfID added to release in 1.35
+//				MapKeyR	(&HCougar, T1, 0);							//Added in 0.51 to prevent P-51D CommState Release.
+
+				Complex_A10C_Comm_Init(TS3_DX,TS3_DX);
+
+				MapKey	(&HCougar,	T6, TEMPO(DX24, EXEC("EjectCheckT6(ProfID);"), DefTempo));		//Will check for ejection parameters if held for 500ms.
+//				MapKeyR	(&HCougar,	T6, 0);
+
+			printf("Switch Initial Check...");
+				A10C_Switch_Initial_Check();
+			printf("...Done!\xa");
+	printf("   HOTAS Cougar Mapping Complete.\xa\xa");			
+	}
+Airbrake_Map_Set(Airbrake_Type_Cur,Airbrake_Swap);	//added in 1.23, switched to type 3 in 1.29
+Global_DF_Init(WarthogThrottle,ProfID);
+//A10C_DF_Init(WarthogThrottle);
+}
+
+int A10C_HCS_Init(int prof = 2510, int force = 0)	//force added in 1.69 as passthru to allow for initial TGZ_MapGearDn if TGZ disabled.
+{
+//		if (Script_Debug) printf("         Hat2 (TMS)...");	
+			MapKeyIO(&HCougar, 	H2U,	Gear_Flaps_Up, 						//I 	
+										DX7);								//O
+			if (TrackIR < 2)
+				{
+				MapKeyIO(&HCougar, 	H2R,	Std_SnapView2,	DX8);				//Snapview2 or DX8
+				MapKeyIO(&HCougar, 	H2L,	Std_SnapView1,	DX10);				//Snapview1 or DX10
+				}
+			else
+				{
+				MapKey	(&HCougar, 	H2R,	DX8);	
+				MapKey	(&HCougar, 	H2L,	DX10);	
+				}
+			TriggerZoom_MapGearDn(TriggerZoom_state, prof,0,force);
+//		if (Script_Debug) printf("...Done!\xa");	
+//		if (Script_Debug) printf("         Hat3 (DMS)...");		
+			MapKey	(&HCougar, 	H3U,	DX11);					
+			MapKey	(&HCougar, 	H3R,	DX12);
+			MapKey	(&HCougar, 	H3D,	DX13);
+			MapKey	(&HCougar, 	H3L,	DX14);			
+//		if (Script_Debug) printf("...Done!\xa");	
+//		if (Script_Debug) printf("         Hat4 (CMS)...");	
+			MapKey	(&HCougar, 	H4U,	DX15);
+			MapKey	(&HCougar, 	H4L,	DX18);
+			MapKey	(&HCougar, 	H4D,	DX17);
+			if (TrackIR < 2)
+					MapKeyIO(&HCougar, 	H4R,	TEMPO(EXEC("SnapViewModRelease(KBPress, ProfID);"),EXEC("SetSnapViewT(9,KBPress*2,ProfID);"), DefTempo),DX16);	//Snapview9 (CMSP) or DX16
+			else	MapKey	(&HCougar, 	H4R,	DX16);
+//		if (Script_Debug) printf("...Done!\xa");		
+}
+int A10C_WHS_Init(int prof = 2510, int force = 0)	//force added in 1.69 as passthru to allow for initial TGZ_MapGearDn if TGZ disabled. must force if no wh throttle
+{
+//		if (Script_Debug) printf("         Hat2 (TMS)...");	
+			if (TrackIR < 2)
+				{
+				MapKeyIO(&Joystick, 	H2R,	Std_SnapView2,	DX8);		//Snapview2 or DX8
+				MapKeyIO(&Joystick, 	H2L,	Std_SnapView1,	DX10);		//Snapview1 or DX10
+				}
+			else
+				{
+				MapKey	(&Joystick, 	H2R,	DX8);
+				MapKey	(&Joystick, 	H2L,	DX10);
+				}
+			//MapKeyIO(&Joystick, 	H2U,	A10C_SnapView9,	DX7);		//Snapview9 (CMSP) or DX7
+			//MapKeyIO(&Joystick,	H2D,	A10C_SnapView3,	DX9);		//SnapView3 (CDU) or DX9
+			TriggerZoom_MapGearDn_WH(TriggerZoom_state, prof, 0, force);
+//		if (Script_Debug) printf("...Done!\xa");	
+//		if (Script_Debug) printf("         Hat3 (DMS)...");		
+			MapKey	(&Joystick, 	H3U,	DX11);					
+			MapKey	(&Joystick, 	H3R,	DX12);
+			MapKey	(&Joystick, 	H3D,	DX13);
+			MapKey	(&Joystick, 	H3L,	DX14);
+//		if (Script_Debug) printf("...Done!\xa");	
+//		if (Script_Debug) printf("         Hat4 (CMS)...");	
+			MapKey	(&Joystick, 	H4U,	DX15);
+			MapKey	(&Joystick, 	H4L,	DX18);
+			MapKey	(&Joystick, 	H4D,	DX17);	
+			MapKey	(&Joystick, 	H4R,	DX16);
+			MapKey	(&Joystick,		H4P,	CHAIN(DX30,D(ModDelay),DX18));	//consider changing to keystroke			
+//		if (Script_Debug) printf("...Done!\xa");		
+}
+
+//int	A10C_DF_Init(int wh)
+//{
+//if (wh > 0)
+//	{
+//	MapKey	(&Throttle,	BSB,	PULSE+DX25);
+////	MapKeyR	(&Throttle,	BSB,	0);
+//	MapKey	(&Throttle,	BSF,	PULSE+DX26);
+////	MapKeyR	(&Throttle,	BSF,	0);
+//	MapKey	(&Throttle,	BSM,	TEMPO(0,PULSE+BoatSwitch_Ctr,	DoubleTap));	//individual key commands added in 1.24 (DX29 moved to E-brake) TEMPO(0,PULSE+PinkySwitch_Ctr,DoubleTap)
+//	}
+//else
+//	{
+//	MapKey	(&HCougar,	T7, PULSE+DX25);
+////	MapKeyR	(&HCougar,	T7, 0);
+//	MapKey	(&HCougar,	T8, PULSE+DX26);
+////	MapKeyR	(&HCougar,	T8,	0);
+//	MapKeyIO(&HCougar,	DFM,TEMPO(0,PULSE+PinkySwitch_Ctr,DoubleTap),		//delay in case going straight between T7/T8
+//							TEMPO(0,PULSE+BoatSwitch_Ctr,	DoubleTap));	//individual key commands added in 1.24 (DX29 moved to E-brake)	
+//	}
+//}
+
+
+int	A10C_MFD_Init()
+{
+//===================================
+//		Standard MFD Buttons
+//===================================
+
+	printf("   Map Cougar Left  MFD (DX31)...");	
+//LOSB 1 in Init
+					MapKeyIO(&LMFD, OSB02,	TEMPO(DX_LOSB02,M2k_Flashlight,DefTempo),	DX_LOSB02);
+					MapKey	(&LMFD, OSB03,	DX_LOSB03);
+					MapKeyIO(&LMFD, OSB04,	TEMPO(0, CHAIN(PULSE+A10C_Stores_Jett_DX,EXEC("A10CJett = 1; if(AirBrkFlash) flashRLED1(1,250); else Lights_RLED1(1);")), LongTempo),	//stores jett is a toggle, so 2 pulses separated by 2 seconds
+											DX_LOSB04);
+					MapKeyRIO(&LMFD,OSB04,	CHAIN(EXEC("if(A10CJett) ActKey(KEYON+PULSE+A10C_Stores_Jett_DX);"), D(ModDelay), EXEC("A10CJett = 0; if(AirBrkFlash) flashRLED1(0,250); DeferCall(LED_Delay,&Lights_RLED1,0);")),0);
+					MapKey	(&LMFD, OSB05,	DX_LOSB05);
+//					MapKeyR	(&LMFD,	OSB05,	0);	//For F-5E			
+//LOSB 6-10
+					MapKeyIO(&LMFD,	OSB06,	TEMPO(CHAIN(DX31,D(ModDelay),DX6,EXEC("if (WarthogThrottle > 0) Lights_WHT1(1);")),CHAIN(MasterArm_Safe,	EXEC("if (WarthogThrottle > 0) Lights_WHT1(0);")),LongTempo),	DX_LOSB06);	//Assign A-10C Shifted Long for Master Arm Safe
+					MapKeyIO(&LMFD,	OSB07,	TEMPO(CHAIN(DX31,D(ModDelay),DX7,EXEC("if (WarthogThrottle > 0) Lights_WHT3(1);")),CHAIN(LaserSwitch_Safe,	EXEC("if (WarthogThrottle > 0) Lights_WHT3(0);")),LongTempo),	DX_LOSB07);
+//					MapKeyR	(&LMFD,	OSB07,	0);	//for Bf109
+					MapKeyIO(&LMFD,	OSB08,	TEMPO(0,DX_LOSB08,LongTempo), DX_LOSB08);				// Make TGP Power TEMPO Long
+					MapKey	(&LMFD,	OSB09,	DX_LOSB09);
+					MapKey	(&LMFD,	OSB10,	DX_LOSB10);
+
+//LOSB 11-15, 16
+					MapKey	(&LMFD,	OSB11,	DX_LOSB11);
+					MapKey	(&LMFD,	OSB12,	DX_LOSB12);
+					MapKeyIO(&LMFD,	OSB13,	SEQ(ALTSCE_Delta,ALTSCE_Radar,ALTSCE_Baro), 	DX_LOSB13);	//Assign A-10C Shifted Alt Sce toggle; Baro last because it's the default setting (cycles first to delta in middle)
+					MapKeyIO(&LMFD,	OSB14,	TEMPO(DX_LOSB14,RadAlt_Disable,LongTempo),		DX_LOSB14);
+					MapKeyIO(&LMFD,	OSB15,	TEMPO(DX_LOSB15,EAC_Off,LongTempo),				DX_LOSB15);
+					MapKeyIO(&LMFD,	OSB16,	TEMPO(DX_LOSB16,Taxi_Ldg_Light_Off,LongTempo),	DX_LOSB16);
+
+//LOSB 17-19
+					MapKey	(&LMFD,	OSB17,	DX_LOSB17);
+					MapKeyIO(&LMFD,	OSB18,	TEMPO(DX_LOSB18,A10C_APU_Off,LongTempo),	DX_LOSB18);	//added in 1.24 for APU Start (short)/Stop (long)
+					MapKey	(&LMFD,	OSB19,	DX_LOSB19);
+		
+//LMFD 20 in Init
+
+//Left Rocker Switches
+//SYM
+		MapKeyIO(&LMFD,	SYMU,	TEMPO(CHAIN(KB_LSYMU,EXEC("if (WarthogThrottle > 0) Lights_WHT2(1);")),CHAIN(GunPac_Safe,EXEC("if (WarthogThrottle > 0) Lights_WHT2(0);")),LongTempo),	KB_LSYMU);
+		MapKeyIO(&LMFD,	SYMD,	TEMPO(CHAIN(KB_LSYMD,EXEC("if (WarthogThrottle > 0) Lights_WHT2(0);")),CHAIN(GunPac_Safe,EXEC("if (WarthogThrottle > 0) Lights_WHT2(0);")),LongTempo),	KB_LSYMD);
+
+//CON
+		MapKey	(&LMFD,	CONU,	KB_LCONU);
+		MapKey	(&LMFD,	COND,	KB_LCOND);
+		
+//BRT
+//Assign A-10C BRT to Day/Night MFD when long (MFD_DN = 1)
+		MapKeyIO(&LMFD,	BRTU,	TEMPO(EXEC("LMFD_Power(LMFD_Pwr_State+1,1);"), Ldg_Light_On, DefTempo),		KB_LBRTU);	
+		MapKeyIO(&LMFD,	BRTD,	TEMPO(EXEC("LMFD_Power(LMFD_Pwr_State-1,1);"), Taxi_Light_On, DefTempo),	KB_LBRTD);
+		
+
+	printf("Done!\xa");
+
+	printf("   Map Cougar Right MFD (DX32)...");
+
+//ROSB 1-10 at first part of routine
+		MapKey	(&RMFD,	OSB01,	DX_ROSB01);
+		MapKey	(&RMFD,	OSB02,	DX_ROSB02);
+		MapKey	(&RMFD,	OSB03,	DX_ROSB03);
+		MapKey	(&RMFD,	OSB04,	DX_ROSB04);
+		MapKeyIO(&RMFD,	OSB05,	CMSP_Switches_Toggle,				DX_ROSB05);						//Assign A-10C OSB5 Shifted to CMSP Switches
+//		MapKeyR	(&RMFD,	OSB05,	0);
+		
+		if ((TARS > 0) & (Overlay_Enable_SRS > 0))
+			MapKeyIO(&RMFD,	OSB06,	TEMPO(DX_ROSB06,Rdo_Ovly,DefTempo),DX_ROSB06);
+		else
+			MapKey	(&RMFD,	OSB06,	DX_ROSB06);
+		MapKeyIO(&RMFD,	OSB07,	TEMPO(DX_ROSB07, A10C_02_Emer, LongTempo),		//S3+short O2 Normal, Long 02 Emergency		
+								DX_ROSB07);
+//		MapKeyR	(&RMFD,	OSB07,	0);
+		MapKey	(&RMFD,	OSB08,	DX_ROSB08);
+		MapKey	(&RMFD,	OSB09,	DX_ROSB09);
+		MapKey	(&RMFD,	OSB10,	DX_ROSB10);	
+//ROSB 11-15
+		MapKey	(&RMFD,	OSB11,	DX_ROSB11);
+		MapKey	(&RMFD,	OSB12,	DX_ROSB12);
+		MapKey	(&RMFD,	OSB13,	DX_ROSB13);
+		MapKey	(&RMFD,	OSB14,	DX_ROSB14);
+		MapKey	(&RMFD,	OSB15,	DX_ROSB15);
+//		MapKeyR	(&RMFD,	OSB13,	0);	//for Spitfire Engine Start	
+//		MapKeyR	(&RMFD,	OSB14,	0);	//for Spitfire Engine Start		
+//ROSB 16-20
+//A-10C special toggles	
+		MapKey	(&RMFD,	OSB16,	DX_ROSB16);
+		MapKey	(&RMFD,	OSB17,	DX_ROSB17);
+		MapKeyIO(&RMFD,	OSB18,	TEMPO(DX_ROSB18,A10C_Posit_Lts_Off,LongTempo),	//s3+long for lights off, short lights on (steady)
+								DX_ROSB18);
+		MapKeyIO(&RMFD,	OSB19,	TEMPO(DX_ROSB19,A10C_Posit_Lts_Off,LongTempo),	//s3+long for lights off, short lights on (flash)
+								DX_ROSB19);
+
+		if (Scratchpad_Enabled)
+			MapKeyIO(&RMFD,	OSB20,	TEMPO(DX_ROSB20,	Scratchpad_Hotkey,	DefTempo),	
+									DX_ROSB20);
+		else
+			MapKey(&RMFD,	OSB20,	DX_ROSB20);
+
+
+//Right Rocker Switches
+//SYM
+//Sets CMSP Mode for A-10C (Shifted)
+		MapKeyIO(&RMFD,	SYMU,	EXEC("SetCMSPMode(5);" ), KB_RSYMU);
+		MapKeyIO(&RMFD,	SYMD,	EXEC("SetCMSPMode(-1);"), KB_RSYMD);
+		MapKeyR	(&RMFD,	SYMU,	0);	//added in 1.61 to account for context sensitive R in M2000C
+		MapKeyR	(&RMFD,	SYMD,	0);
+		
+//CON
+		MapKey	(&RMFD,	CONU,	KB_RCONU);
+		MapKey	(&RMFD,	COND,	KB_RCOND);
+		MapKeyR	(&RMFD,	CONU,	0);	//added in 1.24 to account for context sensitive R in UH-1
+		MapKeyR	(&RMFD,	COND,	0);
+		
+//BRT
+//Assign A-10C BRT to Day/Night MFD when long (MFD_DN = 1)
+	MapKeyIO(&RMFD,	BRTU,	TEMPO(EXEC("RMFD_Power(RMFD_Pwr_State+1,1);"), Ldg_Light_On, 	DefTempo),	KB_RBRTU);
+	MapKeyIO(&RMFD,	BRTD,	TEMPO(EXEC("RMFD_Power(RMFD_Pwr_State-1,1);"), Taxi_Light_On, 	DefTempo),	KB_RBRTD);
+
+//GAIN
+	MapKey	(&RMFD,	GAINU,	KB_RGAINU);
+	MapKey	(&RMFD,	GAIND,	KB_RGAIND);
+
+	printf("Done!\xa");	
+}
+int A10CMapEbrk(int state, int prof = 2510)
+{
+if (WarthogThrottle > 0) A10CMapSPDF(state,prof);
+else A10CMapT10(state,prof);
+}
+int A10CMapSPDF(int state, int prof = 2510)
+{
+if (state > 0)
+	{
+//	if (Script_Debug) printf("Analog Momentary Brake (Gear Down)");	//for test purposes
+	MapKeyIO(&Throttle,	SPDF, 	A10C_E_Brake_DX,	Analog_AirbrakeOff);
+	//if (prof == 2508)
+	//		MapKeyRIO(&Throttle,SPDF, 	AV8_E_Brake_Rel,	Analog_AirbrakeStop);
+	//else	
+	MapKeyRIO(&Throttle,SPDF, 	0,					Analog_AirbrakeStop);
+	}
+else
+	{
+//	if (Script_Debug) printf("Analog Momentary Brake (Gear Up)");		//for test purposes
+	MapKey	(&Throttle,	SPDF, 						Analog_AirbrakeOff);
+	MapKeyR	(&Throttle,	SPDF, 						Analog_AirbrakeStop);
+	}
+}
+int A10CMapT10(int state, int prof = 2510)	//state is gear state (allows e-brake on ground
+{
+if (state > 0)
+	{
+//	if (Script_Debug) printf("Analog Momentary Brake (Gear Down)");	//for test purposes
+	MapKeyIO(&HCougar,	T10, 	A10C_E_Brake_DX,	Analog_AirbrakeOff);
+	//if (prof == 2508)
+	//		MapKeyRIO(&HCougar,	T10, 	AV8_E_Brake_Rel,	Analog_AirbrakeStop);
+	//else	
+	MapKeyRIO(&HCougar,	T10, 	0,					Analog_AirbrakeStop);
+	}
+else
+	{
+//	if (Script_Debug) printf("Analog Momentary Brake (Gear Up)");		//for test purposes
+	MapKey	(&HCougar,	T10, 			Analog_AirbrakeOff);
+	MapKeyR	(&HCougar,	T10, 			Analog_AirbrakeStop);
+	}
+}
+//*************************************************
+//			Boat Switch and Pinky Switch
+//*************************************************
+int	A10C_Switch_Initial_Check()
+{
+if (WarthogThrottle > 0) 	A10C_Initial_WH_Switch_Check();
+else						A10C_Initial_Dogfight_Check();
+}
+
+int	A10C_Initial_WH_Switch_Check()
+{
+if	(Throttle[BSB]) 	ActKey(KEYON+PULSE+DX25);
+else if(Throttle[BSF]) 	ActKey(KEYON+PULSE+DX26);
+else 					ActKey(KEYON+PULSE+BoatSwitch_Ctr);	//changed to key macro in 1.24
+
+if	(Throttle[PSB]) 		ActKey(KEYON+PULSE+PinkySwitch_Aft);		
+else if (Throttle[PSF]) 	ActKey(KEYON+PULSE+PinkySwitch_Fwd);	
+else						ActKey(KEYON+PULSE+PinkySwitch_Ctr);		//Keep as regular key to prevent timing dependencies
+
+if	(Throttle[APPAT])		ActKey(KEYON+PULSE+A10C_APPAT);
+else if (Throttle[APALT])	ActKey(KEYON+PULSE+A10C_APALT);
+else						ActKey(KEYON+PULSE+A10C_APAH);
+
+}
+
+int A10C_Initial_Dogfight_Check()
+{
+if(HCougar[T7]) ActKey(KEYON+PULSE+DX25);
+if(HCougar[T8]) ActKey(KEYON+PULSE+DX26);
+else 			ActKey(KEYON+PULSE+BoatSwitch_Ctr);	//changed to key macro in 1.24
+
+if (GearDn_Ind_Default) ActKey(KEYON+PULSE+PinkySwitch_Aft);		//default for ground ops
+else					ActKey(KEYON+PULSE+PinkySwitch_Ctr);		//Keep as regular key to prevent timing dependencies
+}
+
+
+int A10C_Switch_Posit(int num)	//obsolete in 0.33
+{
+ActKey(KEYON+PULSE+X(SwitchPosit,num));
+if ((num == 1) | (num == 4)) PinkyCenterState=1;
+else PinkyCenterState=0;
+}
+
+
+
+//	  CMSP Mode Toggle
+
+int SetCMSPMode(int md, int index = 5)	//index added in 2.41 for use with F-16C
+{
+//if (Script_Debug) printf("SetCMSPMode(%i,%i)\xa",md,index);
+if (md > index-1)													//fwd
+	{
+	if (CMSP_Mode_Cur >= index-1)		CMSP_Mode_Cur = index-1;	//makes sure value not above maximum, so you don't recycle past T
+	else 	CMSP_Mode_Cur = (CMSP_Mode_Cur+1)%index;				//States are -1 from actual Channel because the List starts at 0
+//	if (Script_Debug) printf(" Hi md:");
+	}
+else if (md < 0)													//back
+	{
+	if (CMSP_Mode_Cur <= 0)		CMSP_Mode_Cur = 0;					//makes sure value not below minimum, so you don't recycle past REM
+	else 	CMSP_Mode_Cur = (CMSP_Mode_Cur+(index-1))%index;				//States are -1 from actual Channel because the List starts at 0
+//	if (Script_Debug) printf(" Low md:");
+	}
+else CMSP_Mode_Cur = md;
+//if (Script_Debug) printf(" CMSP_Mode_Cur = %i\xa",CMSP_Mode_Cur);
+ActKey(KEYON+PULSE+X(CMSP_Modes,CMSP_Mode_Cur));					//0 starts the array
+}
+
+//	Emergency Brake Toggle
+int A10C_E_Brake_Set(int state)
+{
+if (	(state < 0)	|	(state > 1)	) state = abs(A10C_E_Brake_Curr-1);	//toggle if OOB
+if (state != A10C_E_Brake_Curr)
+	{
+	ActKey(KEYON+PULSE+A10C_E_Brake);
+	A10C_E_Brake_Curr = state;
+	}
+}
+
+
+//CDU/AAP Array Routines
+
+int	AAP_Stpt_Cycle(int posit, int loop = 0, int index = 3)		//posit is array position, index is max array size(starting with 1)
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)		AAP_Stpt_Cur = (AAP_Stpt_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)	AAP_Stpt_Cur = (AAP_Stpt_Cur+index-1)%index;		//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (AAP_Stpt_Cur < index-1))	AAP_Stpt_Cur = (AAP_Stpt_Cur+1)%index;			//posit > index will cycle by +1
+	else if ((posit < 0) & (AAP_Stpt_Cur > 0))			AAP_Stpt_Cur = (AAP_Stpt_Cur+index-1)%index;	//posit < 0 will cycle by -1 
+	}
+else				AAP_Stpt_Cur = posit;									//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(AAP_Stpt_Array,AAP_Stpt_Cur));
+}
+
+int	AAP_Page_Cycle(int posit, int loop = 0, int index = 4)		//posit is array position, index is max array size(starting with 1)
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)		AAP_Page_Cur = (AAP_Page_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)	AAP_Page_Cur = (AAP_Page_Cur+index-1)%index;		//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (AAP_Page_Cur < index-1))	AAP_Page_Cur = (AAP_Page_Cur+1)%index;			//posit > index will cycle by +1
+	else if ((posit < 0) & (AAP_Page_Cur > 0))			AAP_Page_Cur = (AAP_Page_Cur+index-1)%index;	//posit < 0 will cycle by -1 
+	}
+else				AAP_Page_Cur = posit;									//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(AAP_Page_Array,AAP_Page_Cur));
+}

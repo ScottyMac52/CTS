@@ -1,0 +1,1043 @@
+//==============================================================================
+//		DCS World Fw-190A8/D9 Dora for HOTAS Cougar/Warthog and Cougar MFDs
+//					by Don "Home Fries" Heumphreus
+//						last updated: 27OCT2021
+//
+//	Change Log:
+//	1.28	Initial Release
+//	1.29	Made Gear/Flaps LMFD only; Tied Fw190 Gear Down to TriggerZoom_MapGearDn() function
+//			Moved MFD mappings from DCS_Init
+//			Fw190_LdgGear_Cover_Array to DCS_Init
+//			modified Fw190_Settings_Init() for use with Bf-109
+//	1.33	Analog braking option added
+//	1.34	DX1 added to TG1 command (removed from TriggerZoom)
+//	1.35	Updated WheelBrakeFull argument for new DiffBraking() routine
+//	1.50	Added Warthog Compatibility
+//	1.53	Adjusted for new 2.0 module selection
+//	1.56	Enabled WAV files for aircraft selection
+//	1.62	Added Adjustable Backlighting
+//	1.66	Moved Fw190 CommState_Off routines here
+//			Added MapKeyR for ROSB13-14 for compatibilty with Spitfire
+//	1.69	Updated CommState_Off() call and force argument to HCS Init
+//	2.02	Set FkeyPress=1 on init to prevent Commswitch activation on profile load
+//	2.10	Improved VAICOM/SRS Compatibility
+//	2.21	Added NS430 compatibility
+//	2.28	Fixed bug preventing Bf-109 landing gear mapping
+//			Swapped EZ42 and Master Arm on WHT
+//	2.29	Added MFDisplay module selection
+//			Replaced 4 MFD Led functions with Lights_Four()
+//	2.30	Remapped Wingspan Incr/Decr to keyboard
+//	2.34a	Added HOTAS Module Selection to S3+SPDB/T9 Long
+//	2.40	Added Fw190A8
+//	2.43	Removed SnapViews for VR
+//	2.44	Added VR and Spyglass Zoom to VR
+//			Set Brake Cycle time (dummy value) to 1 to prevent poss DBZ
+//	2.44a	Adjusted H4D for SnapView3 (CB2 panel)
+//			Fixed D9 H4D/P mapping
+//	2.46	Moved ROSB20 to MFD_Init()
+//	2.50b	Removed duplicate MapKeyR(0) mappings to free stack space.
+//	2.63	Added WHIdle_Enabled parameter to WH Idle commands
+//
+//
+//==============================================================================
+
+
+
+
+//int Sight_Offset_State;	//tracks whether German sight offset is active; obsolete in 2.40
+
+//int	Fw190_LdgGear_Cover_Array;
+int	Fw190_LdgGear_Cover_Cur;
+
+int	Fw190_BombFuse_Array;
+int	Fw190_BombFuse_Cur;
+int	Fw190_Magneto_Array;
+int	Fw190_Magneto_Cur;
+int Fw190_Rocket_Emer_Rel_Cover_Cur;
+int	Fw190_Radio_Array;
+int	Bf109_Radio_Array;
+int	Fw190_Fueltank_Cur;
+int	Bf109_Boost_Cur;
+int	Bf109_Boost_Array;
+
+//int Fw190_Gov_Cur; //added in 2.45
+
+//int	Fw190_Starter_Ind;	//added in 2.40 for separate indications for A8 and D9
+
+
+int DCS_Fw190(int led, int sp, int prof = 3090)
+{
+if (prof == 3190)
+	{
+	printf("DCS Fw-190A-8 Anton\xa");
+	
+	if (WarthogStick > 0)
+		{
+		MapKeyR	(&Joystick,	S2,	EXEC("DCS_Fw190_Init(3190);"));
+		}
+	else
+		{
+		MapKeyR	(&HCougar,	S2,	EXEC("DCS_Fw190_Init(3190);"));
+		}
+	if (sp > 0)	PlayWav("fw190a8.wav");
+	if (led > 0)
+		{
+		//should see * 0 * * to indicate that Fw190a8 has been selected.
+		Lights_Four(1,0,1,1,	ProfileSwapDelay+LED_Delay);
+	//	DeferCall(ProfileSwapDelay+LED_Delay,&Lights_RLED1,0);
+	//	DeferCall(ProfileSwapDelay+2*LED_Delay,&Lights_RLED2,1);
+	//	DeferCall(ProfileSwapDelay+4*LED_Delay,&Lights_LLED2,0);
+	//	DeferCall(ProfileSwapDelay+3*LED_Delay,&Lights_LLED1,1);
+		//Lights_LMFD(1);
+		}
+	}
+else
+	{
+	printf("DCS Fw-190D9 Dora\xa");
+	
+	if (WarthogStick > 0)
+		{
+		MapKeyR	(&Joystick,	S2,	EXEC("DCS_Fw190_Init(3090);"));
+		}
+	else
+		{
+		MapKeyR	(&HCougar,	S2,	EXEC("DCS_Fw190_Init(3090);"));
+		}
+	if (sp > 0)	PlayWav("fw190d9.wav");
+	if (led > 0)
+		{
+		//should see * 0 0 * to indicate that Fw190 has been selected.
+		Lights_Four(1,0,0,1,	ProfileSwapDelay+LED_Delay);
+	//	DeferCall(ProfileSwapDelay+LED_Delay,&Lights_RLED1,0);
+	//	DeferCall(ProfileSwapDelay+2*LED_Delay,&Lights_RLED2,1);
+	//	DeferCall(ProfileSwapDelay+4*LED_Delay,&Lights_LLED2,0);
+	//	DeferCall(ProfileSwapDelay+3*LED_Delay,&Lights_LLED1,1);
+		//Lights_LMFD(1);
+		}
+	}
+}
+
+int	SetMenu_Fw190(int prof = 3090)
+{
+Set_Acft_Array_Cur(prof);
+}
+
+int SetMenu_Fw190A8()
+{
+SetMenu_Fw190(3190);
+}
+int SetMenu_Fw190D9()
+{
+SetMenu_Fw190(3090);
+}
+
+int Fw190_Array_Init(int prof = 3090)	//added in 1.40 for use with Bf-109
+{
+//Fw190_LdgGear_Cover_Array = SEQ(Fw190_LdgGear_Cover_Down,Fw190_LdgGear_Cover_Up);
+Fw190_BombFuse_Array = 	SEQ(	Fw190_BombFuse_DOV,
+								Fw190_BombFuse_DMV,
+								Fw190_BombFuse_Off,
+								Fw190_BombFuse_LMV,
+								Fw190_BombFuse_LOV);
+Fw190_Magneto_Array =	SEQ(	Fw190_Magneto_Off,
+								Fw190_Magneto_1,
+								Fw190_Magneto_2,
+								Fw190_Magneto_12);
+Fw190_Radio_Array	=	SEQ(	Fw190_Radio_Freq_1_DX,								
+								Fw190_Radio_Freq_2_DX,
+								Fw190_Radio_Freq_3_DX,
+								Fw190_Radio_Freq_4_DX);
+Bf109_Radio_Array	=	SEQ(	Bf109_Radio_Freq_1_DX,								
+								Bf109_Radio_Freq_2_DX,
+								Bf109_Radio_Freq_3_DX,
+								Bf109_Radio_Freq_4_DX);
+Bf109_Boost_Array	=	SEQ(	Bf109_Boost_Off,
+								Bf109_Boost_P1,
+								Bf109_Boost_P2,
+								Bf109_Boost_P12);
+
+//if (prof == 3190)	Fw190_Starter_Ind = Starter_Ind_Fw190A8;	//Added in 2.40
+//else				Fw190_Starter_Ind = Starter_Ind_Fw190;		//D9
+}
+
+int Fw190_Settings_Init(int state, int prof = 3090)	//prof added in 1.31 for use with Bf-109
+{
+if (state > 1) state = 1;
+else if (state < 0) state = 0;
+
+Rdo_Channel_Cur = 1;
+Fw190_Fueltank_Cur = 1;
+
+if (prof == 3090)	//condition added in 2.40
+	{
+	if (AirBrkFlash > -1)	//check added in 2.40
+		{
+		if (WarthogThrottle > 0)	//added in 1.40 for LED based on discrete switch state
+			{
+			if (Throttle[EFLNORM]) Lights_LLED1(1);
+			else Lights_LLED1(0);
+			}
+		else Lights_LLED1(abs(state-1));	//sets master arm opposite gear state
+		}
+	Fw190_Rocket_Emer_Rel_Set(1);						//exclusive to Fw190D9
+	}
+else if (prof == 3190)	//added in 2.40
+	{
+	if ((WarthogThrottle > 0) & (Throttle[APUOFF]))	Bf109_CH_Map(1,1,0);	//added in 1.29	//Governor
+	else Bf109_CH_Map(1,1,0);
+	}
+
+if (WarthogThrottle == 0) Fw190_Map_Starter(GearDn_Ind_Default,prof);	//moved here in 1.29
+Fw190_LdgGear_Cover_Cur = 0;
+
+if (state) 	Fw190_Magneto_Cur = 0;
+else		Fw190_Magneto_Cur = 3;
+Bf109_Boost_Cur = Fw190_Magneto_Cur;
+
+Fw190_BombFuse_Reset();
+
+if (prof == 3009)
+		{
+		Bf109_LdgGear_Map(Force_GearLock_Fw190,Fw190_LdgGear_Cover_Cur);	//added in 1.31
+		//Bf109_LTB_Map(state);												//added in 2.40; obsolete
+		}
+else	Fw190_LdgGear_Map(Force_GearLock_Fw190,Fw190_LdgGear_Cover_Cur,ProfID);	//added in 1.29
+
+}
+
+
+int DCS_Fw190_Init(int prof = 3090)
+{
+Determine_Differential_Braking(DiffBraking_Enabled,CougarToeBrakes);
+//AirBrake_Init(AirBrkFlash);	//moved to individual modules in 1.22
+
+//Declare Values
+FkeyPress			=	1;	//added in 2.02 to prevent Commswitch key activation on profile load.
+GraceFlag			=	0;
+Eng_Start_x			=	IdleDetentLow;
+Eng_Stop_x			=	IdleDetentLow;
+//Starter_Ind_x		=	Starter_Ind_Fw190;
+MFD_Eng_Start		=	0;
+ProfID				=	prof;
+FixedGear			=	0;
+Helicopter			=	0;
+T6WheelBrake		=	1;
+BrakeOnCycleTime	=	1;	//min value to prevent DBZ
+BrakeOffCycleTime	=	1;
+GearCycleTimeUp		=	Gear_Retract_Fw190;
+GearCycleTimeDn		=	Gear_Deploy_Fw190;
+TriggerZoomEnabled	=	1;
+S4AnalogBrake		=	JoyAsAnalogBrake*AnalogBrake_Warbird;	//added in 1.33, both values must be nonzero to enable S4AnalogBrake
+AnalogParkingBrake	=	JoyYParkingBrake;	//added in 1.33
+S4asNWS				=	0;					//added in 1.33
+S3holdNWS 			= 	0;	//added in 2.05
+XYAxisTrim			=	0;	//added in 1.34
+DMS_SnapView		=	0;	//added in 1.34
+WheelBrakeFull		=	1;	//added in 1.35
+Rdo_Channel_Cur 	=	1;	//Set to II
+ToeBrakesAvailable	=	1;	//added in 1.40
+NVG_Capable			=	0;	//added in 1.40
+AB_Capable			=	0;	//added in 1.61
+Adjust_Backlighting	=	Adjust_Backlight_Fw190;	//added in 1.62
+NS430_Enabled		=	NS430_Installed*NS430_Enabled_Fw190;	//added in 2.21
+CrewCount			=	1;
+StationChangeModifier	=	0;
+//BrakeOffCycleTime 	= 	1500;
+WH_Use_TQS			=	0;	//added in 2.43
+Analog_TDC			=	1;	//added in 2.43
+EngineCount			=	1;	//added in 2.43
+CommInitType		=	1;	//0 for none/custom, 1 for single channel (P-51), 2 for simple (dual channel), 3 for complex (3 channel).  added in 2.43
+StnCheckDisabled	=	2;	//added in 2.43.  Forced for single seat
+CurrentStation 		=	1;	//moved here in 2.43
+
+
+if (prof == 3190)	Starter_Ind_x		=	Starter_Ind_Fw190A8;
+else				Starter_Ind_x		=	Starter_Ind_Fw190;
+
+Pause_TrackIR(0);
+Fw190_Array_Init(ProfID);	//added in 1.40
+Fw190_Settings_Init(GearDn_Ind_Default);
+
+printf("Done\xa Execute DCS Fw-190D9 Dora Config (Profile v%i.%i):\xa",MajorVersion,MinorVersion);
+PlayWavSel(ProfID,abs(Init_Run - 1),DCSFP_Enabled,MFDisplayEnabled);	//added in 1.61, DCSFP added in 2.05, MFDisplay added in 2.29
+Pause_TrackIR(0);
+AnalogBrakePoll(0);	//added in 1.23
+MFD_Init(ProfID);
+	printf("   Map HOTAS Cougar/Warthog for DCS Fw-190D9 Dora Config:\xa");
+	DCS_Axis_Init(ProfID,EngineCount,Analog_TDC);
+
+
+
+			printf("         Shift Commands: S3 momentary...");
+			if (WarthogStick > 0)
+				{
+				if (WarthogThrottle > 0) 	SetShiftButton(&Joystick, S3, &Throttle, 0, 0);
+				else						SetShiftButton(&Joystick, S3, &HCougar, 0, 0);
+				MapKey	(&Joystick, S3, BTN_S3P);		
+				MapKeyR	(&Joystick, S3, BTN_S3R);	
+				}				
+			else
+				{
+				SetShiftButton(&HCougar, S3, &HCougar, 0, 0);
+				MapKey	(&HCougar, S3, BTN_S3P);		
+				MapKeyR	(&HCougar, S3, BTN_S3R);		
+				}				
+			printf("Done!\xa");
+
+			if (WarthogStick > 0)
+				{
+				printf("         Warthog Stick Buttons...");	
+				MapKeyIO(&Joystick, TG1, EXEC("TriggerZoom_toggle(-1,AirBrkFlash,GearState);"), CHAIN(DX1,EXEC("TriggerZoom_in();"))	);
+				MapKeyRIO(&Joystick,TG1, UP+DX1, EXEC("ActKey(ZoomIn_slow); DeferCall(KBDelay,&TriggerZoom_out,0);"));				//ActKey(DX1) added in 1.21 to force DX1 release if stuck
+
+				MapKey	(&Joystick, TG2,DX6);
+//				MapKeyR	(&Joystick, TG2,0);
+				if (prof == 3090)
+					{
+					if (WarthogThrottle > 0)	
+							MapKey	(&Joystick, S1, DX5);
+					else	MapKeyIO(&Joystick, S1, DX5, TEMPO(Fw190_EZ42_Gyro_Off, Fw190_EZ42_Gyro_On, ModTempo));
+					//MapKeyIO(&Joystick, S1, DX5, TEMPO(CHAIN(SnapView5t,EXEC("Sight_Offset_State=0;")), CHAIN(DOWN+DX5,D(Fw190_Sight_Offset),UP+DX5,EXEC("Sight_Offset_State=1;")), ModTempo));		//long moves view to right for set amount of time (max offset value), short resets view.  /I for master arm.
+					MapKeyIO(&Joystick, S4, EXEC("S3S4Shifted();"), EXEC("DiffBraking(RudderPedals,DiffBrakes,1,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,0);"));	//allows DX4 or wheelbrakes; diffbraking added in 0.24, dx 30 removed for test in 26, DX4 incorporated into DiffBraking in 0.32
+					MapKeyR	(&Joystick, S4, EXEC("DiffBraking(RudderPedals,DiffBrakes,1,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,1);"));						//GearState (argument 3) set to 1 for DiffBraking because there is no in-flight function for S4.
+					}				
+				else
+					{
+					MapKey	(&Joystick, S1, DX5);
+					MapKeyIO(&Joystick, S4, EXEC("S3S4Shifted();"), EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,0);"));	//allows DX4 or wheelbrakes; diffbraking added in 0.24, dx 30 removed for test in 26, DX4 incorporated into DiffBraking in 0.32
+					MapKeyRIO(&Joystick,S4, 0, EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,1);"));
+					}
+//				MapKeyR	(&Joystick, S1,	0);
+				MapKey	(&Joystick, S2, DX2);
+				MapKeyR	(&Joystick,	S2, 0);
+				}
+			else
+				{
+				printf("         Cougar Stick Buttons...");	
+				MapKeyIO(&HCougar, TG1, EXEC("TriggerZoom_toggle(-1,AirBrkFlash,GearState);"), CHAIN(DX1,EXEC("TriggerZoom_in();"))	);
+				MapKeyRIO(&HCougar,TG1, UP+DX1, EXEC("ActKey(ZoomIn_slow); DeferCall(KBDelay,&TriggerZoom_out,0);"));				//ActKey(DX1) added in 1.21 to force DX1 release if stuck
+
+				MapKey	(&HCougar, TG2,DX6);
+//				MapKeyR	(&HCougar, TG2,0);
+				if (prof == 3090)
+					{
+					//MapKeyIO(&HCougar, S1, DX5, TEMPO(CHAIN(SnapView5t,EXEC("Sight_Offset_State=0;")), CHAIN(DOWN+DX5,D(Fw190_Sight_Offset),UP+DX5,EXEC("Sight_Offset_State=1;")), ModTempo));		//long moves view to right for set amount of time (max offset value), short resets view.  /I for master arm.
+					if (WarthogThrottle > 0)
+							MapKey	(&HCougar, S1, DX5);
+					else	MapKeyIO(&HCougar, S1, DX5, TEMPO(Fw190_EZ42_Gyro_Off, Fw190_EZ42_Gyro_On, ModTempo));
+					MapKeyIO(&HCougar, S4, EXEC("S3S4Shifted();"), EXEC("DiffBraking(RudderPedals,DiffBrakes,1,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,0);"));	//allows DX4 or wheelbrakes; diffbraking added in 0.24, dx 30 removed for test in 26, DX4 incorporated into DiffBraking in 0.32
+					MapKeyR	(&HCougar, S4, EXEC("DiffBraking(RudderPedals,DiffBrakes,1,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,1);"));						//GearState (argument 3) set to 1 for DiffBraking because there is no in-flight function for S4.
+					}
+				else
+					{
+					MapKey	(&HCougar, S1, DX5);
+					MapKeyIO(&Joystick, S4, EXEC("S3S4Shifted();"), EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,0);"));	//allows DX4 or wheelbrakes; diffbraking added in 0.24, dx 30 removed for test in 26, DX4 incorporated into DiffBraking in 0.32
+					MapKeyRIO(&Joystick,S4, 0, EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,1);"));
+					}
+//				MapKeyR	(&HCougar, S1, 0);
+				MapKey	(&HCougar, S2, DX2);
+				MapKeyR	(&HCougar,	S2, 0);
+				}
+			printf("...Done!\xa");	
+						
+			H1_Init(TrackIR, PadlockEnabled, ProfID);	//moved to individual routines in 1.27 for trim reset removal on helos
+			CommState_Off(1,ProfID,1,0,1);	//sets hats 2-4 to DX functions	
+			
+				
+				P51D_CommState_Init(ProfID,1,1);						//Set Comms routine (DX21 plus whatever options selected)
+			if (WarthogThrottle > 0)
+				{
+				printf("         Warthog Throttle Buttons\xa");	
+				
+				MapKey	(&Throttle, CSU, DX15);		//set for target range or prop pitch
+				MapKey	(&Throttle, CSD, DX17);
+				
+
+					
+				if (prof == 3190)
+					{
+					if (TrackIR < 2)
+							MapKeyIO(&Throttle,	SC,	Std_SnapView6,	SnapView6);	// /I standard snapview, /O momentary snapview (useful for stopwatch)
+					else	MapKey	(&Throttle,	SC,	Fw190_Stopwatch_DX);
+					MapKey	(&Throttle, CSL, CHAIN(DX30,D(ModDelay),DX17));		//sight intensity
+					MapKey	(&Throttle, CSR, CHAIN(DX30,D(ModDelay),DX15));	
+					}		
+				else	
+					{
+					if (TrackIR < 2)
+							MapKey	(&Throttle,	SC,	SnapView3);	//momentary snapview (useful for stopwatch
+					else	MapKeyIO(&Throttle,	SC,	Fw190_Stopwatch_DX);
+					MapKey	(&Throttle, CSL, K14_Wingspan_Decr);		//Set for target wingspan
+					MapKey	(&Throttle, CSR, K14_Wingspan_Incr);
+					}
+//				MapKeyR	(&Throttle,	SC,	0);	//***Add Function***
+
+
+				TriggerZoom_MapGearDn_WH(TriggerZoom_state, ProfID);
+				if (prof == 3190)
+					{
+					if (Throttle[EACOFF]) 	Bf109_CH_Map(1,1,0);
+					else					Bf109_CH_Map(0,1,0);				
+					}				
+				Fw190_LdgGear_Map(Force_GearLock_Fw190,Fw190_LdgGear_Cover_Cur,ProfID);
+					//MapKey	(&Throttle,	CHB,	KB_RGAIND);	//sight intensity	
+					//MapKey	(&Throttle, CHF, 	KB_RGAINU);	//added in 1.40 for Fw190 sight intensity, changed in 2.40 to RMFD
+				//	}
+				//MapKeyR	(&Throttle,	CHF,	0);	//Added for F-86 in 1.69
+				//MapKeyR	(&Throttle,	CHB,	0);	//Added for F-86 in 1.69
+				
+				MapKey	(&Throttle,	LTB,	Fw190_Stopwatch_DX);	
+				
+				MapKey	(&Throttle,	SPDF,	CHAIN(DX28,EXEC("if (AirBrkFlash > -1) {Lights_RLED1(1); DeferCall(Starter_Ind_x, 	&Lights_RLED1,0);}"))	);	//clutch			
+				MapKeyR	(&Throttle, SPDF,	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);"));
+				
+				if ((TrackIR > 1) | (MFD_Count < 1))		//TIR/MFD added in 2.34a
+						MapKeyIO(&Throttle,	SPDB, 	TEMPO(DX27, EXEC("DCS_AcftSel(1);"),	SwapTempo),		DX27);	
+				else	MapKey	(&Throttle, SPDB,	DX27);	//starter
+				MapKeyR	(&Throttle,	SPDB,	0);
+			
+			
+
+				
+			printf("Base Switches...");
+			if (WHIdle_Enabled > 0)
+				{
+				MapKey	(&Throttle,	IDLERON,	PULSE+Fw190_Throttle_Stop);
+				MapKey	(&Throttle,	IDLEROFF,	PULSE+Fw190_Throttle_Idle);
+//				MapKey	(&Throttle,	IDLELON,	0);
+//				MapKey	(&Throttle,	IDLELOFF,	0);
+				}
+				
+				MapKey	(&Throttle,	FLAPU,	PULSE+CHAIN(DX31,D(ModDelay),DX8)	);					//Flaps Up DX
+				MapKey	(&Throttle,	FLAPM,	TEMPO(0,PULSE+CHAIN(DX31,D(ModDelay),DX9),DoubleTap));	//Flaps Mvr DX
+				MapKey	(&Throttle,	FLAPD,	PULSE+CHAIN(DX31,D(ModDelay),DX10)	);					//Flaps Dn DX
+//				MapKeyR	(&Throttle,	FLAPU,	0);
+//				MapKeyR	(&Throttle,	FLAPD,	0);
+				
+//				MapKeyR	(&Throttle,	EFRNORM,	0);
+//				MapKeyR	(&Throttle,	EFLNORM,	0);				
+				if (prof == 3190)
+					{
+					
+					
+					MapKeyIO(&Throttle,	PSB,	0,PULSE+Fw190A8_Fueltank_Gauge_Aft);	//fuel tank selector
+					MapKeyIO(&Throttle,	PSF,	0,PULSE+Fw190A8_Fueltank_Gauge_Fwd);	
+					MapKeyIO(&Throttle, PSM,	0,TEMPO(0,PULSE+Fw190A8_Fueltank_Gauge_Ctr,DoubleTap));				
+					
+					MapKeyIO(&Throttle,	EFRNORM,	0,	PULSE+CHAIN(DX31,D(ModDelay),DX2));	//Master Arm
+					MapKeyIO(&Throttle,	EFROVER,	0,	PULSE+CHAIN(DX31,D(ModDelay),DX2));	
+					MapKeyIO(&Throttle,	EFLNORM,	0,	PULSE+CHAIN(DX31,D(ModDelay),DX1));	
+					MapKeyIO(&Throttle,	EFLOVER,	0,	PULSE+CHAIN(DX31,D(ModDelay),DX1));	
+					
+					MapKeyIO(&Throttle,	APUON,	EXEC("Bf109_CH_Map(0,1,0);"),PULSE+CHAIN(				  DX24,	EXEC("Bf109_CH_Map(0,1,0);"))	);	//set for gov auto
+					MapKeyIO(&Throttle,	APUOFF,	EXEC("Bf109_CH_Map(1,1,0);"),PULSE+CHAIN(DX30,D(ModDelay),DX24,	EXEC("Bf109_CH_Map(1,1,0);"))	);
+					
+					if (TrackIR < 2)
+							MapKeyIO(&Throttle,	APENG,	Std_SnapView6,	Fw190_Stopwatch_DX);
+					else	MapKey	(&Throttle,	APENG,					Fw190_Stopwatch_DX);
+					
+					MapKeyIO(&Throttle,	EACON,	0);
+					MapKeyIO(&Throttle,	EACOFF,	0);
+				
+					MapKeyIO(&Throttle,	RDRNRM,	0,	PULSE+DX7);	//Smoke Glass
+					MapKeyIO(&Throttle,	RDRDIS,	0,	PULSE+DX9);
+					}				
+				else
+					{
+					MapKeyIO(&Throttle,	PSB,	0,			EXEC("Fw190_Fueltank_Set(0, Switch_Delay);"));	//fuel tank selector
+					MapKeyIO(&Throttle,	PSF,	0,			EXEC("Fw190_Fueltank_Set(2, Switch_Delay);"));	
+					MapKeyIO(&Throttle, PSM,	0,TEMPO(0,	EXEC("Fw190_Fueltank_Set(1, Switch_Delay);"),DoubleTap));
+					
+					MapKeyIO(&Throttle,	EFRNORM,	0,	PULSE+CHAIN(DX31,D(ModDelay),DX1,EXEC("if (AirBrkFlash > -1) Lights_LLED1(1);"))	);	
+					MapKeyIO(&Throttle,	EFROVER,	0,	PULSE+CHAIN(DX31,D(ModDelay),DX1,EXEC("if (AirBrkFlash > -1) Lights_LLED1(0);"))	);	
+					MapKeyIO(&Throttle,	EFLNORM,	0,	PULSE+Fw190_EZ42_Gyro_On);		//EZ42 Gyro 
+					MapKeyIO(&Throttle,	EFLOVER,	0,	PULSE+Fw190_EZ42_Gyro_Off);		//EZ42 Gyro
+					
+					MapKeyIO(&Throttle,	APUON,	0,		PULSE+CHAIN(DX30,D(ModDelay), DX24));	//MW50
+					MapKeyIO(&Throttle,	APUOFF,	0,		PULSE+DX24);
+					
+					MapKey	(&Throttle,	APENG,	Fw190_Stopwatch_DX);
+					
+					MapKeyIO(&Throttle,	EACON,	0,	PULSE+CHAIN(DX32,D(ModDelay),DX19));	//Main Rockets
+					MapKeyIO(&Throttle,	EACOFF,	0,	PULSE+CHAIN(DX32,D(ModDelay),DX18));
+				
+					MapKeyIO(&Throttle,	RDRNRM,	EXEC("Fw190_Rocket_Emer_Rel_Set(0,0);"),	EXEC("Fw190_Rocket_Emer_Rel_Set(0,1);"));	//Emer Rocket Rel
+					MapKeyIO(&Throttle,	RDRDIS,	0,	EXEC("Fw190_Rocket_Emer_Rel_Set(0,0);"));		
+					}
+					
+				MapKeyIO(&Throttle,	EOLIGN,		EXEC("Fw190_BombFuse_Cycle(2);"),	CHAIN(EXEC("Fw190_BombFuse_Cycle(2);if (!IgnLState){ Grace_Flag(1); IgnLState = 1;}"))	);
+				MapKeyIO(&Throttle,	EOLNORM,	0,						EXEC("if (!IgnLState) Fw190_BombFuse_Cycle(1);"));
+				MapKey	(&Throttle,	EOLMOTOR,							EXEC("Fw190_BombFuse_Cycle(0); IgnLState = 0;"));
+				MapKeyIO(&Throttle,	EORIGN,		EXEC("Fw190_BombFuse_Cycle(2);"),	CHAIN(EXEC("Fw190_BombFuse_Cycle(2);if (!IgnLState){ Grace_Flag(1); IgnLState = 1;}"))	);
+				MapKeyIO(&Throttle,	EORNORM,	0,						EXEC("if (!IgnLState) Fw190_BombFuse_Cycle(3);"));
+				MapKey	(&Throttle,	EORMOTOR,							EXEC("Fw190_BombFuse_Cycle(4); IgnLState = 0;"));
+				MapKeyRIO(&Throttle,EOLIGN,		EXEC("IgnLState = 1;"),	EXEC("if ((IgnLState) & (!GraceFlag)) IgnLState = 0; else Grace_Flag(0);")	);
+				MapKeyRIO(&Throttle,EORIGN,		EXEC("IgnLState = 1;"),	EXEC("if ((IgnLState) & (!GraceFlag)) IgnLState = 0; else Grace_Flag(0);")	);
+
+				MapKeyIO(&Throttle,	LDGH,		TEMPO(CHAIN(DX31,D(ModDelay),DX16,EXEC("if (Adjust_Backlighting > 0) MFD_WHT_Power(0);")),EXEC("EjectCheckLDGH(ProfID);"), DefTempo),
+												TEMPO(0,CHAIN(DX30,DX31,D(ModDelay),DX16,EXEC("if (Adjust_Backlighting > 0) MFD_WHT_Power(0);")),DefTempo));	//Electrical Kill Sw
+				
+				
+				MapKeyIO(&Throttle,	APPAT,		0,									EXEC("Fw190_Magneto_Cycle(3);")	);
+				MapKeyIO(&Throttle,	APAH,		EXEC("Fw190_Magneto_Cycle(0);"),	EXEC("Fw190_Magneto_Cycle(2);")	);
+				MapKeyIO(&Throttle,	APALT,		0,									EXEC("Fw190_Magneto_Cycle(1);")	);
+				
+	
+				}
+			else
+				{
+				printf("         TQS Buttons\xa");
+				
+				MapKey	(&HCougar, T2,	DX17);	//DX15/17 prop pitch
+				MapKeyR	(&HCougar, T2,	0);
+				MapKey	(&HCougar, T3,	DX15);
+				MapKeyR	(&HCougar, T3,	0);
+					
+				if (prof == 3190)
+				{
+				MapKey	(&HCougar, T4, KB_RGAINU);	//sight intensity	
+				MapKey	(&HCougar, T5, KB_RGAIND);
+				}
+				else
+				{
+				MapKey	(&HCougar, T4, K14_Wingspan_Decr);	
+				MapKey	(&HCougar, T5, K14_Wingspan_Incr);				
+				}
+				MapKeyR	(&HCougar, T4, 0);
+				MapKeyR	(&HCougar, T5, 0);	
+					
+				P51DMapT6(GearDn_Ind_Default, ProfID);	//used for aux braking with FFB stick.
+
+
+				
+//				MapKeyR	(&HCougar,	T9,		0);
+				}
+				
+			printf("...Done!\xa");
+	printf("   HOTAS Mapping Complete.\xa\xa");	
+
+//Fw190_MFD_Init();
+
+TriggerZoom_state  = 0;		//reset TriggerZoom
+FlapState=0;				//future implementation
+//Lights_ALL(0);				//Says Init complete
+	if (RudderPedals < 2) DeferCall(LED_Delay,&Lights_LLED1,0);
+	DeferCall(2*LED_Delay,&Lights_RLED2,0);
+	if (WarthogThrottle > 0) DeferCall(3*LED_Delay,&WHT_Lights_Dn_D,0);
+	
+ActKey(DX1);				//just in case DX1 lingers from trigger activation
+
+if (Adjust_Backlighting > 0)
+	{
+	DeferCall(LED_Delay,&D_MFDWHT_Pwr,MFD_Default_Setting);	//2x because it's max or off
+	if (Script_Debug) printf("APU = %i",Throttle[APUON]);	//for test purposes
+	DeferCall(3*LED_Delay,&Lights_RLED1,0);	//Changed to Binary in 1.28
+	DeferCall(4*LED_Delay,&Lights_RLED2,0);
+	DeferCall(5*LED_Delay,&WHT_Lights_Dn_D,0);
+	}
+else
+	{
+	DeferCall(LED_Delay,&Backlight_Max_Init,0);
+	DeferCall(4*LED_Delay,&Lights_RLED1,0);	//Changed to Binary in 1.28
+	DeferCall(5*LED_Delay,&Lights_RLED2,0);
+	if (WarthogThrottle > 0) DeferCall(6*LED_Delay,&WHT_Lights_Dn_D,0);
+	}
+	
+if (Init_Run == 0) Gear_Ind_Init(GearDn_Ind_Default,FixedGear,Helicopter,AirBrkFlash);	
+
+if (GearDn_Ind_Default > 0) Map_Cougar_ToeBrakes(ToeBrakesAvailable);//added in 1.40;
+else	Map_Cougar_ToeBrakes(0);
+Global_DF_Init(WarthogThrottle,ProfID);
+printf("\xa DCS Fw-109D9 Dora Init Complete!\xa");	
+Set_Acft_Array_Cur(ProfID);
+}
+
+int Fw190_HCS_Init(int prof = 3090, int force = 0)	//force added in 1.69 as passthru to allow for initial TGZ_MapGearDn if TGZ disabled. must force if no wh throttle
+{
+			if (Script_Debug) printf("         Hat2 (Armament)...");	
+				MapKey	(&HCougar, 	H2U,	DX7);									//Gun safety switch
+				MapKey	(&HCougar,	H2D,	DX9);
+				MapKey	(&HCougar,	H2R,	DX8);
+				MapKey	(&HCougar,	H2L,	DX10);
+		if (Script_Debug) printf("...Done!\xa");	
+		if (Script_Debug) printf("         Hat3 (Fuel/Avionics)...");		
+			if (!WarthogThrottle)
+				{
+				Fw190_LdgGear_Map(Force_GearLock_Fw190,Fw190_LdgGear_Cover_Cur);
+				TriggerZoom_MapGearDn(TriggerZoom_state, prof, 0, force);
+				}
+			else
+				{
+				MapKey	(&HCougar,	H3U,	DX11);
+				MapKey	(&HCougar,	H3D,	DX13);
+				}
+			MapKey	(&HCougar, 	H3R,	DX12);									//compass course/altim incr
+			MapKey	(&HCougar, 	H3L,	DX14);									//compass course/altim decr
+			
+		if (Script_Debug) printf("...Done!\xa");	
+		if (Script_Debug) printf("         Hat4 (VHF Radio)...");	
+				MapKeyIO(&HCougar,	H4U,	Fw190_H4UI,	Fw190_H4UO);	//PULSE+Fw190_RdoMode_Toggle, Rdo_Channel_Decr); //cycle channel/mode
+				if (TrackIR < 2)
+						MapKeyIO(&HCougar,	H4D,	Fw190_H4DI,		Fw190_H4DO);	//Cycle Channel/Mode (Long snapview of CB panel)
+				else	MapKeyIO(&HCougar,	H4D,	VR_Spyglass,	Fw190_H4DO);
+				MapKey	(&HCougar,	H4R,	DX16);									//vhf volume/dim incr
+				MapKey	(&HCougar,	H4L,	DX18);									//vhf volume/dim decr
+		if (Script_Debug) printf("...Done!\xa");		
+}
+int Fw190_WHS_Init(int prof = 3090, int force = 0)	//force added in 2.45
+{
+			if (Script_Debug) printf("         Hat2 (Armament)...");	
+				MapKey	(&Joystick, H2U,	DX7);									//Gun safety switch
+				MapKey	(&Joystick,	H2D,	DX9);
+				if (WarthogThrottle > 0)
+					{
+					MapKeyIO(&Joystick,	H2R,	EXEC("Fw190_BombFuse_Cycle(2);"),	EXEC("Fw190_BombFuse_Cycle(5);")	);	//DX8);
+					MapKeyIO(&Joystick,	H2L,	EXEC("Fw190_BombFuse_Cycle(2);"),	EXEC("Fw190_BombFuse_Cycle(-1);")	);	//DX10);
+					}
+				else
+					{
+					MapKey	(&Joystick,	H2R,	DX8);
+					MapKey	(&Joystick,	H2L,	DX10);
+					}
+		if (Script_Debug) printf("...Done!\xa");	
+		if (Script_Debug) printf("         Hat3 (Fuel/Avionics)...");		
+					if (!WarthogThrottle)
+						{
+						Fw190_LdgGear_Map(Force_GearLock_Fw190,Fw190_LdgGear_Cover_Cur);
+						TriggerZoom_MapGearDn_WH(TriggerZoom_state, prof, 0, force);
+						}
+					else
+						{
+						MapKey	(&Joystick,	H3U,	DX11);
+						MapKey	(&Joystick, H3D,	DX13);
+						}
+					MapKey	(&Joystick, 	H3R,	DX12);									//compass course/altim incr
+					MapKey	(&Joystick, 	H3L,	DX14);									//compass course/altim decr
+		if (Script_Debug) printf("...Done!\xa");	
+		if (Script_Debug) printf("         Hat4 (VHF Radio)...");	
+				MapKeyIO(&Joystick,	H4U,	Fw190_H4UI,	Fw190_H4UO);	
+
+				if (TrackIR < 2)
+					{
+					//if (prof == 3190)
+					//		MapKeyIO(&Joystick,	H4D,	Std_SnapView3,	Fw190_H4DO);	//aft CB panel snapview
+					//else
+					MapKeyIO(&Joystick,	H4D,	Fw190_H4DI,	Fw190_H4DO);
+					//MapKeyIO(&Joystick,	H4P,	Fw190_H4PI,	Fw190_H4PO);	// /I SnapView3, /O DX2 for bomb release (now both DX2 as of 2.28)
+					}
+				else
+					{
+					MapKey	(&Joystick,	H4D,	VR_Spyglass,	Fw190_H4DO);
+					//MapKey	(&Joystick,	H4P,	VR_Zoom_kb,		Fw190_H4PO);	// 				 /O DX2 for bomb release (now both DX2 as of 2.28)
+					}
+				MapKeyIO(&Joystick,	H4P,	Fw190_H4PI,	Fw190_H4PO);	// /I SnapView3, /O DX2 for bomb release (now both DX2 as of 2.28)
+				
+				MapKey	(&Joystick,	H4R,	DX16);						//vhf volume/dim incr
+				MapKey	(&Joystick,	H4L,	DX18);						//vhf volume/dim decr
+		if (Script_Debug) printf("...Done!\xa");		
+}
+
+int	Fw190_MFD_Init(int prof = 3090)
+{
+//===================================
+//		Standard MFD Buttons
+//===================================
+
+	printf("   Map Cougar Left  MFD (DX31)...");	
+//LOSB 1 in Init
+		
+		MapKey	(&LMFD,	OSB02,	CHAIN(DX31,D(ModDelay),DX2));
+		if (prof == 3190)	//A8
+				MapKey	(&LMFD, OSB03,	CHAIN(DX31,D(ModDelay),DX3));
+		else	MapKeyIO(&LMFD, OSB03,	CHAIN(DX31,D(ModDelay),DX3),	TEMPO(CHAIN(DX31,D(ModDelay),DX3),CHAIN(DX30,DX31,D(ModDelay),DX3),LongTempo)	); 
+		MapKey	(&LMFD,	OSB04,	CHAIN(DX31,D(ModDelay),DX4));
+//		MapKeyR	(&LMFD,	OSB04,	0);	//for A-10C and F-5E		
+		MapKey	(&LMFD, OSB05,	CHAIN(DX31,D(ModDelay),DX5));	//anything with shfited tempo		
+//		MapKeyR	(&LMFD,	OSB05,	0);	//For F-5E
+//LOSB 6-10
+		//Landing Gear Retract in Fw-190
+		//Gear extend for Fw190; moved to TriggerZoom_MapGearDn()
+//		MapKeyR	(&LMFD,	OSB07,	0);		//for Bf109
+		MapKey	(&LMFD,	OSB08,	CHAIN(DX31,D(ModDelay),DX8));
+		MapKey	(&LMFD,	OSB09,	CHAIN(DX31,D(ModDelay),DX9));
+		MapKey	(&LMFD,	OSB10,	CHAIN(DX31,D(ModDelay),DX10));
+	
+//LOSB 11-15, 16
+// FW-190 Radio rotary
+		MapKey	(&LMFD,	OSB11,	EXEC("Fw190_Radio_Freq_Set(3,ProfID);"));	//CHAIN(DX31,D(ModDelay),DX11));
+		MapKey	(&LMFD,	OSB12,	EXEC("Fw190_Radio_Freq_Set(2,ProfID);"));	//CHAIN(DX31,D(ModDelay),DX12));
+		MapKey	(&LMFD,	OSB13,	EXEC("Fw190_Radio_Freq_Set(1,ProfID);"));	//CHAIN(DX31,D(ModDelay),DX13));
+		MapKey	(&LMFD,	OSB14,	EXEC("Fw190_Radio_Freq_Set(0,ProfID);"));	//CHAIN(DX31,D(ModDelay),DX14));
+		
+		MapKey	(&LMFD,	OSB15,	CHAIN(DX31,D(ModDelay),DX15));
+		MapKeyIO(&LMFD,	OSB16,	CHAIN(DX31,D(ModDelay),DX16,EXEC("if (Adjust_Backlighting > 0)  MFD_WHT_Power(0);")),	TEMPO(CHAIN(DX31,D(ModDelay),DX16),CHAIN(DX30,DX31,D(ModDelay),DX16,EXEC("if (Adjust_Backlighting > 0) MFD_WHT_Power(0);")), LongTempo));
+
+//		MapKeyR	(&RMFD,	OSB13,	0);	//for Spitfire Engine Start	
+//		MapKeyR	(&RMFD,	OSB14,	0);	//for Spitfire Engine Start	
+//LOSB 17-19
+//Fw190 Red Handles
+		MapKeyIO(&LMFD,	OSB17,	CHAIN(DX31,D(ModDelay),DX17),	TEMPO(CHAIN(DX31,D(ModDelay),DX17),CHAIN(DX30,DX31,D(ModDelay),DX17),LongTempo));	
+		if (prof == 3190)
+				MapKeyIO(&LMFD,	OSB18,	CHAIN(DX31,D(ModDelay),DX18,EXEC("Bf109_CH_Map(1,1,0);")),		//calls Warthog routine even for Cougar to cycle LED
+										TEMPO(CHAIN(DX31,D(ModDelay),DX18,EXEC("Bf109_CH_Map(0,1,0);")),	
+											  CHAIN(DX30,DX31,D(ModDelay),DX18,EXEC("Bf109_CH_Map(1,1,0);")),	DefTempo));
+		else	MapKeyIO(&LMFD,	OSB18,	CHAIN(DX31,D(ModDelay),DX18),	TEMPO(CHAIN(DX31,D(ModDelay),DX18),CHAIN(DX30,DX31,D(ModDelay),DX18),LongTempo));	
+		MapKeyIO(&LMFD,	OSB19,	CHAIN(DX31,D(ModDelay),DX19),	TEMPO(CHAIN(DX31,D(ModDelay),DX19),CHAIN(DX30,DX31,D(ModDelay),DX19),LongTempo));	
+
+		
+
+
+//Left Rocker Switches (Gain in Init)
+//SYM
+		MapKey(&LMFD,	SYMU,	KB_LSYMU);
+		MapKey(&LMFD,	SYMD,	KB_LSYMD);
+
+//CON
+		MapKeyIO(&LMFD,	CONU,	KB_LCONU,	TEMPO(KB_LCONU,	CHAIN(DX30,D(ModDelay),KB_LCONU),	DefTempo)	);	//Fuel Sel Switch (Tempo Long for Both)
+		MapKeyIO(&LMFD,	COND,	KB_LCOND,	TEMPO(KB_LCOND,	CHAIN(DX30,D(ModDelay),KB_LCOND),	LongTempo)	);	//Tempo Long for Off
+		
+//BRT
+		MapKeyIO(&LMFD,	BRTU,	EXEC("Fw190_Magneto_Cycle(3);"),	TEMPO(EXEC("Fw190_Magneto_Cycle( 4);"),	EXEC("Fw190_Magneto_Cycle(3);"),	DefTempo)	);
+		MapKeyIO(&LMFD,	BRTD,	EXEC("Fw190_Magneto_Cycle(0);"),	TEMPO(EXEC("Fw190_Magneto_Cycle(-1);"),	EXEC("Fw190_Magneto_Cycle(0);"),	LongTempo)	);
+
+	printf("Done!\xa");
+
+	printf("   Map Cougar Right MFD (DX32)...");
+
+//ROSB 1-10 in Init
+
+		MapKeyIO(&RMFD,	OSB01,	CHAIN(DX32,D(ModDelay),DX1),	TEMPO(CHAIN(DX32,D(ModDelay),DX1),	CHAIN(DX30,DX32,D(ModDelay),DX1),	DefTempo));
+		MapKey	(&RMFD,	OSB02,	CHAIN(DX32,D(ModDelay),DX2));
+		MapKey	(&RMFD,	OSB03,	CHAIN(DX32,D(ModDelay),DX3));
+		MapKey	(&RMFD,	OSB04,	CHAIN(DX32,D(ModDelay),DX4));
+		MapKey	(&RMFD,	OSB05,	CHAIN(DX32,D(ModDelay),DX5));
+//		MapKeyR	(&RMFD,	OSB05,	0);
+		
+		MapKeyIO(&RMFD,	OSB06,	CHAIN(DX32,D(ModDelay),DX6),	TEMPO(CHAIN(DX32,D(ModDelay),DX6),CHAIN(DX30,DX32,D(ModDelay),DX6),	LongTempo));
+		MapKey	(&RMFD,	OSB07,	CHAIN(DX32,D(ModDelay),DX7));
+//		MapKeyR	(&RMFD,	OSB07,	0);
+		if (prof == 3190)
+			{
+			MapKeyIO(&RMFD, OSB08,	CHAIN(DX32,D(ModDelay),DX8),
+									TEMPO(	CHAIN(Fw190A8_CB_Bank1_On,	EXEC("if ((Adjust_Backlighting > 0) & (LMFD_Pwr_State < 2)) MFD_WHT_Power(2);")),
+											CHAIN(Fw190A8_CB_Bank1_Off,	EXEC("if ((Adjust_Backlighting > 0) & (LMFD_Pwr_State > 0)) MFD_WHT_Power(0);")),	LongTempo));	
+			MapKeyIO(&RMFD, OSB09,	CHAIN(DX32,D(ModDelay),DX9),	TEMPO(Fw190A8_CB_Bank2_On,			Fw190A8_CB_Bank2_Off,				LongTempo));			
+			MapKeyIO(&RMFD,	OSB10,	CHAIN(DX32,D(ModDelay),DX9),	TEMPO(CHAIN(DX32,D(ModDelay),DX10),	CHAIN(DX30,DX32,D(ModDelay),DX10),	LongTempo));	// /I cover 2, /O IFF Self Destruct CB
+			}
+		else
+			{
+			MapKeyIO(&RMFD, OSB08,	CHAIN(DX32,D(ModDelay),DX8),
+									TEMPO(	CHAIN(Fw190_CB_Bank1_On,	EXEC("if ((Adjust_Backlighting > 0) & (LMFD_Pwr_State < 2)) MFD_WHT_Power(2);")),
+											CHAIN(Fw190_CB_Bank1_Off,	EXEC("if ((Adjust_Backlighting > 0) & (LMFD_Pwr_State > 0)) MFD_WHT_Power(0);")),	LongTempo));
+			MapKey	(&RMFD,	OSB09,	CHAIN(DX32,D(ModDelay),DX9));
+			MapKey	(&RMFD,	OSB10,	CHAIN(DX32,D(ModDelay),DX10));
+			}			
+
+//ROSB 11-15
+//can be used for anything that uses Long shift functionality on outer RMFD
+		MapKeyIO(&RMFD,	OSB11,	CHAIN(DX32,D(ModDelay),DX11),	TEMPO(CHAIN(DX32,D(ModDelay),DX11),	CHAIN(DX30,DX32,D(ModDelay),DX11),	DefTempo));		//IO because /I w/o TEMPO is cleaner
+		MapKeyIO(&RMFD,	OSB12,	CHAIN(DX32,D(ModDelay),DX12),	TEMPO(CHAIN(DX32,D(ModDelay),DX12),	CHAIN(DX30,DX32,D(ModDelay),DX12),	DefTempo));
+		MapKeyIO(&RMFD,	OSB13,	CHAIN(DX32,D(ModDelay),DX13),	TEMPO(CHAIN(DX32,D(ModDelay),DX13),	CHAIN(DX30,DX32,D(ModDelay),DX13),	DefTempo));
+		MapKeyIO(&RMFD,	OSB14,	CHAIN(DX32,D(ModDelay),DX14),	TEMPO(CHAIN(DX32,D(ModDelay),DX14),	CHAIN(DX30,DX32,D(ModDelay),DX14),	DefTempo));
+		MapKeyIO(&RMFD,	OSB15,	CHAIN(DX32,D(ModDelay),DX15),	TEMPO(CHAIN(DX32,D(ModDelay),DX15),	CHAIN(DX30,DX32,D(ModDelay),DX15),	DefTempo));
+		
+//ROSB 16-20
+		if (prof == 3190)
+			{
+			MapKeyIO(&RMFD,	OSB16,	CHAIN(DX32,D(ModDelay),DX16),	TEMPO(CHAIN(DX32,D(ModDelay),DX16),	CHAIN(DX30,DX32,D(ModDelay),DX16),	DefTempo));
+			MapKeyIO(&RMFD,	OSB17,	CHAIN(DX32,D(ModDelay),DX17),	TEMPO(CHAIN(DX32,D(ModDelay),DX17),	CHAIN(DX30,DX32,D(ModDelay),DX17),	DefTempo));
+			MapKeyIO(&RMFD,	OSB18,	CHAIN(DX32,D(ModDelay),DX18),	TEMPO(CHAIN(DX32,D(ModDelay),DX18),	CHAIN(DX30,DX32,D(ModDelay),DX18),	DefTempo));	
+			}		
+		else
+			{
+			MapKey	(&RMFD,	OSB16,	EXEC("Fw190_Rocket_Emer_Rel_Set(0,0);")	);
+			MapKeyIO(&RMFD,	OSB17,	EXEC("Fw190_Rocket_Emer_Rel_Set(0,1);"),	TEMPO(EXEC("Fw190_Rocket_Emer_Rel_Set(0,0);"),	EXEC("Fw190_Rocket_Emer_Rel_Set(0,1);"),	LongTempo));		
+			MapKey	(&RMFD,	OSB18,	CHAIN(DX32,D(ModDelay),DX18));
+			}
+		MapKey	(&RMFD,	OSB19,	CHAIN(DX32,D(ModDelay),DX19));
+//		MapKeyIO(&RMFD,	OSB20,	CHAIN(DX32,D(ModDelay),DX24),	TEMPO(CHAIN(DX32,D(ModDelay),DX24),CHAIN(DX30,DX32,D(ModDelay),DX24),	DefTempo));
+
+//Right Rocker Switches
+//SYM
+		MapKey	(&RMFD,	SYMU,	KB_RSYMU);
+		MapKey	(&RMFD,	SYMD,	KB_RSYMD);
+//		MapKeyR	(&RMFD,	SYMU,	0);	//added in 1.61 to account for context sensitive R in M2000C
+//		MapKeyR	(&RMFD,	SYMD,	0);
+		
+//CON
+		MapKey	(&RMFD,	CONU,	KB_RCONU);
+		MapKey	(&RMFD,	COND,	KB_RCOND);
+//		MapKeyR	(&RMFD,	CONU,	0);	//added in 1.24 to account for context sensitive R in UH-1
+//		MapKeyR	(&RMFD,	COND,	0);
+
+//BRT
+		MapKeyIO(&RMFD,	BRTU,	EXEC("Fw190_BombFuse_Cycle(2);"),	TEMPO(EXEC("Fw190_BombFuse_Cycle(-1);"),EXEC("Fw190_BombFuse_Cycle(2);"), 	DefTempo)	);
+		MapKeyIO(&RMFD,	BRTD,	EXEC("Fw190_BombFuse_Cycle(2);"),	TEMPO(EXEC("Fw190_BombFuse_Cycle(5);"), EXEC("Fw190_BombFuse_Cycle(2);"), 	DefTempo)	);
+
+//GAIN
+	MapKey	(&RMFD,	GAINU,	KB_RGAINU);
+	MapKey	(&RMFD,	GAIND,	KB_RGAIND);
+
+	printf("Done!\xa");	
+}
+
+
+int Fw190_Map_Starter(int gear, int prof = 3090)	//prof dummy since Starter_Ind_x now in routine
+{
+if (WarthogThrottle == 0)	//added in 1.40
+	{
+	if ((TrackIR > 1) | (MFD_Count < 1))		//TIR/MFD added in 2.34a uses same as GSU with throttle removed
+			{
+			MapKeyIO(&HCougar,	T9, 	TEMPO(0, EXEC("DCS_AcftSel(1);"),	SwapTempo),		DX27);
+			MapKey	(&HCougar,	T10,	CHAIN(DX28,EXEC("if (AirBrkFlash > -1) {Lights_RLED1(1); DeferCall(Starter_Ind_x,	&Lights_RLED1,0);}"))	);
+			MapKeyR	(&HCougar,	T10,	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);"));
+			}
+	else if ((gear) & (!IdleDetentLow))	
+			{
+			MapKeyIO(&HCougar,	T9,		TEMPO(DX27, Fw190_Throttle_Stop, LongTempo),	DX27);	//DX27/28 is always starter sw; shifted is only for throttle position
+			MapKeyIO(&HCougar,	T10,	Fw190_Throttle_Idle,							CHAIN(DX28,EXEC("if (AirBrkFlash > -1) {Lights_RLED1(1); DeferCall(Starter_Ind_x,	&Lights_RLED1,0);}"))	);
+			MapKeyRIO(&HCougar,	T10,	0,	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);"));
+			}
+	else	
+			{
+			MapKey	(&HCougar,	T9,		DX27);
+			MapKey	(&HCougar,	T10,	CHAIN(DX28,EXEC("if (AirBrkFlash > -1) {Lights_RLED1(1); DeferCall(Starter_Ind_x,	&Lights_RLED1,0);}"))	);
+			MapKeyR	(&HCougar,	T10,	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);"));
+			}
+	}
+}
+
+int	Fw190_LdgGear_Cover_Cycle(int posit, int loop = 1, int index = 2, int time = 250)		//obsolete; posit is array position, index is max array size(starting with 1); not currently in use, time is delay for LED (dummy, set in routine)
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)	Fw190_LdgGear_Cover_Cur = (Fw190_LdgGear_Cover_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)	Fw190_LdgGear_Cover_Cur = (Fw190_LdgGear_Cover_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (Fw190_LdgGear_Cover_Cur < index-1))	Fw190_LdgGear_Cover_Cur = (Fw190_LdgGear_Cover_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (Fw190_LdgGear_Cover_Cur > 0))			Fw190_LdgGear_Cover_Cur = (Fw190_LdgGear_Cover_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				Fw190_LdgGear_Cover_Cur = posit;										//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(Fw190_LdgGear_Cover_Array,Fw190_LdgGear_Cover_Cur));
+if (!Fw190_LdgGear_Cover_Cur) time = 500;	//sets off to 500ms instead of default 250; added in 1.29 for blink
+GearState_Blink(GearState,time);	//added in 1.29 for blink
+}
+
+int Fw190_LdgGear_Map(int allow, int state, int prof = 3090)
+{
+if (Script_Debug) printf("Fw190_LdgGear_Map(%i,%i,%i)\xa",allow,state,prof);
+
+int guo;	//gear up /O
+int gur;	//gear up release
+
+if (prof == 3190)
+	{
+	guo = DX17;	//governor
+	if ((allow) & (!state))	
+			gur = EXEC("Fw190_LdgGear_Map(Force_GearLock_Fw190,Fw190_LdgGear_Cover_Cur,3190);");
+	else	gur = EXEC("if(GraceFlag) Fw190_LdgGear_Map(Force_GearLock_Fw190,Fw190_LdgGear_Cover_Cur,3190); GraceFlag=0;");
+	}
+else	//fw190d9
+	{
+	guo = KB_RGAIND;	//sight intensity
+	if ((allow) & (!state))
+			gur = EXEC("Fw190_LdgGear_Map(Force_GearLock_Fw190,Fw190_LdgGear_Cover_Cur);");
+	else	gur = EXEC("if(GraceFlag) Fw190_LdgGear_Map(Force_GearLock_Fw190,Fw190_LdgGear_Cover_Cur); GraceFlag=0;");		
+	}
+	
+if ((state<0) | (state > 1)) state = abs(Fw190_LdgGear_Cover_Cur-1);	//forces toggle
+if ((allow) & (!state))	//force lock is allowed and state is 0 (locked)
+	{
+	if (Script_Debug) printf("  force lock allowed and state is locked.\xa");
+	MapKey	(&LMFD,	OSB06,	EXEC("Fw190_LdgGear_Cover_Cycle(1);"));		//unlocks gear lock if locked
+	MapKeyR	(&LMFD,	OSB06,	gur);
+	
+	
+	if (WarthogThrottle > 0)
+		{
+		if (Script_Debug) printf("    Gear Up mapped to WH Throttle.\xa");
+		MapKeyIO(&Throttle,	CHB,	EXEC("Fw190_LdgGear_Cover_Cycle(1);"),										guo);
+		MapKeyRIO(&Throttle,CHB,	gur,	0);
+		
+		if (WarthogStick > 0)
+				MapKey	(&Joystick,	H3U,	DX11);
+		else	MapKey	(&HCougar,	H3U,	DX11);
+		}
+	else if (WarthogStick > 0)	
+		{
+		if (Script_Debug) printf("    Gear Up mapped to WH Stick.\xa");
+		MapKeyIO(&Joystick,	H3U,	EXEC("Fw190_LdgGear_Cover_Cycle(1);"),										DX11);
+		MapKeyRIO(&Joystick,H3U,	gur,	0);
+		}
+	else 
+		{
+		if (Script_Debug) printf("    Gear Up mapped to Cougar Stick.\xa");
+		MapKeyIO(&HCougar,	H3U,	EXEC("Fw190_LdgGear_Cover_Cycle(1);"),										DX11);
+		MapKeyRIO(&HCougar,	H3U,	gur,	0);
+		}	
+	}
+
+else	//normal LOSB6 mapping
+	{
+	if (Script_Debug) printf("  force lock disabled or state is unlocked (normal).\xa");
+	MapKeyIO(&LMFD,		OSB06,	CHAIN(DX31,D(ModDelay),DX6, EXEC("if ((Fw190_LdgGear_Cover_Cur) | (!Force_GearLock_Fw190)) GearStateInd(0, ProfID, FixedGear, Helicopter, GearCycleTimeDn, AirBrkFlash);")),
+								TEMPO(EXEC("Fw190_LdgGear_Cover_Cycle(2); GraceFlag = 1;"),
+								CHAIN(DX30,DX31,D(ModDelay),DX6, EXEC("if((Fw190_LdgGear_Cover_Cur) | (!Force_GearLock_Fw190))	GearStateInd(0, ProfID, FixedGear, Helicopter, GearCycleTimeDn, AirBrkFlash);")), DefTempo)	);	//Cycles Logical Gear State if unlocked or force lock disabled.  Gear command cycles automatically (governed in-game)		//Landing Gear Retract in Fw-190
+	
+	MapKeyRIO(&LMFD,	OSB06,	0, gur);
+	
+	if (WarthogThrottle > 0)
+		{
+		if (Script_Debug) printf("    Gear Up mapped to WH Throttle.\xa");
+		MapKeyIO(&Throttle,	CHB,	TEMPO(	EXEC("Fw190_LdgGear_Cover_Cycle(2); GraceFlag = 1;"),
+											CHAIN(DX31,D(ModDelay),DX6, EXEC("if((Fw190_LdgGear_Cover_Cur) | (!Force_GearLock_Fw190))	GearStateInd(0, ProfID, FixedGear, Helicopter, GearCycleTimeDn, AirBrkFlash);")), GearUpTempo),
+									guo);
+		MapKeyRIO(&Throttle,CHB,	gur,	0);
+		
+		if (WarthogStick > 0)
+				MapKey	(&Joystick,	H3U,	DX11);
+		else	MapKey	(&HCougar,	H3U,	DX11);
+		}
+	else if (WarthogStick > 0)	
+		{
+		if (Script_Debug) printf("    Gear Up mapped to WH Stick.\xa");
+		MapKeyIO(&Joystick,	H3U,	TEMPO(	EXEC("Fw190_LdgGear_Cover_Cycle(2); GraceFlag = 1;"),
+											CHAIN(DX31,D(ModDelay),DX6, EXEC("if((Fw190_LdgGear_Cover_Cur) | (!Force_GearLock_Fw190))	GearStateInd(0, ProfID, FixedGear, Helicopter, GearCycleTimeDn, AirBrkFlash);")), GearUpTempo),
+									DX11);
+		MapKeyRIO(&Joystick,H3U,	gur,	0);
+		}
+	else 
+		{
+		if (Script_Debug) printf("    Gear Up mapped to Cougar Stick.\xa");
+		MapKeyIO(&HCougar,	H3U,	TEMPO(	EXEC("Fw190_LdgGear_Cover_Cycle(2); GraceFlag = 1;"),
+											CHAIN(DX31,D(ModDelay),DX6, EXEC("if((Fw190_LdgGear_Cover_Cur) | (!Force_GearLock_Fw190))	GearStateInd(0, ProfID, FixedGear, Helicopter, GearCycleTimeDn, AirBrkFlash);")), GearUpTempo),
+									DX11);
+		MapKeyRIO(&HCougar,	H3U,	gur,	0);
+		}		
+	}
+if (allow) printf("LOSB6 mapped to GearUnlocked = %i.\xa",state);
+}
+
+int	Fw190_Magneto_Cycle(int posit, int loop = 0, int index = 4)
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)	Fw190_Magneto_Cur = (Fw190_Magneto_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)	Fw190_Magneto_Cur = (Fw190_Magneto_Cur+index-1)%index;	//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (Fw190_Magneto_Cur < index-1))	Fw190_Magneto_Cur = (Fw190_Magneto_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (Fw190_Magneto_Cur > 0))			Fw190_Magneto_Cur = (Fw190_Magneto_Cur+index-1)%index;	//posit < 0 will cycle by -1 
+	}
+else				Fw190_Magneto_Cur = posit;										//posit in bounds will be discrete function call
+if (Script_Debug) printf("Magneto Setting = %i\xa",Fw190_Magneto_Cur);
+ActKey(KEYON+PULSE+X(Fw190_Magneto_Array,Fw190_Magneto_Cur));
+}
+
+
+int	Fw190_BombFuse_Cycle(int posit, int loop = 0, int index = 5)
+{
+//if (WarthogThrottle > 0) LED(&Throttle, LED_ONOFF,LED_CURRENT-X(WH_LED_ArrayI,Fw190_BombFuse_Cur));	//add to separate tmc
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)	Fw190_BombFuse_Cur = (Fw190_BombFuse_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)	Fw190_BombFuse_Cur = (Fw190_BombFuse_Cur+index-1)%index;	//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (Fw190_BombFuse_Cur < index-1))	Fw190_BombFuse_Cur = (Fw190_BombFuse_Cur+1)%index;			//posit > index will cycle by +1
+	else if ((posit < 0) & (Fw190_BombFuse_Cur > 0))		Fw190_BombFuse_Cur = (Fw190_BombFuse_Cur+index-1)%index;	//posit < 0 will cycle by -1 
+	}
+else				Fw190_BombFuse_Cur = posit;										//posit in bounds will be discrete function call
+if (Script_Debug) printf("Bomb Fuse Setting = %i\xa",Fw190_BombFuse_Cur);
+ActKey(KEYON+PULSE+X(Fw190_BombFuse_Array,Fw190_BombFuse_Cur));
+//if (WarthogThrottle > 0) LED(&Throttle, LED_ONOFF,LED_CURRENT+X(WH_LED_ArrayI,Fw190_BombFuse_Cur));	//add to separate tmc
+}
+
+int Fw190_BombFuse_Reset(int posit = 2)
+{
+if ((WarthogThrottle > 0) & ((Throttle[EOLMOTOR]) | (Throttle[EORMOTOR]))	)	IgnLState = 0;
+else	IgnLState = 1;
+IgnRState = 0;
+Fw190_BombFuse_Cur = posit;
+if (Script_Debug) printf("Bomb Fuse Setting = %i (Reset)\xa",Fw190_BombFuse_Cur);
+}
+
+int	Fw190_Rocket_Emer_Rel_Set(int state = 0, int sw = 0)	//state is cover state (0 is open), sw is switch position (1 for on, 0 for off)
+{
+if ((Fw190_Rocket_Emer_Rel_Cover_Cur > 0) | (state > 0))	//cover closed or reset (state == 1)
+	{
+	if (state == 0) ActKey(KEYON+PULSE+Fw190_Rocket_Emer_Rel_Cover_Open);	//forces cover if state = 0.
+	Fw190_Rocket_Emer_Rel_Cover_Cur = state;	//should set to 0 (open) unless set to 1 for reset
+	}
+else	//cover alredy open, uses sw for switch position
+	{
+	if (sw > 0) ActKey(KEYON+PULSE+Rocket_Emer_Rel_On);
+	else		ActKey(KEYON+PULSE+Rocket_Emer_Rel_Off);
+	}
+}
+
+int Fw190_Radio_Freq_Set(int posit, int prof = 3090, int loop = 0, int index = 4)
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)	Rdo_Channel_Cur = (Rdo_Channel_Cur+1)%index;	//posit > index will cycle by +1
+	else if (posit < 0)	Rdo_Channel_Cur = (Rdo_Channel_Cur+index-1)%index;	//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (Rdo_Channel_Cur < index-1))	Rdo_Channel_Cur = (Rdo_Channel_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (Rdo_Channel_Cur > 0))			Rdo_Channel_Cur = (Rdo_Channel_Cur+index-1)%index;	//posit < 0 will cycle by -1 
+	}
+else				Rdo_Channel_Cur = posit;										//posit in bounds will be discrete function call
+if (Script_Debug) printf("Radio Frequency = %i\xa",Rdo_Channel_Cur);
+if	(prof == 3009) 	ActKey(KEYON+PULSE+X(Bf109_Radio_Array,Rdo_Channel_Cur));	//order changed in 2.40 to do Fw190 by default
+else				ActKey(KEYON+PULSE+X(Fw190_Radio_Array,Rdo_Channel_Cur));
+
+if ((WarthogThrottle > 0) & (AirBrkFlash > -1))	//ported from P-51 in 2.40
+	{	
+	if (Rdo_Channel_Cur == 0) Lights_WHT2(1); else Lights_WHT2(0);
+	if (Rdo_Channel_Cur == 1) DeferCall(LED_Delay, &Lights_WHT3,1);   else DeferCall(LED_Delay, &Lights_WHT3,0);
+	if (Rdo_Channel_Cur == 2) DeferCall(2*LED_Delay, &Lights_WHT4,1); else DeferCall(2*LED_Delay, &Lights_WHT4,0);
+	if (Rdo_Channel_Cur == 3) DeferCall(3*LED_Delay, &Lights_WHT5,1); else DeferCall(3*LED_Delay, &Lights_WHT5,0);
+	}
+}
+
+
+int	Fw190_Fueltank_Set(int posit, int delay = 200, int index=3, int time=0)
+{
+if (	(posit > index-1) | (posit < 0)	)
+	{
+	if (posit > index-1) 
+		{
+		posit = (Fw190_Fueltank_Cur+1);					//no out of bounds
+		if (posit > index-1) posit = index-1;
+		}
+	else if (posit < 0)
+		{
+		posit = (Fw190_Fueltank_Cur-1);				//no out of bounds
+		if (posit < 0) posit = 0;
+		}
+	}
+while (Fw190_Fueltank_Cur != posit)					//do loop with if/then based on </>
+	{
+	if (Fw190_Fueltank_Cur > posit)					
+		{
+		DeferCall(time, &ActKey, KEYON+PULSE+Fw190_Fueltank_Lt_DX);	
+		Fw190_Fueltank_Cur = (Fw190_Fueltank_Cur-1);
+		if (Fw190_Fueltank_Cur < 0) Fw190_Fueltank_Cur = 0;
+		}
+	else if (Fw190_Fueltank_Cur < posit)
+		{
+		DeferCall(time, &ActKey, KEYON+PULSE+Fw190_Fueltank_Rt_DX);	
+		Fw190_Fueltank_Cur = (Fw190_Fueltank_Cur+1);
+		if (Fw190_Fueltank_Cur > index-1) Fw190_Fueltank_Cur = index-1;
+		}
+	time = time + delay;
+	}
+}
+
+

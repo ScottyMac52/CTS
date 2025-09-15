@@ -1,0 +1,609 @@
+//================================================================================
+//		DCS World I-16 Ishak for HOTAS Cougar/Warthog and Cougar MFDs
+//					by Don "Home Fries" Heumphreus
+//						last updated: 26JUN2022
+//
+//	Change Log:
+//	2.42	Initial Release
+//	2.44	Added MapKeyR(0) for SPDx/T9 and set Brake Cycle time to 1 to prevent DBZ error
+//	2.46	Replaced obsolete hawk commands on MFDs
+//			Moved ROSB20 to MFD_Init()
+//	2.50b	Removed duplicate MapKeyR(0) mappings to free stack space.
+//	2.50c	Temporarily set MFD MapKey(0) to free stack space.
+//	2.63d	Updated mixture routine and axes for DCS 2.7.15
+//
+//
+//================================================================================
+
+//Free DX: 1(unassign)
+
+
+int	I16_LThrottle_Cur;
+int ThrFC_Lock_Cur;
+
+
+int DCS_I16(int led, int sp)
+{
+printf("DCS I-16 Ishak Config\xa");
+
+if (WarthogStick > 0) 	MapKeyR(&Joystick, S2, EXEC("DCS_I16_Init();")); 
+else					MapKeyR(&HCougar,  S2, EXEC("DCS_I16_Init();"));
+
+
+if (sp > 0)	PlayWav("i16.wav");
+if (led > 0)
+	{
+	Lights_Four(0,0,0,1,	ProfileSwapDelay+LED_Delay);
+	}
+
+}
+
+
+int	SetMenu_I16()
+{
+Set_Acft_Array_Cur(3516);
+}
+
+int DCS_I16_Init()
+{
+Determine_Differential_Braking(DiffBraking_Enabled,CougarToeBrakes);
+
+FkeyPress				=	1;	//added in 2.02 to prevent Commswitch key activation on profile load.
+GraceFlag				=	0;
+Eng_Start_x				=	0;	//Eng_Start_DX;
+Eng_Stop_x				=	0;
+Starter_Ind_x			=	0;	//Starter_Ind_DX;
+MFD_Eng_Start			=	0;
+ProfID					=	3516;
+FixedGear				=	0;
+Helicopter				=	0;
+T6WheelBrake			=	1;
+TriggerZoomEnabled		=	1;
+GearCycleTimeDn			=	Gear_Deploy_I16;
+GearCycleTimeUp			=	Gear_Retract_I16;
+BrakeOnCycleTime		=	1;	//min value to prevent DBZ
+BrakeOffCycleTime		=	1;
+WheelBrakeFull			=	0;	//added in 1.35
+ToeBrakesAvailable		=	1;	//added in 1.40
+NVG_Capable				=	0;	//added in 1.40
+AB_Capable				=	0;	//added in 1.61
+Adjust_Backlighting		=	0;	//added in 1.62
+
+S4AnalogBrake			=	JoyAsAnalogBrake;		//added in 1.33
+AnalogParkingBrake		=	0;	//JoyYParkingBrake;	//added in 1.33
+
+S4asNWS					=	0;					//added in 1.33
+S3holdNWS 				= 	0;	//added in 2.05
+DMS_SnapView 			= 	0;	//1;	//necessary for TGZoom
+XYAxisTrim			 	= 	XYAxisTrim_I16;	
+	JoyXTrim			=	JoyXTrim_I16;		//added in 1.34
+	JoyYTrim			=	JoyYTrim_I16;		//added in 1.34
+NS430_Enabled			=	NS430_Installed*NS430_Enabled_I16;	//added in 2.21
+CrewCount				=	1;
+StationChangeModifier	=	0;
+WH_Use_TQS				=	0;	//added in 2.43
+Analog_TDC				=	1;	//added in 2.43
+EngineCount				=	2;	//Left Throttle for RPM
+CommInitType			=	0;	//0 for none/custom, 1 for single channel (P-51), 2 for simple (dual channel), 3 for complex (3 channel).  added in 2.43
+StnCheckDisabled		=	2;	//added in 2.43.  Forced for single seat
+CurrentStation 			=	1;	//moved here in 2.43
+
+
+printf("Done\xa Execute DCS I-16 Ishak Config (Profile v%i.%i):\xa",MajorVersion,MinorVersion);
+PlayWavSel(ProfID,abs(Init_Run - 1),DCSFP_Enabled,MFDisplayEnabled);	//added in 1.61, DCSFP added in 2.05, MFDisplay added in 2.29
+Pause_TrackIR(0);
+//AirBrake_Init(AirBrkFlash);	//moved to individual modules in 1.22 
+MFD_Init(ProfID);
+	printf("   Map HOTAS for DCS I-16 Ishak Config:\xa");
+	DCS_Axis_Init(ProfID,EngineCount,Analog_TDC);	
+if (WarthogStick > 0)
+	{
+		printf("      Warthog Stick Button Mapping:\xa");
+			printf("         Shift Commands: S3  momentary...");
+				if (WarthogThrottle > 0) SetShiftButton(&Joystick, S3, &Throttle, 0, 0);
+				else	SetShiftButton(&Joystick, S3, &HCougar, 0, 0);
+				MapKey	(&Joystick, S3, BTN_S3P);		//DX3 short, long(er) for modifier and eject check, moved here in 0.53, removed S4 and changed argument to "RudderPedals"
+				MapKeyR	(&Joystick, S3, BTN_S3R);		//added in 0.53 to release "RudderPedals" argument in S3Shifted
+			printf("...Done!\xa");	
+			printf("         Cougar Stick Buttons...");	
+				
+				MapKeyIO(&Joystick, TG1, EXEC("TriggerZoom_toggle(-1,AirBrkFlash,GearState);"), CHAIN(DX1,EXEC("TriggerZoom_in();"))	);
+				MapKeyRIO(&Joystick,TG1, UP+DX1, EXEC("ActKey(ZoomIn_slow); DeferCall(KBDelay,&TriggerZoom_out,0);"));				//ActKey(DX1) added in 1.21 to force DX1 release if stuck
+
+				//MapKeyIO(&HCougar, TG1, EXEC("TriggerZoom_toggle();"), EXEC("TriggerZoom_in();"));
+				//MapKeyRIO(&HCougar, TG1, 0, EXEC("TriggerZoom_out();"));
+				MapKey	(&Joystick, TG2, DX6);
+//				MapKeyR	(&Joystick, TG2, 0);
+				MapKey	(&Joystick, S1, DX5);
+				MapKey	(&Joystick, S2, DX2);
+				MapKeyR	(&Joystick,	S2, 0);
+				MapKeyIO(&Joystick, S4, EXEC("S3S4Shifted();"), EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,0);"));	//Chain allows DX4 and wheelbrakes; diffbraking added in 0.24, DX30 removed, DX4 moved to Diffbraking in 0.32
+				MapKeyRIO(&Joystick, S4, 0, EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,1);"));
+			printf("...Done!\xa");	
+	}
+else
+	{
+		printf("      Button Mapping:\xa");
+			printf("         Shift Commands: S3  momentary...");
+				SetShiftButton(&HCougar, S3, &HCougar, 0, 0);
+				MapKey	(&HCougar, S3, BTN_S3P);		//DX3 short, long(er) for modifier and eject check, moved here in 0.53, removed S4 and changed argument to "RudderPedals"
+				MapKeyR	(&HCougar, S3, BTN_S3R);		//added in 0.53 to release "RudderPedals" argument in S3Shifted
+			printf("...Done!\xa");	
+			printf("         Cougar Stick Buttons...");	
+				
+				MapKeyIO(&HCougar, TG1, EXEC("TriggerZoom_toggle(-1,AirBrkFlash,GearState);"), CHAIN(DX1,EXEC("TriggerZoom_in();"))	);
+				MapKeyRIO(&HCougar,TG1, UP+DX1, EXEC("ActKey(ZoomIn_slow); DeferCall(KBDelay,&TriggerZoom_out,0);"));				//ActKey(DX1) added in 1.21 to force DX1 release if stuck
+
+				//MapKeyIO(&HCougar, TG1, EXEC("TriggerZoom_toggle();"), EXEC("TriggerZoom_in();"));
+				//MapKeyRIO(&HCougar, TG1, 0, EXEC("TriggerZoom_out();"));
+				MapKey(&HCougar, TG2, DX6);
+//				MapKeyR(&HCougar, TG2, 0);
+				MapKey(&HCougar, S1, DX5);
+				MapKey(&HCougar, S2, DX2);
+				MapKeyR	(&HCougar,	S2, 0);
+				//MapKey(&HCougar, S3, CHAIN(DX30,TEMPO(DX3, EXEC("S3S4Shifted(0);"), ModTempo)));		//moved to DCS_Init in 0.53
+				MapKeyIO(&HCougar, S4, EXEC("S3S4Shifted();"), EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,0);"));	//Chain allows DX4 and wheelbrakes; diffbraking added in 0.24, DX30 removed, DX4 moved to Diffbraking in 0.32
+				MapKeyRIO(&HCougar, S4, 0, EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,1);"));
+			printf("...Done!\xa");	
+	}
+	
+			H1_Init(TrackIR, PadlockEnabled, ProfID, XYAxisTrim);	//moved to individual routines in 1.27 for trim reset removal on helos, added XYAxisTrim in 1.34
+			CommState_Off(1,ProfID,1,DMS_SnapView,1);		//sets hats 2-4 to DX functions
+if (WarthogThrottle > 0)
+	{
+			printf("         Throttle Buttons...");	
+				MapKey	(&Throttle, SC, DX24);	//not WEP_DX to be consistent with cougar
+//				MapKeyR	(&Throttle, SC, 0);			//Added in 0.51 to prevent P-51D CommState Release.
+
+				MapKey	(&Throttle, CSR,	DX8);
+				MapKey	(&Throttle, CSL,	DX10);
+				MapKeyIO(&Throttle, CSU,	TEMPO(DX7,I16_MechSight_On,	DefTempo),	DX7);
+				MapKeyIO(&Throttle, CSD,	TEMPO(DX9,I16_MechSight_Off,DefTempo),	DX9);
+
+				MapKeyIO(&Throttle,	PSF,	PULSE+I16_SuperCharger_High,	EXEC("I16_LockThr(0,1);"));	//EXEC("I16_LThrottle_Set(1,PlayWavEng_I16);"));
+				MapKeyIO(&Throttle,	PSB,	PULSE+I16_SuperCharger_Low,		EXEC("I16_LockThr(0,1);"));	//EXEC("I16_LThrottle_Set(1,PlayWavEng_I16);"));
+				MapKeyIO(&Throttle,	PSM,	0,TEMPO(0,EXEC("I16_LockThr(0,0);"),DoubleTap)	);		//TEMPO(0,EXEC("I16_LThrottle_Set(0,PlayWavEng_I16);"),DoubleTap));
+
+				if (TrackIR > 1)	// ((I16_Custom_LUA > 0) & (TrackIR > 1))	//VR
+					{
+					//MapAxis(&Throttle, THR_FC, DX_XROT_AXIS, 	AXIS_REVERSED, MAP_ABSOLUTE);	//for VR remaps to mixture instead of lighting if lighting ever added.
+					MapKey	(&Throttle, LTB,	I16_MixtureBall_Push);	//mixture ball push
+					
+//					MapKeyIO(&Throttle,	PSF,	0,EXEC("I16_LockThr(0,1);"));
+//					MapKeyIO(&Throttle,	PSB,	0,EXEC("I16_LockThr(0,1);"));
+//					MapKeyIO(&Throttle,	PSM,	0,TEMPO(0,EXEC("I16_LockThr(0,0);"),DoubleTap)	);
+//					MapKey	(&Throttle, LTB,	EXEC("I16_LockThr(1,-1);"));
+					}
+				else	// if ((I16_Custom_LUA > 0))  custom lua obsolete in 2.63d
+					{
+					MapKey	(&Throttle, LTB,	TEMPO(	EXEC("I16_LThrottle_Set(0,PlayWavEng_I16);"),
+														EXEC("I16_LThrottle_Set(1,PlayWavEng_I16);"), DefTempo)); // state 1 includes I16_MixtureBall_Push
+					
+//					if ((Throttle[PSF]) | (Throttle[PSB]))	I16_LThrottle_Set(1,0);
+//					else									I16_LThrottle_Set(0,0);
+					}				
+//				else	//Obsolete in 2.63d
+//					{
+//					MapKeyIO(&Throttle,	PSF,	0,EXEC("LockAxis(&Throttle, THR_LEFT, 1);"));
+//					MapKeyIO(&Throttle,	PSB,	0,EXEC("LockAxis(&Throttle, THR_LEFT, 1);"));
+//					MapKeyIO(&Throttle,	PSM,	0,TEMPO(0,EXEC("LockAxis(&Throttle, THR_LEFT, 0);"),DoubleTap));
+//					MapKey	(&Throttle, LTB,	I16_Mixture_Cycle);
+//					}
+				
+//				MapKeyR	(&Throttle, LTB,	0);
+
+
+				MapKeyIO(&Throttle,	LDGH,	TEMPO(I16_TorchJettison,	EXEC("EjectCheckLDGH(ProfID);"),	DefTempo),	
+											TEMPO(I16_GearNextState,	I16_TorchJettison,					DefTempo));	
+				MapKey	(&Throttle,	APENG,	DX4);	//Nav Test
+				
+				MapKey	(&Throttle,	CHF,	DX11);	//Compass Course Set
+				MapKey	(&Throttle,	CHB,	DX13);
+//				MapKeyR	(&Throttle,	CHF,	0);	//Added for F-86 in 1.69
+//				MapKeyR	(&Throttle,	CHB,	0);	//Added for F-86 in 1.69
+				
+
+				
+//				MapKey	(&Throttle,	IDLERON,	0);
+//				MapKey	(&Throttle,	IDLEROFF,	0);
+//				MapKey	(&Throttle,	IDLELON,	0);
+//				MapKey	(&Throttle,	IDLELOFF,	0);
+				
+				MapKeyIO(&Throttle,	EACON,		0,PULSE+I16_BombSw_On);
+				MapKeyIO(&Throttle,	EACOFF,		0,PULSE+I16_BombSw_Off);
+				MapKeyIO(&Throttle,	RDRNRM,		0,PULSE+I16_SuperCharger_High);	
+				MapKeyIO(&Throttle,	RDRDIS,		0,PULSE+I16_SuperCharger_Low);	
+				
+				MapKeyIO(&Throttle,	APPAT,		0,PULSE+I16_PriFuelSw_Close);
+				MapKeyIO(&Throttle,	APAH,		0,TEMPO(0,PULSE+I16_PriFuelSw_Carb,DoubleTap));
+				MapKeyIO(&Throttle,	APALT,		0,PULSE+I16_PriFuelSw_Motor);
+				
+				MapKeyIO(&Throttle,	EFLNORM,	0,PULSE+I16_ClockHeat_On);
+				MapKeyR	(&Throttle,	EFLNORM,	0);
+				MapKeyIO(&Throttle,	EFLOVER,	0,PULSE+I16_ClockHeat_Off);
+				MapKeyIO(&Throttle,	EFRNORM,	0,PULSE+I16_OxyValve_Open);
+				MapKeyR	(&Throttle,	EFRNORM,	0);
+				MapKeyIO(&Throttle,	EFROVER,	0,PULSE+I16_OxyValve_Close);
+				
+				MapKey	(&Throttle,	EOLIGN,		I16_TorchLeft);
+				MapKeyIO(&Throttle,	EOLNORM,	0,PULSE+I16_PitotHeat_On);	
+				MapKeyIO(&Throttle,	EOLMOTOR,	0,PULSE+I16_PitotHeat_Off);		
+				MapKey	(&Throttle,	EORIGN,		I16_TorchRight);
+				MapKeyIO(&Throttle,	EORNORM,	0,PULSE+I16_NavLts_On);
+				MapKeyIO(&Throttle,	EORMOTOR,	0,PULSE+I16_NavLts_Off);
+//				MapKeyR	(&Throttle,	EOLIGN,		0);
+//				MapKeyR	(&Throttle,	EORIGN,		0);
+				
+				MapKeyIO(&Throttle,	APUON,		0,PULSE+I16_Ign_Both);
+				MapKeyIO(&Throttle,	APUOFF,		0,PULSE+I16_Ign_Off);
+				
+				if ((TrackIR > 1) | (MFD_Count < 1))
+						MapKeyIO(&Throttle, SPDB, TEMPO(0, EXEC("DCS_AcftSel(1);"),	SwapTempo),	DX12);
+				else	MapKey	(&Throttle, SPDB, DX12);
+				MapKey	(&Throttle, SPDF, DX14);
+//				MapKeyR	(&Throttle,	SPDF, 0);
+//				MapKeyR	(&Throttle,	SPDB, 0);
+				
+				MapKey	(&Throttle,	FLAPU,	CHAIN(	DX25,	EXEC("GearStateInd(0, ProfID, FixedGear, Helicopter, GearCycleTimeUp, AirBrkFlash); if (GearCheck_I16 > 0) DeferCall(GearCycleTimeUp,&I16_GearCheck,0);"))	);
+//				MapKeyR	(&Throttle,	FLAPU,	0);
+				TriggerZoom_MapGearDn(TriggerZoom_state, ProfID, DMS_SnapView, 1);
+	}
+else
+	{
+			printf("         TQS Buttons...");	
+				if ((TrackIR > 1) & (RudderPedals < 2))
+					{
+					MapAxis(&HCougar, RDR_X, DX_SLIDER_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);		//RDR X is ANT knob (bug in target.tmh), DX_SLIDER_AXIS maps to RPM without swap if VR
+					I16_LThrottle_Set(1,0,0);	//sets MAN_RNG to Mix	
+					}
+				MapKeyR	(&HCougar, T2, 0);
+				MapKeyR (&HCougar, T3, 0);
+				MapKeyIO(&HCougar, T4, DX10,	TEMPO(DX10,CHAIN(DX30,D(ModDelay),DX10),DefTempo)	);
+				MapKeyIO(&HCougar, T5, DX8,		TEMPO(DX8, CHAIN(DX30,D(ModDelay),DX8), DefTempo)	);
+				
+				//if (I16_Custom_LUA > 0)
+				//		MapKeyIO(&HCougar, T6, TEMPO(EXEC("I16_LThrottle_Set(-1,PlayWavEng_I16);"), EXEC("EjectCheckT6(ProfID);"), DefTempo),DX24);
+				//else 	MapKeyIO(&HCougar, T6, TEMPO(I16_Mixture_Cycle, EXEC("EjectCheckT6(ProfID);"), DefTempo),DX24);		//Will check for ejection parameters if T6+S3 held for 500ms.
+				//MapKeyR	(&HCougar, T6, 0);
+				P51DMapT6(GearDn_Ind_Default,ProfID);
+				
+				if ((TrackIR > 1) | (MFD_Count < 1))
+						MapKeyIO(&HCougar, T9, TEMPO(0, EXEC("DCS_AcftSel(1);"),	SwapTempo),	I16_GearNextState);
+				else	MapKey	(&HCougar, T9, I16_GearNextState);
+//				MapKeyR	(&HCougar, T9,	0);
+				
+				MapKey	(&HCougar, T10, EXEC("I16_FlapLock(1);"));
+				MapKeyR	(&HCougar, T10, EXEC("I16_FlapLock(0);"));
+				
+				if (HCougar[T10])	I16_FlapLock(1);
+				else				I16_FlapLock(0);
+	}
+		P51D_CommState_Init(ProfID);
+		Global_DF_Init(WarthogThrottle,ProfID);
+		printf("...Done!\xa");	
+	printf("   HOTAS Mapping Complete.\xa");			
+
+//DX_MFD_Init();
+
+
+
+TriggerZoom_state  = 0;		//reset TriggerZoom
+ActKey(DX1);				//just in case DX1 lingers from trigger activation
+//Lights_ALL(0);				//Says Init Complete
+	
+//	DeferCall(LED_Delay,&Lights_RLED2,0);	//Number changed in 1.28
+//	DeferCall(2*LED_Delay,&Lights_LLED1,0);
+//	DeferCall(3*LED_Delay,&Lights_RLED1,0);
+//	DeferCall(4*LED_Delay,&Backlight_Max_Init,0);
+//	if (WarthogThrottle > 0) DeferCall(7*LED_Delay,&WHT_Lights_Dn_D,0);
+
+if (Init_Run == 0) Gear_Ind_Init(GearDn_Ind_Default,FixedGear,Helicopter,AirBrkFlash);
+
+if (GearDn_Ind_Default > 0) Map_Cougar_ToeBrakes(ToeBrakesAvailable);//added in 1.40;
+else	Map_Cougar_ToeBrakes(0);
+
+printf(" I-16 Ishak Config Complete!\xa");	
+Set_Acft_Array_Cur(ProfID);
+}
+
+int I16_Switch_Init(int gear)	//gear dummy for now (allows poss gearstate later)
+{
+//if (I16_Custom_LUA > 0)//obsolete in 2.63d
+//	{
+	if (WarthogThrottle > 0) 
+		{
+		if (TrackIR > 1)	I16_LockThr(1,0);	//releases THR_FC on reset (since toggled) if VR
+		}
+	else
+		{
+		if (TrackIR < 2)	I16_LThrottle_Set(0,0); //resets RNG to RPM if no VR
+		}
+//	}
+if (XYAxisTrim > 0) TrimXYResetCheck(3);
+TriggerZoom_state  = 0;
+
+
+}
+
+int I16_DF_Init(int wh)
+{
+if (wh > 0)
+	{
+	MapKey	(&Throttle, BSB, I16_FlapDn_DX);
+	MapKeyR	(&Throttle, BSB, 0);
+	MapKey	(&Throttle, BSF, I16_FlapUp_DX);
+	MapKeyR	(&Throttle, BSF, 0);
+	MapKey	(&Throttle, BSM, 0);
+	}
+else
+	{
+	MapKey	(&HCougar,	T7,	CHAIN(DX25,	EXEC("GearStateInd(0, ProfID, FixedGear, Helicopter, GearCycleTimeUp, AirBrkFlash); if (GearCheck_I16 > 0) DeferCall(GearCycleTimeUp,&I16_GearCheck,0);"))	);
+	MapKeyR	(&HCougar,	T7,	0);
+	MapKey	(&HCougar, DFM, 0);	
+	
+	TriggerZoom_MapGearDn(TriggerZoom_state, ProfID, 0, 1);
+	}
+}
+
+int I16_HCS_Init(int force = 0)	//force added in 1.69 as passthru to allow for initial TGZ_MapGearDn if TGZ disabled
+{
+if (Script_Debug) printf("         Hat2 (TMS)...");	
+	MapKeyIO(&HCougar, 	H2U,	TEMPO(DX7,I16_MechSight_On,	DefTempo),	DX7);
+	MapKey	(&HCougar, 	H2R,	DX8);
+	MapKeyIO(&HCougar, 	H2D,	TEMPO(DX9,I16_MechSight_Off,DefTempo),	DX9);
+	MapKey	(&HCougar, 	H2L,	DX10);
+if (Script_Debug) printf("...Done!\xa");	
+if (Script_Debug) printf("         Hat3 (");		
+		if (Script_Debug) printf("Flaps)...");
+		MapKeyIO(&HCougar, 	H3D,	TEMPO(CHAIN(UP+I16_FlapUp_DX,UP+I16_FlapDn_DX),CHAIN(UP+I16_FlapUp_DX,DOWN+I16_FlapDn_DX),DefTempo),	CHAIN(UP+I16_FlapUp_DX,I16_FlapDn_DX));
+		MapKeyIO(&HCougar, 	H3U,	TEMPO(CHAIN(UP+I16_FlapUp_DX,UP+I16_FlapDn_DX),CHAIN(UP+I16_FlapDn_DX,DOWN+I16_FlapUp_DX),DefTempo),	CHAIN(UP+I16_FlapDn_DX,I16_FlapUp_DX));	
+		MapKeyIO(&HCougar, 	H3R,	I16_GunCharge_RW,	I16_GunCharge_RN);	
+		MapKeyIO(&HCougar, 	H3L,	I16_GunCharge_LW,	I16_GunCharge_LN);
+if (Script_Debug) printf("...Done!\xa");	
+if (Script_Debug) printf("         Hat4 (CMS)...");	
+	if (XYAxisTrim > 0)
+		{
+		MapKeyIO(&HCougar,	H4U,	EXEC("TrimXYResetCheck(3);"),DX15);
+		MapKeyIO(&HCougar,	H4D,	EXEC("TrimXYResetCheck(3);"),DX17);
+		}
+	else
+		{
+		MapKey	(&HCougar,	H4U,	DX15);
+		MapKey	(&HCougar,	H4D,	DX17);
+		}
+//	MapKeyR	(&HCougar,	H4U, 	0);			//added to cancel helo trim
+//	MapKeyR	(&HCougar,	H4D,	0);			//added to cancel helo trim					
+	MapKey	(&HCougar,	H4R,	DX16);
+	MapKey	(&HCougar,	H4L,	DX18);
+if (Script_Debug) printf("...Done!\xa");
+}
+
+int I16_WHS_Init(int force = 0)	//force added in 1.69 as passthru to allow for initial TGZ_MapGearDn if TGZ disabled. must force if no wh throttle
+{
+if (Script_Debug) printf("         Hat2 (TMS)...");	
+					MapKeyIO(&Joystick, 	H2U,	TEMPO(DX7,I16_MechSight_On,	DefTempo),	DX7);
+					MapKeyIO(&Joystick, 	H2D,	TEMPO(DX9,I16_MechSight_Off,DefTempo),	DX9);
+					MapKey	(&Joystick, 	H2R,	DX8);
+					MapKey	(&Joystick, 	H2L,	DX10);
+				if (Script_Debug) printf("...Done!\xa");	
+				if (Script_Debug) printf("         Hat3 (");		
+						if (Script_Debug) printf("Flaps)...");
+							MapKeyIO(&Joystick, 	H3D,	TEMPO(CHAIN(UP+I16_FlapUp_DX,UP+I16_FlapDn_DX),CHAIN(UP+I16_FlapUp_DX,DOWN+I16_FlapDn_DX),DefTempo),	CHAIN(UP+I16_FlapUp_DX,I16_FlapDn_DX));
+							MapKeyIO(&Joystick, 	H3U,	TEMPO(CHAIN(UP+I16_FlapUp_DX,UP+I16_FlapDn_DX),CHAIN(UP+I16_FlapDn_DX,DOWN+I16_FlapUp_DX),DefTempo),	CHAIN(UP+I16_FlapDn_DX,I16_FlapUp_DX));	
+							MapKeyIO(&Joystick, 	H3R,	I16_GunCharge_RW,	I16_GunCharge_RN);
+							MapKeyIO(&Joystick, 	H3L,	I16_GunCharge_LW,	I16_GunCharge_LN);
+				if (Script_Debug) printf("...Done!\xa");	
+
+				if (Script_Debug) printf("         Hat4 (CMS)...");	
+					MapKey	(&Joystick,	H4U,	DX15);
+//					MapKeyR	(&Joystick,	H4U, 	0);			//added to cancel helo trim
+					MapKey	(&Joystick,	H4D,	DX17);
+//					MapKeyR	(&Joystick,	H4D,	0);			//added to cancel helo trim
+					MapKey	(&Joystick,	H4R,	DX16);
+					MapKey	(&Joystick,	H4L,	DX18);
+					if (XYAxisTrim > 0)
+							MapKeyIO(&Joystick, H4P,	EXEC("TrimXYResetCheck(3);"),DX4);
+					else	MapKey	(&Joystick,	H4P,	DX4);	
+				if (Script_Debug) printf("...Done!\xa");			
+}
+
+int I16_MFD_Init()
+{
+//===================================
+//		Standard MFD Buttons
+//===================================
+
+	printf("   Map Cougar Left  MFD (DX31)...");	
+//LOSB 1 in Init
+					MapKey	(&LMFD, OSB02,	0);	//DX_LOSB02);
+					MapKey	(&LMFD, OSB03,	0);	//DX_LOSB03);
+					MapKey	(&LMFD,	OSB04,	0);	//DX_LOSB04);
+//					MapKeyR	(&LMFD,	OSB04,	0);	//for A-10C and F-5E				
+					MapKey	(&LMFD, OSB05,	0);	//DX_LOSB05);
+//					MapKeyR	(&LMFD,	OSB05,	0);	//For F-5E
+//LOSB 6-10
+					MapKey	(&LMFD,	OSB06,	0);	//DX_LOSB06);
+					MapKey	(&LMFD,	OSB07,	0);	//DX_LOSB07);
+//					MapKeyR	(&LMFD,	OSB07,	0);	//for Bf109
+					MapKey	(&LMFD,	OSB08,	0);	//DX_LOSB08);
+					MapKey	(&LMFD,	OSB09,	0);	//DX_LOSB09);
+					MapKey	(&LMFD,	OSB10,	0);	//DX_LOSB10);
+
+//LOSB 11-15, 16	//should be macros
+					MapKey	(&LMFD,	OSB11,	0);	//DX_LOSB11);
+					MapKey	(&LMFD,	OSB12,	0);	//DX_LOSB12);
+					MapKey	(&LMFD,	OSB13,	0);	//DX_LOSB13);
+					MapKey	(&LMFD,	OSB14,	0);	//DX_LOSB14);
+					MapKey	(&LMFD,	OSB15,	0);	//DX_LOSB15);
+					MapKey	(&LMFD,	OSB16,	0);	//DX_LOSB16);
+
+//LOSB 17-19	//should be macros
+					MapKey	(&LMFD,	OSB17,	0);	//DX_LOSB17);
+					MapKey	(&LMFD,	OSB18,	0);	//DX_LOSB18);
+					MapKey	(&LMFD,	OSB19,	0);	//DX_LOSB19);
+		
+//LMFD 20 in Init
+
+//Left Rocker Switches
+//SYM
+		MapKey	(&LMFD,	SYMU,	0);	//KB_LSYMU);
+		MapKey	(&LMFD,	SYMD,	0);	//KB_LSYMD);
+
+//CON
+		MapKey	(&LMFD,	CONU,	0);	//KB_LCONU);
+		MapKey	(&LMFD,	COND,	0);	//KB_LCOND);
+		
+//BRT
+		MapKey	(&LMFD,	BRTU,	0);	//KB_LBRTU);
+		MapKey	(&LMFD,	BRTD,	0);	//KB_LBRTD);
+		
+//GAIN in Init
+
+	printf("Done!\xa");
+
+	printf("   Map Cougar Right MFD (DX32)...");
+
+//ROSB 1-10 in Init
+		MapKey	(&RMFD,	OSB01,	0);	//DX_ROSB01);
+		MapKey	(&RMFD,	OSB02,	0);	//DX_ROSB02);	
+		MapKey	(&RMFD,	OSB03,	0);	//DX_ROSB03);
+		MapKey	(&RMFD,	OSB04,	0);	//DX_ROSB04);
+		MapKey	(&RMFD,	OSB05,	0);	//DX_ROSB05);
+//		MapKeyR	(&RMFD,	OSB05,	0);
+		MapKey	(&RMFD,	OSB06,	0);	//DX_ROSB06);
+		MapKey	(&RMFD,	OSB07,	0);	//DX_ROSB07);
+//		MapKeyR	(&RMFD,	OSB07,	0);
+		MapKey	(&RMFD,	OSB08,	0);	//DX_ROSB08);
+		MapKey	(&RMFD,	OSB09,	0);	//DX_ROSB09);
+		MapKey	(&RMFD,	OSB10,	0);	//DX_ROSB10);	
+//ROSB 11-15 (all should be macros)
+		MapKey	(&RMFD,	OSB11,	0);	//DX_ROSB11);
+		MapKey	(&RMFD,	OSB12,	0);	//DX_ROSB12);
+		MapKey	(&RMFD,	OSB13,	0);	//DX_ROSB13);
+		MapKey	(&RMFD,	OSB14,	0);	//DX_ROSB14);
+		MapKey	(&RMFD,	OSB15,	0);	//DX_ROSB15);
+//		MapKeyR	(&RMFD,	OSB13,	0);	//for Spitfire Engine Start	
+//		MapKeyR	(&RMFD,	OSB14,	0);	//for Spitfire Engine Start		
+//ROSB 16-20 (all should be macros)
+		MapKey	(&RMFD,	OSB16,	0);	//DX_ROSB16);
+		MapKey	(&RMFD,	OSB17,	0);	//DX_ROSB17);
+		MapKey	(&RMFD,	OSB18,	0);	//DX_ROSB18);
+		MapKey	(&RMFD,	OSB19,	0);	//DX_ROSB19);
+//		MapKey	(&RMFD,	OSB20,	DX_ROSB20);
+
+//SYM
+		MapKey	(&RMFD,	SYMU,	0);	//KB_RSYMU);
+		MapKey	(&RMFD,	SYMD,	0);	//KB_RSYMD);
+//		MapKeyR	(&RMFD,	SYMU,	0);	//added in 1.61 to account for context sensitive R in M2000C
+//		MapKeyR	(&RMFD,	SYMD,	0);
+		
+//CON
+		MapKey	(&RMFD,	CONU,	0);	//KB_RCONU);
+		MapKey	(&RMFD,	COND,	0);	//KB_RCOND);
+//		MapKeyR	(&RMFD,	CONU,	0);	//added in 1.24 to account for context sensitive R in UH-1
+//		MapKeyR	(&RMFD,	COND,	0);
+
+//BRT
+	MapKey	(&RMFD,	BRTU,	0);	//KB_RBRTU);
+	MapKey	(&RMFD,	BRTD,	0);	//KB_RBRTD);
+
+//GAIN
+	MapKey	(&RMFD,	GAINU,	0);	//KB_RGAINU);
+	MapKey	(&RMFD,	GAIND,	0);	//KB_RGAIND);
+
+	printf("Done!\xa");	
+}
+
+int I16_GearCheck(int gear)
+{
+if (gear)	//down
+	{
+	if (	((WarthogThrottle > 0) & (Throttle[FLAPD]))	|	((!WarthogThrottle) & (HCougar[T8]))	)	ActKey(DX26);
+	}
+else		//up
+	{
+	if (	((WarthogThrottle > 0) & (Throttle[FLAPU]))	|	((!WarthogThrottle) & (HCougar[T7]))	)	ActKey(DX25);
+	}
+}
+
+int I16_FlapLock(int lock)
+{
+if (lock)
+	{
+	MapKey	(&HCougar,	T3,	TEMPO(CHAIN(UP+I16_FlapUp_DX,UP+I16_FlapDn_DX),CHAIN(UP+I16_FlapDn_DX,DOWN+I16_FlapUp_DX),DefTempo)	);
+	MapKey	(&HCougar,	T2,	TEMPO(CHAIN(UP+I16_FlapUp_DX,UP+I16_FlapDn_DX),CHAIN(UP+I16_FlapUp_DX,DOWN+I16_FlapDn_DX),DefTempo)	);
+	}
+else
+	{
+	MapKey	(&HCougar,	T3,	I16_FlapUp_DX);
+	MapKey	(&HCougar,	T2,	I16_FlapDn_DX);
+	ActKey	(I16_FlapUp_DX);
+	ActKey	(I16_FlapDn_DX);
+	}
+if (AirBrkFlash > -1) Lights_LLED1(lock);
+}
+
+int I16_LThrottle_Set(int lt, int playlt, int key = 1)
+{
+if (Script_Debug) printf("I16_LThrottle_Set(%i,%i)\xa I16_LThrottle_Cur = %i\xa",lt,playlt,I16_LThrottle_Cur);
+if ((lt < 0) | (lt > 1)) lt = abs(I16_LThrottle_Cur-1);
+
+if (playlt < 0) playlt = 0;	//error traps
+else if (playlt > 1) playlt = 1;
+
+if (lt)
+	{
+	printf("Mixture\xa");
+	if ((playlt) & (!Init_Run)) PlayWav ("mix.wav");
+	
+	if (WarthogThrottle > 0)
+		{
+		MapAxis (&Throttle,	THR_LEFT,	DX_THROTTLE_AXIS,	 AXIS_NORMAL, MAP_ABSOLUTE);	
+		if (AirBrkFlash > -1)
+			{
+			DeferCall(LED_Delay,&Lights_WHT4,0);
+			DeferCall(2*LED_Delay,&Lights_WHT5,1);
+			}
+		}
+	else	MapAxis(&HCougar, MAN_RNG, DX_THROTTLE_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
+	if (key) ActKey(KEYON+PULSE+I16_MixtureBall_Push);
+	}
+else
+	{
+	printf("RPM\xa");
+	if ((playlt) & (!Init_Run)) PlayWav ("rpm.wav");
+	
+	if (WarthogThrottle > 0)
+		{
+		MapAxis (&Throttle,	THR_LEFT,	DX_ZROT_AXIS,	 AXIS_REVERSED, MAP_ABSOLUTE);
+		if (AirBrkFlash > -1)
+			{
+			DeferCall(LED_Delay,&Lights_WHT4,1);
+			DeferCall(2*LED_Delay,&Lights_WHT5,0);			
+			}				
+		}
+	else	MapAxis(&HCougar, MAN_RNG, DX_SLIDER_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);	
+	}
+if ((AirBrkFlash > -1) & (MFD_Count > 1)) Lights_RLED1(lt);
+I16_LThrottle_Cur = lt;
+if (Script_Debug) printf(" I16_LThrottle_Cur = %i\xa lt = %i\xa",I16_LThrottle_Cur,lt);
+}
+
+int I16_LockThr(int ax, int lock = 0)	//lock default 0 for DeferCall to release
+{
+if (ax)	//VR Mix
+	{
+	if (lock < 0) lock = abs(ThrFC_Lock_Cur-1);
+	
+	LockAxis(&Throttle, THR_FC, lock);
+	if (AirBrkFlash > -1) Lights_WHT5(lock);
+	ThrFC_Lock_Cur = lock;
+	}
+else	//VR RPM
+	{
+	//if (lock < 0) lock = abs(ThrLt_Lock_Cur-1);
+	LockAxis(&Throttle, THR_LEFT, lock);
+	if (AirBrkFlash > -1) Lights_WHT4(lock);
+	//ThrLt_Lock_Cur = lock;
+	}
+}

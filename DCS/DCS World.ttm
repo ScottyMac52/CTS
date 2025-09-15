@@ -1,0 +1,3944 @@
+//========================================================================
+//		DCS World Macro file for HOTAS Cougar/Warthog and Cougar MFDs
+//					by Don "Home Fries" Heumphreus
+//						last updated: 22AUG2023
+//
+//	Change Log:
+//	0.1		Initial Beta Release
+//	0.24	Added TS_PTT mappings for DX21 and scroll lock
+//	0.30	Added A-10C specific mappings
+//	0.33	Removed DX30 from Wheelbrake_DX
+//	0.36	Added MFD Day/Night/Off (A-10C)
+//	0.40	Added "_Key" to Landing_Gear_Toggle macro
+//	0.41	Added SPU9_PTT (BS2)
+//	0.42	Fixed Air to Ground mode (FC3)
+//			Added P-51D commands
+//	0.52	Added A-10C macros for SEQ sets
+//	0.53	Added LaserSwitch_Safe and Taxi_Ldg_Light_Off for A-10C
+//	0.58	Added initial UH-1 macros
+//	0.59	Added Dome Light macros
+//	0.61	Added UH1 Comms macros, KB_Toggle and TIR_Pause
+//	0.64	Added Intercom_PVT_DX (DX1) to UH1
+//	0.68	Changed CMSP_Switch_Delay to Switch_Delay
+//	0.69	Added Caution Dim/Bright and Gunner AI macros for UH1
+//	0.71	Added KBPress and Delay variables to Chains
+//	1.00	Initial Release/Rebaseline
+//	1.11	Changed ICS/Radio DX switch to DX20
+//	1.15	Added ESBR_Power_DX to Mi-8
+//	1.25	Added rudder and single engine default macros.
+//	1.26	Ka-50: Added BS2_Rotor_RPM_Warn, BS2_ADF_Bcn_Sel & BS2_R800_ADF_Sw
+//			Ka-50: Added Engine cutoff/stop and Shkval_BW
+//	1.28	Added F-86 and Fw-190 entries
+//	1.29	Added MiG-21 entries
+//	1.32	MiG-21: added Emergency Pitot Heat On/Off
+//			F-86: Added entries for discrete switch macros
+//	1.33	Added digital parking brake macros for analog braking routine
+//			Added PrevWaypoint for new FC3 iCommand
+//	1.34	Converted values to USB
+//			Added MiG-15
+//	1.35	Updated A-10C Autopilot for new UFC keys and Ka-50 Rotor Brake commands for 1.2.14+ compatibility
+//	1.36	Added Ka-50 interior lighting and SAI/ADI adjustment commands
+//	1.40	Added WH Mapping commands; revised CMSP_RWR_Toggle.
+//	1.40a2	Added MiG-21 switch commands
+//	1.50	Added Mi-8 Door commands
+//			Added Fw190/Bf109 and F-86 miscellaneous commands
+//			Added Radio/RSBN/PMRG commands for MiG-21
+//	1.51	Added SA342 macros
+//	1.52	Added UniversRadio External Radio commands
+//	1.60	Added L-39 macros
+//	1.61	Added SnapViewModRel_H() to SnapViewX macros
+//			Added DCS 1.54 macros for M2000
+//	1.63	Added F-5E
+//			Added non-discrete switch settings for MiG-21
+//	1.64	Updated SA342 Autopilot DX commands
+//	1.65	M2000C: Added INS PCN Switch Array commands
+//	1.66	M2000C: Added PCA Select and dim external lighting settings
+//					Added INS Mode commands for array
+//			Added Spitfire Controls
+//	1.67	Added AJS-37
+//	1.68	Added VigWalkman commands to AJS-37
+//			Added VR_Zoom
+//	1.69	Added Hawk mappings
+//			F-86: Added rocket salvo knob
+//			Mi-8: Added Gunner Commands
+//	1.70	AJS-37: Updated Macros for new luas
+//	1.71	AJS-37: Updated macros for 2.1.1U1
+//			M2000C: Added Hide Stick/Throttle
+//			Mi-8:	Added Throttle/Corrector commands
+//	1.72	Added new Su-27/33 specific macros
+//	1.73	SA342: Added Mode +/- Commands
+//			F-5E: Updated F5E_Fuse_Tail
+//	2.00	Added AV-8B
+//			AJS-37: Deconflicted trigger release with default clock key
+//	2.01	AV-8B: Added digital TDC commands
+//			Su-33: Added Su33_Wheelbrake_Start_DX
+//	2.04	AV-8B: Mapped additional keymaps to free up DX for switches
+//			Su-33: Updated Autothrottle commands
+//	2.05	AV-8B: Replaced SSW LWIN commands with L/R_SHIFT.  Added ECM macros.
+//	2.10	Moved VAC Macros here from DCS_UserSettings due to obsolescence.
+//			Updated KB macros for MFD replacing DX20-23
+//	2.12	F-5E: Added F5E_Comm_AirCartOn/F5E_Comm_AirCartOff macros
+//	2.13	M2000C: M2k_Decoy_Prog_Incr/Decr macros
+//	2.20	Added F/A-18C and ZoomOut_slow_Shift macros
+//	2.21	Added L_ALT to existing R_ALT+USB_B macros for compatibility with R_ALT+USB_B for TacView Bookmark (DCS_UserSettings)
+//			Added KB_xOSB01-10 macros
+//			M2000C: Changed M2k_Battery_On macro to deconflict with NS430_Toggle
+//	2.23	AJS37: Added AJS37_Throttle_Off macro
+//	2.24	M2000C: Changed M2k_Battery_On macro to deconflict with TacView Bookmark
+//	2.25	AJS37:  Swapped Seat Up/Down to match new default.lua
+//					Added CK37 mode CW/CCW commands
+//					Fixed Throttle Off bug
+//			Changed CTRL+Num1-4 combinations to SHIFT+Num1-4 for VR compatibility
+//	2.26	Added JHMCS and Seat Adjust to F/A-18C
+//			Updated M2K nav lights (L/RALT+L for DIM)
+//	2.27	Additional A-4E controls
+//			Added IR View and JumpInAcft for CA
+//	2.28	Changed CTRL+SHIFT+X to ALT+SHIFT+X for MiG21 FixNet and AV8 Ext Lights to deconflict with Scratchpad plugin
+//			Added ASC Refuel for Su-33
+//	2.29	Added Rdo4-10 and ICS for AWACS mode
+//			Added LotATC shortcuts
+//	2.30	Added SA42 pilot/wso/gunner seat macros (L_SHIFT+USB_1/2/3)
+//			Removed LATC_RefStartPt (renamed and moved to DCS_UserSettings.tmm)
+//			Moved LATC_RangeRings to DCS_UserSettings.tmm
+//	2.31	Added F-14
+//	2.32	Added F-14 Stab in/out
+//	2.33	Added F14_PTT_ICS for discrete ICS from TS3 PTT and F14_Jester_Menu_Off
+//	2.34	Added F14_Ammo_Count_Incr and VAICOM_ICS
+//			Deconflicted LANTIRN commands for pilot LANTIRN mod
+//			Added AJS37_AutoThrottle_Discon_AA and AJS37_AutoThrottle_AOA
+//			Added A-4 mappings for A-4E_C v1.3.1
+//	2.35	Added Radar, INS and FLIR mappings to F/A-18C
+//	2.40	Added F-16C macros
+//	2.42	Added F16C_RWR_PwrOff macro
+//			Added MiG-19 and I-16
+//			Added F18_UFC_OnOff to F/A-18C
+//			Added M20000 NVG commands
+//	2.43	Added MB339 and JF-17
+//	2.44	Added VR_Spyglass and mouse commands as keystrokes, moved VR_Center here from DCS_UserSettings.ttm
+//			Added C101 Trigger/Pickle safety macros
+//			Added AV8_Refuel_Probe_In/Out discrete macros
+//			Added UH1_RequestControl to UH-1
+//			Updated F14 Walkman switch side to deconflict with TacView
+//			Added JF17 Ext Lights
+//			Added UH1_CargoCam
+//			Added M2k CM programs 0-10
+//	2.45	Added F18_Plt_Salute, F18_CallBall and F14_Seat_Up/Dn
+//			Fixed F16C_FAckHornCombo macro
+//			Added DX OSB shortcuts (normal and TEMPO)
+//			Deconflicted M2k Radalt, Vent, INS Nav and added D2M
+//	2.46	Deconflicted M2k NVG Stow with Eng Start
+//			Added Rdo_Ovly_DX
+//	2.47	Added P-47
+//			Changed P-51 WEP_DX to DX19 to deconflict with OSB20
+//	2.47a	Updated AV8_SSw_x to conform with new default commands
+//	2.47b	Updated F-14 Strut compression to match new commands
+//	2.49	Added F-14 fire system commands for future implementation
+//	2.50	Changed VTB On/Export modifiers from left to right alt/ctl/shift
+//			Added P-47 Arm/Disarm for all pylons (macro)
+//	2.50a	Fixed IFFCC macros for A-10C
+//	2.51	Fixed UH-1 door gunner assignmensts
+//	2.52	Added F-14A MCB Circuit Breaker
+//	2.53	Updated AV8_ODUx macros to LALT for compatibilty
+//	2.54	Added F14_Aspect_Beam and F14_Tgt_Small for center switch posit.
+//			Fixed F16C_HUD_IAS, added F16C_HideStick.
+//			Added covert lighting modes for F-16.
+//			JF17: swapped EFCS/Auto (until fixed ingame), added Digital Clock
+//	2.55	P-47: Added recognition light discrete "key" macros.
+//			F-16C: Added IFF In/Out
+//			M-2000C: Added macros for DCS 2.5.6.60645
+//			F/A-18C: Added ECM
+//	2.57b	MiG-21: Replaced (obsolete) discrete SPO-10 light commands with a toggle command
+//	2.57d	AV-8B: Added discrete master arm switch settings, reoriented Sto Stop +/- to proper alignment
+//	2.60	Added Mi-24 Macros
+//	2.61	Added Mosquito macros and additional KB_rocker macros
+//	2.62	F-14: Added F14_APV_Off	and F14_APH_Off for 3 position neutrals.
+//	2.63	M2000C: Added Emer Throttle
+//	2.63a	AJS37:  Added Radar Elev Center
+//					Added AJS37_WepInt_C/CW, disabled discrete WepInt and WepSel macros
+//	2.63c	F-14: Added F14_EmerSweep_Fwd/Aft for non-custom LUA
+//	2.63d	I-16: Added I16_MixtureBall_Push
+//	2.64	Added AH-64 section
+//	2.64b	Added Flashlight Green/White to Ka-50
+//	2.65	Ka-50: Added discrete commands for DCS 2.8.1/BS3
+//			M2000C: Added M2k_FBW_Reset
+//			Added discrete NAV Light commnads for UH1 (used L+R modifiers to be unique enough for other helos)
+//	2.67	Updated SA342 light and pitot commands for deconfliction with DCS 2.8.6
+//			Updated A-4E_C for v2.1.1
+//	2.68	Added F-15E macros
+//	2.69	F-15E: Changed F15E_Fingerlift macro modifier to ALT to deconflict with Hdg/Crs MFD logic
+//			P-51D: Added radiator manual control macros
+//	2.71	F-15E: Added Startup Macro switches
+//			Mi-8: Added Key ESBR macro
+//
+//========================================================================
+
+
+define	VR_Zoom				DX29	
+define	VR_Zoom_kb			L_SHIFT+R_ALT+USB_PAGEDOWN
+define	VR_Spyglass			L_SHIFT+R_ALT+USB_PAGEUP
+define	RudderTrimLt_DX		CHAIN(DX32,D(ModDelay),DXHATLEFT)	//used here for VR so no need to repeat CHAIN.  If change H1_Init() be sure to update macro
+define	RudderTrimRt_DX		CHAIN(DX32,D(ModDelay),DXHATRIGHT)
+define	RudderTrimLt_DXO	CHAIN(DX30,DX32,D(ModDelay),DXHATLEFT)	//used here for VR when /I not necessary
+define	RudderTrimRt_DXO	CHAIN(DX30,DX32,D(ModDelay),DXHATRIGHT)
+
+define	VR_MouseWheelUpRx	USB_UPARROW							//Rx is unmodified for REXEC (modifiers held with DOWN command)
+define	VR_MouseWheelDnRx	USB_DOWNARROW						//Rx is unmodified for REXEC (modifiers held with DOWN command)
+define	VR_MouseWheelUp		L_SHIFT+R_ALT+VR_MouseWheelUpRx		//CHAIN(DX32,D(ModDelay),	DXHATUP)  or DXHAT w/o modifier
+define	VR_MouseWheelDn		L_SHIFT+R_ALT+VR_MouseWheelDnRx		//CHAIN(DX32,D(ModDelay),	DXHATDOWN)
+define	VR_MouseBtnLt		L_SHIFT+R_ALT+USB_LEFTARROW			//CHAIN(DX32,D(ModDelay),	DXHATLEFT)
+define	VR_MouseBtnRt		L_SHIFT+R_ALT+USB_RIGHTARROW		//CHAIN(DX32,D(ModDelay),	DXHATRIGHT)
+define	VR_Center			L_SHIFT+R_ALT+USB_HOME				//CHAIN(R_CTL,L_CTL,D(ModDelay),DX29)
+
+define	FOV_Center			USB_KP_ENTER
+define	FOV_Center_Shift	CHAIN(DX30,D(ModDelay),USB_KP_ENTER)
+//define	FOV_Center_Long		CHAIN(DOWN+USB_KP_ENTER,D(100),UP+USB_KP_ENTER)
+
+//define X40 50	//assigns "button 50" when used with EVH to activate shifted state
+
+//VR Stay away: CTRL+NUM1-4
+
+
+
+// ******************************************************
+//					 DCS External Macros
+// ******************************************************
+
+//TeamSpeak/VAC
+define	TS3PTT_DX			DX21
+define	VACPTT_Other		DX23	//VoiceAttack for other sims.  DX23 allows 2 other radio functions (DX20,22) as required.
+//define	VAC_PTT				MOUSE_CENTER	//obsolete, moved from DCS_UserSettings
+//define	VAC_Toggle			R_CTL+USB_U		//obsolete, moved from DCS_UserSettings
+
+//TARS/Aries/Univers Radio; Do not modify
+define	Rdo1_VHF_AM			DX20
+define	Rdo2_UHF			DX22
+define	Rdo3_VHF_FM			DX23
+define	Rdo4				CHAIN(DX29,D(ModDelay),DX4)	//DX29 used as modifier for AWACS radios 4-10
+define	Rdo5				CHAIN(DX29,D(ModDelay),DX5)
+define	Rdo6				CHAIN(DX29,D(ModDelay),DX15)
+define	Rdo7				CHAIN(DX29,D(ModDelay),DX14)
+define	Rdo8				CHAIN(DX29,D(ModDelay),DX13)
+define	Rdo9				CHAIN(DX29,D(ModDelay),DX12)
+define	Rdo10				CHAIN(DX29,D(ModDelay),DX11)
+define	Rdo_ICS				CHAIN(DX30,D(ModDelay),DX21)
+define	VAICOM_ICS			CHAIN(DX30,D(VAICOM_ICS_Delay),DX21)
+define	Rdo_Ovly_DX			DX29
+define	Rdo_Ovly_DXI		CHAIN(DX30,D(ModDelay),DX29)
+define	Rdo_Ovly_KB			L_CTL+L_SHIFT+USB_ESCAPE
+//LotATC (non-customizable).  Shortcuts start with alt (which is with shift) so should just be the main key
+
+//define LATC_RangeRings		USB_D	//moved to DCS_UserSettings.tmm
+//define LATC_RefStartPt		USB_R	//renamed to LATC_BullsRef and moved to DCS_UserSettings.tmm
+
+// -----------------------------------
+//           Communications
+// -----------------------------------
+
+define	CommMenu				USB[0x31]			//backslash
+define	Mic_Sw					R_ALT+USB[0x31]		//RALT \
+define	Mic_Sw_DX				DX20
+
+define	A10C_Mic_Sw_Fwd			L_ALT+USB[0x57]		//ALT KP+
+define	A10C_Mic_Sw_Dn			L_ALT+USB[0x56]		//ALT KP-
+define	A10C_Mic_Sw_Up			L_SHIFT+USB[0x57]	//SHF KP+
+define	A10C_Mic_Sw_Aft			L_SHIFT+USB[0x56]	//SHF KP-
+
+define	Comm_GndElec_On			CHAIN(PULSE+USB_F8,D(KBDelay),PULSE+USB_F2,D(KBDelay),PULSE+USB_F1)
+define	Comm_GndElec_Off		CHAIN(PULSE+USB_F8,D(KBDelay),PULSE+USB_F2,D(KBDelay),PULSE+USB_F2)
+define	F5E_Comm_AirCartOn		CHAIN(PULSE+USB_F8,D(KBDelay),PULSE+USB_F5,D(KBDelay),PULSE+USB_F1)
+define	F5E_Comm_AirCartOff		CHAIN(PULSE+USB_F8,D(KBDelay),PULSE+USB_F5,D(KBDelay),PULSE+USB_F2)
+define	F5E_Comm_SupplyAir		CHAIN(PULSE+USB_F8,D(KBDelay),PULSE+USB_F5,D(KBDelay),PULSE+USB_F3)
+
+// -----------------------------------
+//           Flight controls
+// -----------------------------------
+define	Autopilot				USB_A 
+
+define	Airbrake 				USB_B
+define	Airbrake_On				L_SHIFT+USB_B 
+define	Airbrake_Off			L_CTL+USB_B 
+define	Airbrake_Stop			USB_B					//same as toggle
+define	Flaps_Cycle				USB_F 
+define	Flaps_Dn				L_SHIFT+USB[0x09]		//LSHF f 
+define	Flaps_Up				L_CTL+USB[0x09]			//LCTL f  
+define	Landing_Gear_Toggle_Key	USB[0x0A]				// g
+define	Landing_Gear_Up 		L_CTL+USB[0x0A]			// LCTL g 
+define	Landing_Gear_Down 		L_SHIFT+USB[0x0A]		//LSHF g 
+
+// Trim
+define	Trim_Up				R_CTL+USB_PERIOD
+define	Trim_Down			R_CTL+USB_SEMICOLON  
+define	Trim_Left			R_CTL+USB_COMMA 
+define	Trim_Right			R_CTL+USB_SLASH 
+define	Trim_Left_Rudder	R_CTL+USB_Z 
+define	Trim_Right_Rudder	R_CTL+USB_X
+define	Trim_Reset			L_CTL+USB_T
+
+define	WheelBrake			USB_W
+define	WheelBrake_DX		CHAIN(DX31,DX32,D(ModDelay),DX29)
+
+define	Rudder_Left			USB_Z
+define	Rudder_Right		USB_X
+
+define	RequestAcftCtl		USB_J
+
+// ---------------------------
+//           Systems
+// ---------------------------
+define	NS430_Toggle			L_SHIFT+L_ALT+USB_B
+
+define	Engine_Left_Start		R_ALT+USB_HOME 
+define	Engine_Left_Stop		R_ALT+USB_END
+define	Engine_Right_Start		R_CTL+USB_HOME
+define	Engine_Right_Stop		R_CTL+USB_END
+
+define	Engine_Single_Start		USB_HOME
+define	Engine_Single_Stop		USB_END
+define	Engine_Single_RSStart	R_SHIFT+USB_HOME
+define	Engine_Single_RSStop	R_SHIFT+USB_END
+
+define	CA_IR_View				R_SHIFT+USB_N
+define	CA_PlannedPosit			R_CTL+USB_F10			
+define	Eject					L_CTL+USB_E
+define	Eject3X					CHAIN(DOWN+USB_LEFTCONTROL,D(ModDelay),PULSE+USB_E, D(KBDelay), PULSE+USB_E, D(KBDelay), PULSE+USB_E,D(ModDelay),UP+USB_LEFTCONTROL)
+// ---------------------------
+//           Sensors
+// ---------------------------
+define	TargetDesignator_Up		USB_SEMICOLON  
+define	TargetDesignator_Down	USB_PERIOD
+define	TargetDesignator_Left	USB_COMMA
+define	TargetDesignator_Right	USB_SLASH 
+define	TargetDesignator_Center	R_CTL+USB_I
+define	TargetLock				USB_RETURNORENTER
+
+define	NVG_Toggle				R_SHIFT+USB_H
+define	NVG_Gain_Incr			R_CTL+R_SHIFT+USB_H
+define	NVG_Gain_Decr			R_ALT+R_SHIFT+USB_H
+
+// ------------------------
+//           Views
+// ------------------------
+define	KB_Toggle					R_SHIFT+USB_K
+define	KB_Posit					R_CTL+USB_K
+define	KB_Page_Next				USB_CLOSEBRACKET
+define	KB_Page_Prev				USB_OPENBRACKET
+define	KB_Shortcut_Mark			R_CTL+R_SHIFT+USB_K		//not default, must be mapped in-game
+define	KB_Shortcut_Next			R_CTL+USB_CLOSEBRACKET	//not default, must be mapped in-game
+define	KB_Shortcut_Prev			R_CTL+USB_OPENBRACKET	//not default, must be mapped in-game
+
+define	CrewStation1				USB_1
+define	CrewStation2				USB_2
+define	CrewStation3				USB_3
+define	CrewStation4				USB_4
+//define	CrewStation1DX				CHAIN(DX30,D(ModDelay),USB_1)
+//define	CrewStation2DX				CHAIN(DX30,D(ModDelay),USB_2)
+//define	CrewStation3DX				CHAIN(DX30,D(ModDelay),USB_3)
+//define	CrewStation4DX				CHAIN(DX30,D(ModDelay),USB_4)
+define	CrewStation1LS				L_SHIFT+USB_1
+define	CrewStation2LS				L_SHIFT+USB_2
+define	CrewStation3LS				L_SHIFT+USB_3
+define	CrewStation4LS				L_SHIFT+USB_4
+define	CrewStation1RS				R_SHIFT+USB_1
+define	CrewStation2RS				R_SHIFT+USB_2
+define	CrewStation3RS				R_SHIFT+USB_3
+define	CrewStation4RS				R_SHIFT+USB_4
+
+define	JumpInAcft					R_ALT+USB_J
+define	LSOView						L_ALT+USB_F9
+define	MapView						USB_F10
+
+define	ZoomIn						R_SHIFT+USB[0x55]	//R_SHIFT+KP* 
+define	ZoomOut						R_SHIFT+USB[0x54]	//R_SHIFT+KP/    
+define	ZoomIn_slow					USB[0x55]			//KP* 
+define	ZoomOut_slow				USB[0x54]			//KP/ 
+define	ZoomOut_slow_Shift			CHAIN(DX30,D(ModDelay),USB[0x54]) //Shift KP/
+define	ZoomNormal					USB[0x58]			//KPENT 
+define	LockView					USB[0x63] 			//KP.
+define	UnlockView					USB[0x53]			//NUML 
+
+define	Padlock_missiles_All		R_SHIFT+USB[0x63] 	//KP.
+define	Padlock_missile_Threat		R_ALT+USB[0x63] 
+define	Padlock_terrain_view		R_CTL+USB[0x63]
+
+define	SnapViewHold				R_CTL+USB_KP_0
+define	SnapViewRelease				USB_KP_0
+define	SnapView1					CHAIN(USB_LEFTGUI,D(ModDelay),USB_KP_1,EXEC("SnapViewModRel_H();"))	
+define	SnapView1t					USB_KP_1
+define	SnapView2					CHAIN(USB_LEFTGUI,D(ModDelay),USB_KP_2,EXEC("SnapViewModRel_H();"))
+define	SnapView2t					USB_KP_2
+define	SnapView3					CHAIN(USB_LEFTGUI,D(ModDelay),USB_KP_3,EXEC("SnapViewModRel_H();"))
+define	SnapView3t					USB_KP_3
+define	SnapView4					CHAIN(USB_LEFTGUI,D(ModDelay),USB_KP_4,EXEC("SnapViewModRel_H();"))
+define	SnapView4t					USB_KP_4
+define	SnapView5					CHAIN(USB_LEFTGUI,D(ModDelay),USB_KP_5,EXEC("SnapViewModRel_H();"))
+define	SnapView5t					USB_KP_5
+define	SnapView6					CHAIN(USB_LEFTGUI,D(ModDelay),USB_KP_6,EXEC("SnapViewModRel_H();"))
+define	SnapView6t					USB_KP_6
+define	SnapView7					CHAIN(USB_LEFTGUI,D(ModDelay),USB_KP_7,EXEC("SnapViewModRel_H();"))
+define	SnapView7t					USB_KP_7
+define	SnapView8					CHAIN(USB_LEFTGUI,D(ModDelay),USB_KP_8,EXEC("SnapViewModRel_H();"))
+define	SnapView8t					USB_KP_8
+define	SnapView9					CHAIN(USB_LEFTGUI,D(ModDelay),USB_KP_9,EXEC("SnapViewModRel_H();"))
+define	SnapView9t					USB_KP_9
+
+//DX OSB Buttons
+define	DX_LOSB01							CHAIN(DX31,D(ModDelay),DX1)
+define	DX_LOSB02							CHAIN(DX31,D(ModDelay),DX2)
+define	DX_LOSB03							CHAIN(DX31,D(ModDelay),DX3)
+define	DX_LOSB04							CHAIN(DX31,D(ModDelay),DX4)
+define	DX_LOSB05							CHAIN(DX31,D(ModDelay),DX5)
+define	DX_LOSB06							CHAIN(DX31,D(ModDelay),DX6)
+define	DX_LOSB07							CHAIN(DX31,D(ModDelay),DX7)
+define	DX_LOSB08							CHAIN(DX31,D(ModDelay),DX8)
+define	DX_LOSB09							CHAIN(DX31,D(ModDelay),DX9)
+define	DX_LOSB10							CHAIN(DX31,D(ModDelay),DX10)
+define	DX_LOSB11							CHAIN(DX31,D(ModDelay),DX11)
+define	DX_LOSB12							CHAIN(DX31,D(ModDelay),DX12)
+define	DX_LOSB13							CHAIN(DX31,D(ModDelay),DX13)
+define	DX_LOSB14							CHAIN(DX31,D(ModDelay),DX14)
+define	DX_LOSB15							CHAIN(DX31,D(ModDelay),DX15)
+define	DX_LOSB16							CHAIN(DX31,D(ModDelay),DX16)
+define	DX_LOSB17							CHAIN(DX31,D(ModDelay),DX17)
+define	DX_LOSB18							CHAIN(DX31,D(ModDelay),DX18)
+define	DX_LOSB19							CHAIN(DX31,D(ModDelay),DX19)
+define	DX_LOSB20							CHAIN(DX31,D(ModDelay),DX24)
+
+define	DX_ROSB01							CHAIN(DX32,D(ModDelay),DX1)
+define	DX_ROSB02							CHAIN(DX32,D(ModDelay),DX2)
+define	DX_ROSB03							CHAIN(DX32,D(ModDelay),DX3)
+define	DX_ROSB04							CHAIN(DX32,D(ModDelay),DX4)
+define	DX_ROSB05							CHAIN(DX32,D(ModDelay),DX5)
+define	DX_ROSB06							CHAIN(DX32,D(ModDelay),DX6)
+define	DX_ROSB07							CHAIN(DX32,D(ModDelay),DX7)
+define	DX_ROSB08							CHAIN(DX32,D(ModDelay),DX8)
+define	DX_ROSB09							CHAIN(DX32,D(ModDelay),DX9)
+define	DX_ROSB10							CHAIN(DX32,D(ModDelay),DX10)
+define	DX_ROSB11							CHAIN(DX32,D(ModDelay),DX11)
+define	DX_ROSB12							CHAIN(DX32,D(ModDelay),DX12)
+define	DX_ROSB13							CHAIN(DX32,D(ModDelay),DX13)
+define	DX_ROSB14							CHAIN(DX32,D(ModDelay),DX14)
+define	DX_ROSB15							CHAIN(DX32,D(ModDelay),DX15)
+define	DX_ROSB16							CHAIN(DX32,D(ModDelay),DX16)
+define	DX_ROSB17							CHAIN(DX32,D(ModDelay),DX17)
+define	DX_ROSB18							CHAIN(DX32,D(ModDelay),DX18)
+define	DX_ROSB19							CHAIN(DX32,D(ModDelay),DX19)
+define	DX_ROSB20							CHAIN(DX32,D(ModDelay),DX24)
+
+
+define	DX_LOSB01T							TEMPO(CHAIN(DX31,D(ModDelay),DX1),	CHAIN(DX30,DX31,D(ModDelay),DX1),	SwTempo)
+define	DX_LOSB02T							TEMPO(CHAIN(DX31,D(ModDelay),DX2),	CHAIN(DX30,DX31,D(ModDelay),DX2),	SwTempo)
+define	DX_LOSB03T							TEMPO(CHAIN(DX31,D(ModDelay),DX3),	CHAIN(DX30,DX31,D(ModDelay),DX3),	SwTempo)
+define	DX_LOSB04T							TEMPO(CHAIN(DX31,D(ModDelay),DX4),	CHAIN(DX30,DX31,D(ModDelay),DX4),	SwTempo)
+define	DX_LOSB05T							TEMPO(CHAIN(DX31,D(ModDelay),DX5),	CHAIN(DX30,DX31,D(ModDelay),DX5),	SwTempo)
+define	DX_LOSB06T							TEMPO(CHAIN(DX31,D(ModDelay),DX6),	CHAIN(DX30,DX31,D(ModDelay),DX6),	SwTempo)
+define	DX_LOSB07T							TEMPO(CHAIN(DX31,D(ModDelay),DX7),	CHAIN(DX30,DX31,D(ModDelay),DX7),	SwTempo)
+define	DX_LOSB08T							TEMPO(CHAIN(DX31,D(ModDelay),DX8),	CHAIN(DX30,DX31,D(ModDelay),DX8),	SwTempo)
+define	DX_LOSB09T							TEMPO(CHAIN(DX31,D(ModDelay),DX9),	CHAIN(DX30,DX31,D(ModDelay),DX9),	SwTempo)
+define	DX_LOSB10T							TEMPO(CHAIN(DX31,D(ModDelay),DX10),	CHAIN(DX30,DX31,D(ModDelay),DX10),	SwTempo)
+define	DX_LOSB11T							TEMPO(CHAIN(DX31,D(ModDelay),DX11),	CHAIN(DX30,DX31,D(ModDelay),DX11),	SwTempo)
+define	DX_LOSB12T							TEMPO(CHAIN(DX31,D(ModDelay),DX12),	CHAIN(DX30,DX31,D(ModDelay),DX12),	SwTempo)
+define	DX_LOSB13T							TEMPO(CHAIN(DX31,D(ModDelay),DX13),	CHAIN(DX30,DX31,D(ModDelay),DX13),	SwTempo)
+define	DX_LOSB14T							TEMPO(CHAIN(DX31,D(ModDelay),DX14),	CHAIN(DX30,DX31,D(ModDelay),DX14),	SwTempo)
+define	DX_LOSB15T							TEMPO(CHAIN(DX31,D(ModDelay),DX15),	CHAIN(DX30,DX31,D(ModDelay),DX15),	SwTempo)
+define	DX_LOSB16T							TEMPO(CHAIN(DX31,D(ModDelay),DX16),	CHAIN(DX30,DX31,D(ModDelay),DX16),	SwTempo)
+define	DX_LOSB17T							TEMPO(CHAIN(DX31,D(ModDelay),DX17),	CHAIN(DX30,DX31,D(ModDelay),DX17),	SwTempo)
+define	DX_LOSB18T							TEMPO(CHAIN(DX31,D(ModDelay),DX18),	CHAIN(DX30,DX31,D(ModDelay),DX18),	SwTempo)
+define	DX_LOSB19T							TEMPO(CHAIN(DX31,D(ModDelay),DX19),	CHAIN(DX30,DX31,D(ModDelay),DX19),	SwTempo)
+define	DX_LOSB20T							TEMPO(CHAIN(DX31,D(ModDelay),DX24),	CHAIN(DX30,DX31,D(ModDelay),DX24),	SwTempo)
+
+define	DX_ROSB01T							TEMPO(CHAIN(DX32,D(ModDelay),DX1),	CHAIN(DX30,DX32,D(ModDelay),DX1),	SwTempo)
+define	DX_ROSB02T							TEMPO(CHAIN(DX32,D(ModDelay),DX2),	CHAIN(DX30,DX32,D(ModDelay),DX2),	SwTempo)
+define	DX_ROSB03T							TEMPO(CHAIN(DX32,D(ModDelay),DX3),	CHAIN(DX30,DX32,D(ModDelay),DX3),	SwTempo)
+define	DX_ROSB04T							TEMPO(CHAIN(DX32,D(ModDelay),DX4),	CHAIN(DX30,DX32,D(ModDelay),DX4),	SwTempo)
+define	DX_ROSB05T							TEMPO(CHAIN(DX32,D(ModDelay),DX5),	CHAIN(DX30,DX32,D(ModDelay),DX5),	SwTempo)
+define	DX_ROSB06T							TEMPO(CHAIN(DX32,D(ModDelay),DX6),	CHAIN(DX30,DX32,D(ModDelay),DX6),	SwTempo)
+define	DX_ROSB07T							TEMPO(CHAIN(DX32,D(ModDelay),DX7),	CHAIN(DX30,DX32,D(ModDelay),DX7),	SwTempo)
+define	DX_ROSB08T							TEMPO(CHAIN(DX32,D(ModDelay),DX8),	CHAIN(DX30,DX32,D(ModDelay),DX8),	SwTempo)
+define	DX_ROSB09T							TEMPO(CHAIN(DX32,D(ModDelay),DX9),	CHAIN(DX30,DX32,D(ModDelay),DX9),	SwTempo)
+define	DX_ROSB10T							TEMPO(CHAIN(DX32,D(ModDelay),DX10),	CHAIN(DX30,DX32,D(ModDelay),DX10),	SwTempo)
+define	DX_ROSB11T							TEMPO(CHAIN(DX32,D(ModDelay),DX11),	CHAIN(DX30,DX32,D(ModDelay),DX11),	SwTempo)
+define	DX_ROSB12T							TEMPO(CHAIN(DX32,D(ModDelay),DX12),	CHAIN(DX30,DX32,D(ModDelay),DX12),	SwTempo)
+define	DX_ROSB13T							TEMPO(CHAIN(DX32,D(ModDelay),DX13),	CHAIN(DX30,DX32,D(ModDelay),DX13),	SwTempo)
+define	DX_ROSB14T							TEMPO(CHAIN(DX32,D(ModDelay),DX14),	CHAIN(DX30,DX32,D(ModDelay),DX14),	SwTempo)
+define	DX_ROSB15T							TEMPO(CHAIN(DX32,D(ModDelay),DX15),	CHAIN(DX30,DX32,D(ModDelay),DX15),	SwTempo)
+define	DX_ROSB16T							TEMPO(CHAIN(DX32,D(ModDelay),DX16),	CHAIN(DX30,DX32,D(ModDelay),DX16),	SwTempo)
+define	DX_ROSB17T							TEMPO(CHAIN(DX32,D(ModDelay),DX17),	CHAIN(DX30,DX32,D(ModDelay),DX17),	SwTempo)
+define	DX_ROSB18T							TEMPO(CHAIN(DX32,D(ModDelay),DX18),	CHAIN(DX30,DX32,D(ModDelay),DX18),	SwTempo)
+define	DX_ROSB19T							TEMPO(CHAIN(DX32,D(ModDelay),DX19),	CHAIN(DX30,DX32,D(ModDelay),DX19),	SwTempo)
+define	DX_ROSB20T							TEMPO(CHAIN(DX32,D(ModDelay),DX24),	CHAIN(DX30,DX32,D(ModDelay),DX24),	SwTempo)
+
+
+//non-DX buttons for deconfliction
+define	KB_LOSB01							CHAIN(R_ALT,USB_LEFTGUI,D(ModDelay), USB_KP_1)
+define	KB_LOSB02							CHAIN(R_ALT,USB_LEFTGUI,D(ModDelay), USB_KP_2)
+define	KB_LOSB03							CHAIN(R_ALT,USB_LEFTGUI,D(ModDelay), USB_KP_3)
+define	KB_LOSB04							CHAIN(R_ALT,USB_LEFTGUI,D(ModDelay), USB_KP_4)
+define	KB_LOSB05							CHAIN(R_ALT,USB_LEFTGUI,D(ModDelay), USB_KP_5)
+define	KB_LOSB06							CHAIN(R_ALT,USB_LEFTGUI,D(ModDelay), USB_KP_6)
+define	KB_LOSB07							CHAIN(R_ALT,USB_LEFTGUI,D(ModDelay), USB_KP_7)
+define	KB_LOSB08							CHAIN(R_ALT,USB_LEFTGUI,D(ModDelay), USB_KP_8)
+define	KB_LOSB09							CHAIN(R_ALT,USB_LEFTGUI,D(ModDelay), USB_KP_9)
+define	KB_LOSB10							CHAIN(R_ALT,USB_LEFTGUI,D(ModDelay), USB_KP_0)
+define	KB_LOSB11							CHAIN(R_SHIFT,USB_LEFTGUI,D(ModDelay), USB_KP_1)
+define	KB_LOSB12							CHAIN(R_SHIFT,USB_LEFTGUI,D(ModDelay), USB_KP_2)
+define	KB_LOSB13							CHAIN(R_SHIFT,USB_LEFTGUI,D(ModDelay), USB_KP_3)
+define	KB_LOSB14							CHAIN(R_SHIFT,USB_LEFTGUI,D(ModDelay), USB_KP_4)
+define	KB_LOSB15							CHAIN(R_SHIFT,USB_LEFTGUI,D(ModDelay), USB_KP_5)
+define	KB_LOSB16							CHAIN(R_SHIFT,USB_LEFTGUI,D(ModDelay), USB_KP_6)
+define	KB_LOSB17							CHAIN(R_SHIFT,USB_LEFTGUI,D(ModDelay), USB_KP_7)
+define	KB_LOSB18							CHAIN(R_SHIFT,USB_LEFTGUI,D(ModDelay), USB_KP_8)
+define	KB_LOSB19							CHAIN(R_SHIFT,USB_LEFTGUI,D(ModDelay), USB_KP_9)
+define	KB_LCONU							CHAIN(R_ALT,USB_LEFTGUI,D(ModDelay), USB_PAGEUP)
+define	KB_LCOND							CHAIN(R_ALT,USB_LEFTGUI,D(ModDelay), USB_PAGEDOWN)
+define	KB_LBRTU							CHAIN(L_ALT,USB_LEFTGUI,D(ModDelay), USB_PAGEUP)
+define	KB_LBRTD							CHAIN(L_ALT,USB_LEFTGUI,D(ModDelay), USB_PAGEDOWN)
+define	KB_LSYMU							CHAIN(R_SHIFT,USB_LEFTGUI,D(ModDelay), USB_PAGEUP)
+define	KB_LSYMD							CHAIN(R_SHIFT,USB_LEFTGUI,D(ModDelay), USB_PAGEDOWN)
+define	KB_LGAINU							CHAIN(L_SHIFT,USB_LEFTGUI,D(ModDelay), USB_PAGEUP)
+define	KB_LGAIND							CHAIN(L_SHIFT,USB_LEFTGUI,D(ModDelay), USB_PAGEDOWN)
+
+define	KB_ROSB01							CHAIN(L_ALT,USB_RIGHTGUI,D(ModDelay), USB_KP_1)
+define	KB_ROSB02							CHAIN(L_ALT,USB_RIGHTGUI,D(ModDelay), USB_KP_2)
+define	KB_ROSB03							CHAIN(L_ALT,USB_RIGHTGUI,D(ModDelay), USB_KP_3)
+define	KB_ROSB04							CHAIN(L_ALT,USB_RIGHTGUI,D(ModDelay), USB_KP_4)
+define	KB_ROSB05							CHAIN(L_ALT,USB_RIGHTGUI,D(ModDelay), USB_KP_5)
+define	KB_ROSB06							CHAIN(L_ALT,USB_RIGHTGUI,D(ModDelay), USB_KP_6)
+define	KB_ROSB07							CHAIN(L_ALT,USB_RIGHTGUI,D(ModDelay), USB_KP_7)
+define	KB_ROSB08							CHAIN(L_ALT,USB_RIGHTGUI,D(ModDelay), USB_KP_8)
+define	KB_ROSB09							CHAIN(L_ALT,USB_RIGHTGUI,D(ModDelay), USB_KP_9)
+define	KB_ROSB10							CHAIN(L_ALT,USB_RIGHTGUI,D(ModDelay), USB_KP_0)
+define	KB_ROSB11							CHAIN(L_SHIFT,USB_RIGHTGUI,D(ModDelay), USB_KP_1)
+define	KB_ROSB12							CHAIN(L_SHIFT,USB_RIGHTGUI,D(ModDelay), USB_KP_2)
+define	KB_ROSB13							CHAIN(L_SHIFT,USB_RIGHTGUI,D(ModDelay), USB_KP_3)
+define	KB_ROSB14							CHAIN(L_SHIFT,USB_RIGHTGUI,D(ModDelay), USB_KP_4)
+define	KB_ROSB15							CHAIN(L_SHIFT,USB_RIGHTGUI,D(ModDelay), USB_KP_5)
+define	KB_ROSB16							CHAIN(L_SHIFT,USB_RIGHTGUI,D(ModDelay), USB_KP_6)
+define	KB_ROSB17							CHAIN(L_SHIFT,USB_RIGHTGUI,D(ModDelay), USB_KP_7)
+define	KB_ROSB18							CHAIN(L_SHIFT,USB_RIGHTGUI,D(ModDelay), USB_KP_8)
+define	KB_ROSB19							CHAIN(L_SHIFT,USB_RIGHTGUI,D(ModDelay), USB_KP_9)
+define	KB_RCONU							CHAIN(R_ALT,USB_RIGHTGUI,D(ModDelay), USB_PAGEUP)
+define	KB_RCOND							CHAIN(R_ALT,USB_RIGHTGUI,D(ModDelay), USB_PAGEDOWN)
+define	KB_RBRTU							CHAIN(L_ALT,USB_RIGHTGUI,D(ModDelay), USB_PAGEUP)
+define	KB_RBRTD							CHAIN(L_ALT,USB_RIGHTGUI,D(ModDelay), USB_PAGEDOWN)
+define	KB_RSYMU							CHAIN(R_SHIFT,USB_RIGHTGUI,D(ModDelay), USB_PAGEUP)
+define	KB_RSYMD							CHAIN(R_SHIFT,USB_RIGHTGUI,D(ModDelay), USB_PAGEDOWN)
+define	KB_RGAINU							CHAIN(L_SHIFT,USB_RIGHTGUI,D(ModDelay), USB_PAGEUP)
+define	KB_RGAIND							CHAIN(L_SHIFT,USB_RIGHTGUI,D(ModDelay), USB_PAGEDOWN)
+
+define	KB_LSYMUI							CHAIN(DX30,R_SHIFT,USB_LEFTGUI, D(ModDelay), USB_PAGEUP)
+define	KB_LSYMDI							CHAIN(DX30,R_SHIFT,USB_LEFTGUI, D(ModDelay), USB_PAGEDOWN)
+define	KB_LCONUI							CHAIN(DX30,R_ALT,USB_LEFTGUI, D(ModDelay), USB_PAGEUP)
+define	KB_LCONDI							CHAIN(DX30,R_ALT,USB_LEFTGUI, D(ModDelay), USB_PAGEDOWN)
+define	KB_LBRTUI							CHAIN(DX30,L_ALT,USB_LEFTGUI, D(ModDelay), USB_PAGEUP)
+define	KB_LBRTDI							CHAIN(DX30,L_ALT,USB_LEFTGUI, D(ModDelay), USB_PAGEDOWN)
+
+define	KB_RSYMUI							CHAIN(DX30,R_SHIFT,USB_RIGHTGUI,D(ModDelay), USB_PAGEUP)
+define	KB_RSYMDI							CHAIN(DX30,R_SHIFT,USB_RIGHTGUI,D(ModDelay), USB_PAGEDOWN)
+define	KB_RGAINUI							CHAIN(DX30,L_SHIFT,USB_RIGHTGUI,D(ModDelay), USB_PAGEUP)
+define	KB_RGAINDI							CHAIN(DX30,L_SHIFT,USB_RIGHTGUI,D(ModDelay), USB_PAGEDOWN)
+define	KB_RCONUI							CHAIN(DX30,R_ALT,USB_RIGHTGUI,D(ModDelay), USB_PAGEUP)
+define	KB_RCONDI							CHAIN(DX30,R_ALT,USB_RIGHTGUI,D(ModDelay), USB_PAGEDOWN)
+define	KB_RBRTUI							CHAIN(DX30,L_ALT,USB_RIGHTGUI,D(ModDelay), USB_PAGEUP)
+define	KB_RBRTDI							CHAIN(DX30,L_ALT,USB_RIGHTGUI,D(ModDelay), USB_PAGEDOWN)
+
+
+define	KB_LOSB05T							TEMPO(CHAIN(R_ALT,USB_LEFTGUI, D(ModDelay), USB_KP_5),	CHAIN(DX30,R_ALT,USB_LEFTGUI, D(ModDelay), USB_KP_5),	SwTempo)
+define	KB_ROSB05T							TEMPO(CHAIN(L_ALT,USB_RIGHTGUI,D(ModDelay), USB_KP_5),	CHAIN(DX30,L_ALT,USB_RIGHTGUI,D(ModDelay), USB_KP_5),	SwTempo)
+define	KB_LOSB06T							TEMPO(CHAIN(R_ALT,USB_LEFTGUI, D(ModDelay), USB_KP_6),	CHAIN(DX30,R_ALT,USB_LEFTGUI, D(ModDelay), USB_KP_6),	SwTempo)
+define	KB_ROSB06T							TEMPO(CHAIN(L_ALT,USB_RIGHTGUI,D(ModDelay), USB_KP_6),	CHAIN(DX30,L_ALT,USB_RIGHTGUI,D(ModDelay), USB_KP_6),	SwTempo)
+define	KB_LOSB07T							TEMPO(CHAIN(R_ALT,USB_LEFTGUI, D(ModDelay), USB_KP_7),	CHAIN(DX30,R_ALT,USB_LEFTGUI, D(ModDelay), USB_KP_7),	SwTempo)
+define	KB_ROSB07T							TEMPO(CHAIN(L_ALT,USB_RIGHTGUI,D(ModDelay), USB_KP_7),	CHAIN(DX30,L_ALT,USB_RIGHTGUI,D(ModDelay), USB_KP_7),	SwTempo)
+define	KB_LOSB08T							TEMPO(CHAIN(R_ALT,USB_LEFTGUI, D(ModDelay), USB_KP_8),	CHAIN(DX30,R_ALT,USB_LEFTGUI, D(ModDelay), USB_KP_8),	SwTempo)
+define	KB_ROSB08T							TEMPO(CHAIN(L_ALT,USB_RIGHTGUI,D(ModDelay), USB_KP_8),	CHAIN(DX30,L_ALT,USB_RIGHTGUI,D(ModDelay), USB_KP_8),	SwTempo)
+define	KB_LOSB09T							TEMPO(CHAIN(R_ALT,USB_LEFTGUI, D(ModDelay), USB_KP_9),	CHAIN(DX30,R_ALT,USB_LEFTGUI, D(ModDelay), USB_KP_9),	SwTempo)
+define	KB_ROSB09T							TEMPO(CHAIN(L_ALT,USB_RIGHTGUI,D(ModDelay), USB_KP_9),	CHAIN(DX30,L_ALT,USB_RIGHTGUI,D(ModDelay), USB_KP_9),	SwTempo)
+
+
+define	KB_CONU								KB_RCONU	//Used for DE Snapviews
+define	KB_COND								KB_RCOND
+define	KB_BRTU								KB_RBRTU
+define	KB_BRTD								KB_RBRTD
+define	KB_SYMU								KB_RSYMU
+define	KB_SYMD								KB_RSYMD
+define	KB_GAINU							KB_RGAINU
+define	KB_GAIND							KB_RGAIND
+
+define	KB_LSYMUT							TEMPO(KB_LSYMU,KB_LSYMUI,DefTempo)
+define	KB_LSYMDT							TEMPO(KB_LSYMD,KB_LSYMDI,DefTempo)
+define	KB_LBRTUT							TEMPO(KB_LBRTU,KB_LBRTUI,DefTempo)
+define	KB_LBRTDT							TEMPO(KB_LBRTD,KB_LBRTDI,DefTempo)
+define	KB_LCONUT							TEMPO(KB_LCONU,KB_LCONUI,DefTempo)
+define	KB_LCONDT							TEMPO(KB_LCOND,KB_LCONDI,DefTempo)
+
+define	KB_RGAINUT							TEMPO(KB_RGAINU,KB_RGAINUI,DefTempo)
+define	KB_RGAINDT							TEMPO(KB_RGAIND,KB_RGAINDI,DefTempo)
+define	KB_RSYMUT							TEMPO(KB_RSYMU,KB_RSYMUI,DefTempo)
+define	KB_RSYMDT							TEMPO(KB_RSYMD,KB_RSYMDI,DefTempo)
+define	KB_RBRTUT							TEMPO(KB_RBRTU,KB_RBRTUI,DefTempo)
+define	KB_RBRTDT							TEMPO(KB_RBRTD,KB_RBRTDI,DefTempo)
+define	KB_RCONUT							TEMPO(KB_RCONU,KB_RCONUI,DefTempo)
+define	KB_RCONDT							TEMPO(KB_RCOND,KB_RCONDI,DefTempo)
+
+
+// ******************************************************
+//					 Flaming Cliffs 3
+// ******************************************************
+
+// -----------------------------
+// 		     Su-25T 
+// -----------------------------
+
+define	Altimeter_Press_Incr 	R_SHIFT+USB_EQUALSIGN 
+define	Altimeter_Press_Decr	R_SHIFT+USB_HYPHEN 
+
+//Autopilot
+define	AP_Baro_Alt_Hold_H	USB_H 
+define	AP_Attitude_Hold 	L_ALT+USB_1			//Dampen for MiG-29
+define	AP_Alt_Roll_Hold	L_ALT+USB_2			//GPWS/GCAM for MiG-29
+define	AP_Level			L_ALT+USB_3			//baro alt hold (requires att Hold) in MiG-29
+define	AP_Baro_Alt_Hold	L_ALT+USB_4			//Att Hold for MiG-29
+define	AP_Rad_Alt_Hold		L_ALT+USB_5			//Path (not implemented) for MiG-29
+define	AP_Route 			L_ALT+USB_6			//Reapproach (not implemented) for MiG-29
+define	AP_GPWS 			L_ALT+USB_7			//Wings Level for MiG-29
+define	AP_Disengage		L_ALT+USB_9
+define	Autothrottle		USB_J
+define	Autothrottle_Incr	L_CTL+USB_PERIOD	//Danger Alt decr on MiG-29
+define	Autothrottle_Decr	L_CTL+USB_COMMA		//Danger Alt incr on MiG-29
+
+// -----------------------------
+// 		     A-10A 
+// -----------------------------
+
+define	A10A_AP_Path		R_ALT+USB_2
+define	A10A_AP_AltHdg		R_ALT+USB_3
+define	A10A_AP_Alt			R_ALT+USB_1
+
+define	A10A_EAC_On			R_ALT+USB_4		//also can work for Su-33 tailhook, Su-27 ASC, and Su-25A/T Cut of Burst
+define	A10A_EAC_Off		R_ALT+USB_5		//also can work for tailhook, ASC, and CoB
+
+// -----------------------------
+// 		     Su-27/33
+// -----------------------------
+define	Su33_STL_Override			USB_Y
+define	Su33_STL_Override_DX		DX10
+define	Su27_Intake_Grid			L_ALT+USB_I
+define	Su33_Refuel_Lts				L_ALT+USB_R
+define	Su33_WEP					L_SHIFT+USB_E
+define	Su33_Wheelbrake_Start_DX	DX8
+define	Su33_ASC_Refuel				R_CTL+USB_R
+
+// -----------------------------------
+//           Flight controls
+// -----------------------------------
+
+define	TailHook				L_ALT+USB_G
+define	Drogue_Chute			USB_P
+define	Drogue_Chute_DX		CHAIN(DX31,D(ModDelay),DX17)
+define	FC3_TO_Trim				L_ALT+USB_T
+
+// ---------------------------
+//           Systems
+// ---------------------------
+define	MASTER_CAUTION_Reset	USB_N			//was R_SHIFT+USB_N, modifier removed in 2.01 for Su-33 Wheelbrake Start
+define	HUDColor				R_CTL+USB_H 
+define	Weapons_Jettison		L_CTL+USB_W 
+define	FuelTank_Jettison		L_ALT+USB_R 
+define	FuelDump				USB_R 
+//define	FuelDumpDX				DX19 	
+define	Refueling_Boom			L_CTL+USB_R
+define	Smoke					USB_T
+define	Electric_Pwr			R_SHIFT+USB_L 
+define	Cockpit_Illum			USB_L 
+define	FC3_Nav_lights			R_CTL+USB_L 
+define	FC3_Nav_lights_DX		CHAIN(DX31,D(ModDelay),DX15)
+define	LandingLight			R_ALT+USB_L 
+define	FC3_AntiColl_Lights		R_ALT+R_CTL+USB_L	//added in 1.40 for F-15C in DCSW 1.5
+define	FoldingWings			R_CTL+USB_P
+define	Canopy_Toggle			L_CTL+USB_C 
+define	FlightClock				R_SHIFT+USB_C
+define	Engines_Start			R_SHIFT+USB_HOME 
+define	Engines_Stop			R_SHIFT+USB_END 
+
+
+// ----------------------------------
+//           Avionics Modes
+// ----------------------------------
+
+define	NextWaypoint			L_CTL+USB_GRAVEACCENTANDTILDE 
+define	PrevWaypoint			L_SHIFT+USB_GRAVEACCENTANDTILDE	//was L_ALT+USB_GRAVEACCENTANDTILDE
+define	Nav_Mode				USB_1 
+define	BVR_Mode				USB_2
+define	CAC_Vertical_Scan_Mode	USB_3
+define	CAC_Bore_Mode			USB_4
+define	CAC_HMD_Mode			USB_5
+define	Longitudinal_FLOOD_mode	USB_6
+define	Air_To_Ground_Mode		USB_7
+define	GunsightReticle			USB_8
+
+
+// ---------------------------
+//           Sensors
+// ---------------------------
+
+define	Target_Lock			ENT
+define	Target_Unlock		BSP 
+define	Radar_ELINT			USB_I
+define	RWS_TWS_Toggle		R_ALT+USB_I 
+define	PRF_Select			R_SHIFT+USB_I 
+define	EOS_CCRP			USB_O 
+define	LaserDesignator		R_SHIFT+USB_O 
+define	LLLTV				R_CTL+USB_O 
+
+define	ScanZone_Up			R_SHIFT+USB_SEMICOLON 
+define	ScanZone_Down		R_SHIFT+USB_PERIOD
+define	ScanZone_Left		R_SHIFT+USB_COMMA 
+define	ScanZone_Right		R_SHIFT+USB_SLASH 
+define	DisplayZoom_In		USB_EQUALSIGN 
+define	DisplayZoom_Out		USB_HYPHEN 
+
+define	Launch_Authorization_Override	ALT+USB_W 
+define	RDRScan_Decr					R_CTL+USB_HYPHEN		//formerly RDRScan/GunpodELEStep_Decr
+define	RDRScan_Incr					R_CTL+USB_EQUALSIGN 	//formerly RDRScan/GunpodELEStep_Incr
+define	TGTSize_Incr					R_ALT+USB_EQUALSIGN 	//formerly TGTSize/GunpodELE_Incr
+define	TGTSize_Decr					R_ALT+USB_HYPHEN	 	//formerly TGTSize/GunpodELE_Decr
+define	RWR_SPO_Mode					R_SHIFT+USB_R 
+
+define	FC3_NVG_Gain_Incr				L_ALT+USB_UPARROW		//Added for FC3 NVG Capability (prevents conflict with HUD brightness default command)
+define	FC3_NVG_Gain_Decr				L_ALT+USB_DOWNARROW
+
+// ---------------------------
+//           Weapons
+// ---------------------------
+  
+define Weapon_Fire				USB_SPACEBAR
+define Weapon_Select			USB_D 
+define Weapon_Release			R_ALT+SPC 
+define Cannon					USB_C
+define SalvoMode				L_CTL+USB_V 
+define Cut_Of_Burst				L_SHIFT+USB_C 
+define RippleQuantity			L_CTL+SPC
+define RippleInterval_Incr		USB_V
+define RippleInterval_Decr		L_SHIFT+USB_V 
+define PRS_SGL_Release_Submodes	L_SHIFT+USB_SPACEBAR
+
+
+// -----------------------------------
+//           Countermeasures
+// -----------------------------------
+
+define CM_ContinuousDispense	L_SHIFT+USB_Q 
+define CM_Dispense				USB_Q 
+define Flares_Dispense			USB_DELETEFORWARD 
+define Chaff_Dispense			USB_INSERT
+define ECM						USB_E 
+define IR_Jamming				L_SHIFT+USB_E 
+
+
+
+// ******************************************************
+//					 A-10C Warthog
+// ******************************************************
+
+define	Taxi_Ldg_Light_Off		L_SHIFT+L_CTL+USB_I
+define	Taxi_Light_On			L_CTL+R_CTL+USB_I
+define	Ldg_Light_On			L_SHIFT+R_SHIFT+USB_I
+define	A10C_E_Brake			CHAIN(USB_RIGHTGUI,D(ModDelay),USB_W)
+define	A10C_E_Brake_DX			DX29
+define	A10C_Posit_Lts_Off		L_CTL+L_SHIFT+USB_P
+define	A10C_Stores_Jett		L_CTL+USB_W
+define	A10C_Stores_Jett_DX		CHAIN(DX30,DX31,D(ModDelay),DX4)
+define	A10C_02_Emer			L_CTL+L_SHIFT+USB_O
+
+
+// -----------------------------------
+//         	Throttle Keys 
+// -----------------------------------
+define	A10C_CSU				USB_U	
+define	A10C_CSD				USB_J
+define	A10C_CSL				USB_H
+define	A10C_CSR				USB_K
+
+define	A10C_CSU_DX				CHAIN(DX30,D(ModDelay),DX11)
+define	A10C_CSD_DX				CHAIN(DX30,D(ModDelay),DX13)
+define	A10C_CSL_DX				CHAIN(DX30,D(ModDelay),DX14)
+define	A10C_CSR_DX				CHAIN(DX30,D(ModDelay),DX12)
+
+define	A10C_CHF				USB_V
+define	A10C_CHB				USB_B
+
+
+
+// -----------------------------------
+//           Boat Switch
+// -----------------------------------
+define	BoatSwitch_Aft			R_ALT+USB[0x50]		//RALT LARROW
+define	BoatSwitch_Ctr			R_ALT+USB[0x51]		//RALT+Down Arrow
+define	BoatSwitch_Fwd			R_ALT+USB[0x4F]		//RALT RARROW
+
+// -----------------------------------
+//           Pinky Switch
+// -----------------------------------
+define	PinkySwitch_Fwd			L_ALT+USB[0x13]		//LALT+p
+define	PinkySwitch_Ctr			L_SHIFT+USB[0x13]	//LSHF+p
+define	PinkySwitch_Aft			L_CTL+USB[0x13]		//LCTL+p
+
+// -----------------------------------
+//         	Throttle Base  
+// -----------------------------------
+define	A10C_EFLNORM			R_SHIFT+R_CTL+USB_L
+define	A10C_EFLOVER			R_ALT+R_CTL+USB_L
+define	A10C_EFRNORM			R_SHIFT+R_CTL+USB_R
+define	A10C_EFROVER			R_ALT+R_CTL+USB_R
+
+define	A10C_EOLIGN				L_SHIFT+R_SHIFT+USB_L
+define	A10C_EOLNORM			L_CTL+R_CTL+USB_L
+define	A10C_EOLMOTOR			L_ALT+R_ALT+USB_L
+define	A10C_EORIGN				L_SHIFT+R_SHIFT+USB_R
+define	A10C_EORNORM			L_CTL+R_CTL+USB_R
+define	A10C_EORMOTOR			L_ALT+R_ALT+USB_R
+
+define	A10C_APU_On				L_SHIFT+USB_A
+define	A10C_APU_On_DX			CHAIN(DX30,DX31,D(ModDelay),DX18)
+define	A10C_APU_Off			L_CTL+USB_A
+
+define	EAC_On_DX				CHAIN(DX30,DX31,D(ModDelay),DX15)
+define	EAC_Off					L_ALT+L_SHIFT+USB_E
+define	RadAlt_Norm_DX			CHAIN(DX30,DX31,D(ModDelay),DX14)
+define	RadAlt_Disable			L_SHIFT+L_CTL+USB_A
+
+define	A10C_LDGH				L_ALT+USB_G
+// -----------------------------------
+//         Autopilot Switch
+// -----------------------------------
+define	A10C_AP_Path			L_SHIFT+USB_2
+define	A10C_AP_AltHdg			L_SHIFT+USB_3
+define	A10C_AP_Alt				L_SHIFT+USB_4
+
+// -----------------------------------
+//         	  MFD Power 
+// -----------------------------------
+define	LMFD_Off				L_CTL+USB_O
+define	LMFD_Night				L_CTL+USB_N
+define	LMFD_Day				L_CTL+USB_D
+define	RMFD_Off				R_CTL+USB_O
+define	RMFD_Night				R_CTL+USB_N
+define	RMFD_Day				R_CTL+USB_D
+
+
+// -----------------------------------
+//         	 	 AHCP 
+// -----------------------------------
+define	MasterArm_On_DX			CHAIN(DX30,DX31,D(ModDelay),DX6)
+define	MasterArm_Safe			L_SHIFT+L_CTL+USB_S
+//define	GunPac_On_DX			CHAIN(DX30,DX31,D(ModDelay),DX21)
+//define	GunPac_Arm_DX			CHAIN(DX30,DX31,D(ModDelay),DX22)
+define	GunPac_On				CHAIN(DX30,D(ModDelay),KB_LSYMU)
+define	GunPac_Arm				CHAIN(DX30,D(ModDelay),KB_LSYMD)
+define	GunPac_Safe				L_SHIFT+L_CTL+USB_G
+define	LaserSwitch_On_DX		CHAIN(DX30,DX31,D(ModDelay),DX7)
+define	LaserSwitch_Safe		L_SHIFT+L_CTL+USB_L
+define	TGP_Toggle_DX			CHAIN(DX30,DX31,D(ModDelay),DX8)
+
+define	ALTSCE_Baro				L_SHIFT+L_CTL+USB_B
+define	ALTSCE_Radar			L_SHIFT+L_CTL+USB_R
+define	ALTSCE_Delta			L_SHIFT+L_CTL+USB_D
+
+define	IFFCC_On				R_SHIFT+R_CTL+USB_I
+define	IFFCC_Off				R_ALT+R_CTL+USB_I
+define	IFFCC_Test				R_SHIFT+R_ALT+USB_I
+
+// -----------------------------------
+//         	 	 CMSP 
+// -----------------------------------
+define	CMSP_Mode_Off			R_SHIFT+R_CTL+USB_F
+define	CMSP_Mode_Stby			R_SHIFT+R_CTL+USB_Y
+define	CMSP_Mode_Man			R_SHIFT+R_CTL+USB_M
+define	CMSP_Mode_Semi			R_SHIFT+R_CTL+USB_S
+define	CMSP_Mode_Auto			R_SHIFT+R_CTL+USB_A
+define	CMSP_Mode_Byp			R_SHIFT+R_CTL+USB_B		//added in 2.41 for F-16C
+
+define	CMSP_MWS_Toggle			R_SHIFT+R_CTL+USB_W
+define	CMSP_JMR_Toggle			R_SHIFT+R_CTL+USB_J
+define	CMSP_RWR_Toggle			R_SHIFT+L_ALT+USB_R
+define	CMSP_DISP_Toggle		R_SHIFT+R_CTL+USB_D
+define	CMSP_Switches_Toggle	CHAIN(CMSP_MWS_Toggle,D(Switch_Delay),CMSP_JMR_Toggle,D(Switch_Delay),CMSP_RWR_Toggle,D(Switch_Delay),CMSP_DISP_Toggle)
+
+//added for F-16C
+define	CMSP_Prog1				R_SHIFT+R_CTL+USB_1
+define	CMSP_Prog2				R_SHIFT+R_CTL+USB_2
+define	CMSP_Prog3				R_SHIFT+R_CTL+USB_3
+define	CMSP_Prog4				R_SHIFT+R_CTL+USB_4
+
+
+// -----------------------------------
+//         	 	 CDU 
+// -----------------------------------
+define	AAP_Stpt_Fpln			R_SHIFT+USB_F
+define	AAP_Stpt_Mark			R_SHIFT+USB_M
+define	AAP_Stpt_Msn			R_SHIFT+USB_I
+
+define	AAP_Page_Other			R_SHIFT+USB_O
+define	AAP_Page_Posit			R_SHIFT+USB_P
+define	AAP_Page_Steer			R_SHIFT+USB_S
+define	AAP_Page_Waypt			R_SHIFT+USB_W
+
+define	CDU_DE_Prev				USB_HOME
+
+
+// ******************************************************
+//				    Ka-50 Black Shark 2
+// ******************************************************
+define	SPU9_PTT				R_ALT+USB[0x31]	//backslash
+//define	SPU9_RdoSel_DXI			CHAIN(DX31,D(ModDelay),DX16)	//obsolete
+define	BS2_Cyclic_Gauge_Illum	L_SHIFT+USB_K
+//define	BS2_ADF_Bcn_Sel			L_ALT+USB_EQUALSIGN
+define	BS2_ADF_Bcn_Up			R_ALT+USB_EQUALSIGN
+define	BS2_ADF_Bcn_Dn			R_CTL+USB_EQUALSIGN
+//define	BS2_R800_ADF_Sw			L_ALT+L_CTL+USB_A
+define	BS2_Rotor_RPM_Warn		USB_B
+
+define	BS2_Shkval_BW			R_SHIFT+R_CTL+USB_B
+define	BS2_Weps_AutoMan		USB_A
+define	BS2_Pitot_Ram_Clock		L_SHIFT+L_CTL+USB_S
+define	BS2_Pitot_Static_AoA	L_SHIFT+L_ALT+USB_S
+
+define	BS2_SAI_Lt				R_ALT+R_SHIFT+USB_A
+define	BS2_SAI_Rt				R_CTL+R_SHIFT+USB_A
+
+//define	BS2_Searchlight_Cycle	R_SHIFT+USB_L
+define	BS2_LdgLight_Change		R_CTL+USB_L
+
+define	BS2_Wiper_Windshield	L_ALT+L_CTL+USB_W
+define	BS2_Wiper_Shkval		L_SHIFT+R_CTL+USB_M
+
+define	BS2_Alt_RA				L_SHIFT+R_SHIFT+USB_A
+define	BS2_Hdg_DT				L_SHIFT+R_SHIFT+USB_B
+
+define	ABRIS_Axis_Incr			R_ALT+USB_8
+define	ABRIS_Axis_Decr			R_ALT+USB_7
+
+define	BS2_HMD_On				R_CTL+USB_H
+define	BS2_HMD_Off				R_ALT+USB_H
+
+define	BS2_Cannon_AT			L_CTL+R_CTL+USB_P
+define	BS2_Cannon_RET			L_ALT+R_ALT+USB_P
+
+define	BS2_Salvo_Mode			USB_S
+define 	BS2_Salvo_Short			L_ALT+R_ALT+USB_S
+define	BS2_Salvo_Med			L_CTL+R_CTL+USB_S
+define	BS2_Salvo_Long			L_SHIFT+R_SHIFT+USB_S
+
+define	BS2_Cannon_Ammo			L_CTL+USB_C
+define	BS2_Cannon_Ammo_AP		L_SHIFT+R_SHIFT+USB_C
+define	BS2_Cannon_Ammo_HE		L_CTL+R_CTL+USB_C
+
+define	BS2_Cannon_ROF			L_SHIFT+USB_C
+define	BS2_Cannon_ROF_High		L_SHIFT+R_CTL+USB_C
+define	BS2_Cannon_ROF_Low		L_SHIFT+R_ALT+USB_C
+
+define	BS2_SPU9_Mode_Next		R_ALT+USB_CLOSEBRACKET
+define	BS2_SPU9_Mode_Prev		R_ALT+USB_OPENBRACKET
+
+define	BS2_Laser_Pwr_Off		R_ALT+R_SHIFT+USB_O
+
+define	BS2_Stores_Jett			L_ALT+USB_R
+
+
+// -----------------------------------
+//         Ka-50 Engine Start
+// -----------------------------------
+define	BS2_Eng_Sel_Sw			USB_E
+define	BS2_Eng_Sel_Lt			L_SHIFT+USB_E
+define	BS2_Eng_Sel_Rt			R_SHIFT+USB_E
+define	BS2_Eng_Sel_APU			L_ALT+R_ALT+USB_E
+define	BS2_Engine_Stop			R_ALT+USB_HOME
+define	BS2_APU_Stop			USB_END
+define	BS2_Rotor_Brake			L_CTL+USB_R
+define	BS2_Parking_Brake		L_SHIFT+USB_W
+
+define	BS2_Fuel_Cutoff_Lt		R_CTL+USB_PAGEUP
+define	BS2_Fuel_Cutoff_Rt		R_CTL+USB_PAGEDOWN
+define	BS2_Fuel_Sw_Lt			R_CTL+R_SHIFT+USB_J
+define	BS2_Fuel_Sw_Lt_Cover	R_CTL+R_SHIFT+R_ALT+USB_J
+define	BS2_Fuel_Sw_Rt			R_CTL+R_SHIFT+USB_K
+define	BS2_Fuel_Sw_Rt_Cover	R_CTL+R_SHIFT+R_ALT+USB_K
+define	BS2_Fuel_Sw_APU			R_CTL+R_SHIFT+USB_L
+define	BS2_Fuel_Sw_APU_Cover	R_CTL+R_SHIFT+R_ALT+USB_L
+
+define	BS2_Throttle_Up_Lt		R_ALT+USB_PAGEUP
+define	BS2_Throttle_Up_Rt		R_SHIFT+USB_PAGEUP
+define	BS2_Throttle_Dn_Lt		R_ALT+USB_PAGEDOWN
+define	BS2_Throttle_Dn_Rt		R_SHIFT+USB_PAGEDOWN
+define	BS2_Throttle_Up			USB_PAGEUP
+define	BS2_Throttle_Dn			USB_PAGEDOWN
+
+
+// -----------------------------------
+//         Ka-50 Cockpit Lighting
+// -----------------------------------
+define	BS2_Lights_Cpt			R_CTL+USB_K
+define	BS2_Lights_NVG			L_CTL+USB_K
+define	BS2_Lights_SAI			R_ALT+R_SHIFT+USB_K
+define	BS2_Lights_Aux			R_ALT+R_SHIFT+USB_L
+define	BS2_Flashlight_Lens		L_CTL+L_SHIFT+USB_L
+
+// -----------------------------------
+//         Ka-50 Collective
+// -----------------------------------
+define	BS2_Shkval_23x			USB_EQUALSIGN
+define	BS2_Shkval_7x			USB_HYPHEN
+define	BS2_RPM_Low				R_ALT+USB_KP_HYPHEN
+define	BS2_RPM_Nom				R_ALT+USB_KP_PLUS
+
+define	BS2_Weps_All			USB_U
+define	BS2_Weps_Inbd			USB_I
+define	BS2_Weps_Outbd			USB_Y
+define  BS2_AA_Weps_Sel			L_CTL+USB_U
+
+
+
+// ******************************************************
+//					    P-51D Mustang
+// ******************************************************
+define	P51D_Parking_Brake	L_ALT+L_CTL+USB_W
+define	P51D_SilenceHorn	R_ALT+USB_H
+define	P51D_LandingLight	USB_L
+
+// -----------------------------------
+//         	  VHF Radio
+// -----------------------------------
+define	Rdo_Channel_A	L_CTL+USB_1
+define	Rdo_Channel_B	L_CTL+USB_2
+define	Rdo_Channel_C	L_CTL+USB_3
+define	Rdo_Channel_D	L_CTL+USB_4
+define	Rdo_Channel_E	L_CTL+USB_5							//added for MiG19
+define	Rdo_Channel_F	L_CTL+USB_6
+define	Rdo_Channel_Off	L_CTL+USB_GRAVEACCENTANDTILDE		//added for Spitfire in 1.66
+
+define 	Rdo_T			L_ALT+USB_5
+define	Rdo_R			L_CTL+USB_5
+define	Rdo_REM			L_SHIFT+USB_5
+define	Rdo_Mode_Lock	L_ALT+L_CTL+USB_5
+define	Rdo_Mode_Unlock	L_ALT+L_CTL+USB_GRAVEACCENTANDTILDE	//added in 1.66
+
+// -----------------------------------
+//         	  K-14 Gunsight
+// -----------------------------------
+define	K14_Wingspan_Decr	USB_SLASH
+define	K14_Wingspan_Incr	USB_COMMA
+define	K14_Range_Incr		USB_SEMICOLON
+define	K14_Range_Decr		USB_PERIOD
+define	K14_Gyro_Power		USB_5
+define	K14_FixedRingLvr	R_SHIFT+USB_O
+define	K14_Bright_Incr		R_CTL+USB_O
+define	K14_Bright_Decr		R_ALT+USB_O
+
+// -----------------------------------
+//         	  Weapons
+// -----------------------------------
+define	P51D_ChemRel_Lt		L_ALT+USB_6
+define	P51D_BombOff_Lt		L_SHIFT+USB_6
+define	P51D_BombArm_Lt		L_CTL+USB_6
+define	P51D_ChemRel_Rt		L_ALT+USB_7
+define	P51D_BombOff_Rt		L_SHIFT+USB_7
+define	P51D_BombArm_Rt		L_CTL+USB_7
+
+define	P51D_BombSel_Both	L_CTL+USB_D
+define	P51D_BombSel_Train	L_ALT+USB_D
+define	P51D_BombSel_Rkt	L_SHIFT+USB_D
+define	P51D_BombSel_Safe	L_CTL+L_SHIFT+USB_D
+
+define	P51D_GunSel_GunCam	L_CTL+USB_Q
+define	P51D_GunSel_Cam		L_ALT+USB_Q
+define	P51D_GunSel_Safe	L_SHIFT+USB_Q
+
+define	P51D_Rocket_Safe	R_SHIFT+USB_8
+define	P51D_Rocket_Auto	R_ALT+USB_8
+define	P51D_Rocket_Single	R_CTL+USB_8
+define	P51D_Rocket_DlyInst	R_CTL+R_SHIFT+USB_8
+define	Rocket_Reset		L_ALT+USB_8
+
+// -----------------------------------
+//         	  Misc Engine
+// -----------------------------------
+define	Mixture_Run				L_CTL+USB_M
+define	Mixture_Rich			L_ALT+USB_M
+define	Mixture_Cut				L_SHIFT+USB_M
+define	Mixture_Rotary			USB_M
+define	Ignition_Both			R_CTL+USB_END
+define	Fuel_Selector_Fuselage	R_CTL+USB_T
+define	Fuel_Selector_Main_LH	L_ALT+USB_T
+define	WEP_DX					DX19
+define	P51D_Radiator_Open		L_ALT+USB_A
+define	P51D_Radiator_Close		L_CTL+USB_A
+define	P51D_Radiator_Auto		USB_A
+define	P51D_Radiator_Cover		L_CTL+L_SHIFT+USB_A
+define	P51D_OilCooler_Open		L_ALT+USB_S
+define	P51D_OilCooler_Close	L_CTL+USB_S
+define	P51D_OilCooler_Auto		USB_S
+define	P51D_OilCooler_Cover	L_CTL+L_SHIFT+USB_S
+
+// ******************************************************
+//					P-47D Thunderbolt
+// ******************************************************
+define	P47D_Mixture_Lean		R_ALT+USB_M
+define	P47D_Mixture_Norm		R_SHIFT+USB_M
+define	P47D_Mixture_Full		R_CTL+USB_M
+
+define	P47D_Boost_Thr_Lock		CHAIN(USB_RIGHTGUI,USB_LEFTCONTROL,USB_M)
+define	P47D_Pitch_Thr_Lock		CHAIN(USB_RIGHTGUI,USB_LEFTSHIFT,USB_M)
+define	P47D_Boost_Thr_Toggle	CHAIN(USB_RIGHTGUI,USB_RIGHTCONTROL,USB_M)
+define	P47D_Pitch_Thr_Toggle	CHAIN(USB_RIGHTGUI,USB_RIGHTSHIFT,USB_M)
+define	P47D_Left_Jettison		L_ALT+L_SHIFT+USB_6
+define	P47D_Right_Jettison		L_ALT+L_SHIFT+USB_7
+//define	P47D_Belly_Jettison		L_ALT+L_SHIFT+USB_8
+
+define	P47D_Left_Disarm		L_CTL+USB_H				//commands include DX30; unmodified for toggle
+define	P47D_Left_Arm			L_CTL+R_CTL+USB_H
+define	P47D_Right_Disarm		L_ALT+USB_H
+define	P47D_Right_Arm			L_ALT+R_ALT+USB_H
+define	P47D_Belly_Disarm		L_SHIFT+USB_H
+define	P47D_Belly_Arm			L_SHIFT+R_SHIFT+USB_H
+//define	P47D_Pylons_Disarm		CHAIN(DOWN+DX30,D(ModDelay),	PULSE+P47D_Belly_Disarm,	D(2*Switch_Delay),PULSE+P47D_Left_Disarm,	D(2*Switch_Delay),PULSE+P47D_Right_Disarm,	D(ModDelay),UP+DX30)
+define	P47D_Pylons_Disarm		CHAIN(DOWN+DX30,D(ModDelay),	PULSE+P47D_Belly_Disarm,	D(2*Switch_Delay),PULSE+P47D_Left_Disarm,	D(2*Switch_Delay),PULSE+P47D_Right_Disarm,	D(ModDelay),UP+DX30)
+define	P47D_Pylons_Arm			CHAIN(							PULSE+P47D_Belly_Arm,		D(2*Switch_Delay),PULSE+P47D_Left_Arm,		D(2*Switch_Delay),PULSE+P47D_Right_Arm)
+
+define	P47D_Fuel_Main			R_ALT+R_SHIFT+USB_T
+
+define	P47D_Flaps_Ext			R_CTL+USB_F
+define	P47D_Flaps_Ret			R_SHIFT+USB_F
+define	P47D_Flaps_Neut			R_ALT+USB_F
+
+define	P47D_K14Ring_On			R_SHIFT+R_CTL+USB_8
+define	P47D_K14Ring_Off		R_SHIFT+R_ALT+USB_8
+
+define	P47D_Spoiler_CB			USB_END
+
+define	P47D_Red_Key			L_SHIFT+R_SHIFT+USB_K
+define	P47D_Green_Key			L_CTL+R_CTL+USB_K
+define	P47D_Amber_Key			L_ALT+R_ALT+USB_K
+
+// ******************************************************
+//					    UH-1H Huey
+// ******************************************************
+define	UH1_Autopilot			CHAIN(USB_LEFTGUI,USB_A)
+define	UH1_AP_AttHold			L_ALT+L_SHIFT+USB_A
+define	UH1_AP_AltHold			L_CTL+USB_A
+define	UH1_AP_Orbit			L_ALT+USB_A
+define	UH1_AP_Mode_Toggle		SEQ(UH1_AP_Orbit,UH1_AP_AttHold,UH1_AP_AltHold)
+
+define	UH1_Weps_Hints			L_CTL+L_SHIFT+USB_H
+define	Pilot_Sight_Deploy_DX	CHAIN(DX31,D(ModDelay),DX4)
+define	Flex_Sight_Toggle_DX	CHAIN(DX32,D(ModDelay),DX5)
+define	Flex_Sight_Lamp_Main_DX	CHAIN(DX32,D(ModDelay),DX6)
+define	Flex_Sight_Lamp_Back_DX	CHAIN(DX32,D(ModDelay),DX8)
+define	Flex_Sight_Lamp_Off_DX	CHAIN(DX32,D(ModDelay),DX7)
+
+define	UH1_Gunner_Door_Rt		L_ALT+USB_4
+define	UH1_Gunner_Door_Lt		L_ALT+USB_3
+define	UH1_Gunner_ROE_Rt		L_CTL+USB_4
+define	UH1_Gunner_ROE_Lt		L_CTL+USB_3
+define	UH1_Gunner_Burst_Rt		L_SHIFT+USB_4
+define	UH1_Gunner_Burst_Lt		L_SHIFT+USB_3
+
+define	UH1_MainGen_Cover		L_SHIFT+USB_L
+define	UH1_RequestControl		USB_C
+define	UH1_CargoCam			L_ALT+L_SHIFT+USB_Q
+
+// -----------------------------------
+//         	  Collective
+// -----------------------------------
+define	Searchlight_On			R_CTL+USB_SEMICOLON 
+define	Searchlight_Off			R_ALT+USB_SEMICOLON 
+define	Searchlight_Stow		CHAIN(USB_RIGHTGUI,D(ModDelay),USB_SEMICOLON)
+define	Searchlight_Retract		USB_7
+define	Searchlight_Extend		USB_8
+define	Searchlight_Left		USB_9
+define	Searchlight_Right		USB_0
+
+define	Searchlight_Retract_DX	CHAIN(DX31,D(ModDelay), DXHATDOWN)
+define	Searchlight_Extend_DX	CHAIN(DX31,D(ModDelay), DXHATUP)
+define	Searchlight_Left_DX		CHAIN(DX31,D(ModDelay), DXHATLEFT)
+define	Searchlight_Right_DX	CHAIN(DX31,D(ModDelay), DXHATRIGHT)
+	
+define	LandingLight_Stop		R_ALT+USB_SLASH
+define	LandingLight_OnOff		R_CTL+USB_COMMA
+
+define 	Throttle_Stop			CHAIN(USB_RIGHTGUI,D(ModDelay),USB_T)
+
+define	UH1_Throttle_Up				USB_PAGEUP
+define	UH1_Throttle_Dn				USB_PAGEDOWN
+
+// -----------------------------------
+//         	Center Console
+// -----------------------------------
+define	Intercom_PVT			R_CTL+R_SHIFT+USB_W
+define	Intercom_PVT_DX			DX1
+define	UH1_Jettison			USB_J
+define	Caution_Bright			L_ALT+USB_F
+define	Caution_Dim				L_CTL+USB_F
+define	Caution_Brt_Toggle		SEQ(Caution_Bright,Caution_Dim)
+define	UH1_Flare_Dispense		L_CTL+USB_C
+
+define	UH1_GunSel_Up			R_ALT+R_CTL+USB_CLOSEBRACKET
+define	UH1_GunSel_Dn			R_ALT+R_CTL+USB_OPENBRACKET
+define	UH1_ArmSel_Up			R_ALT+USB_CLOSEBRACKET
+define	UH1_ArmSel_Dn			R_ALT+USB_OPENBRACKET
+define	UH1_MasterArm_Up		R_SHIFT+USB_CLOSEBRACKET
+define	UH1_MasterArm_Dn		R_SHIFT+USB_OPENBRACKET
+
+define	UH1_Rocket_Reset		L_CTL+USB_R
+
+// -----------------------------------
+//         Overhead Console
+// -----------------------------------
+define	UH1_NavLights_Steady	L_SHIFT+R_CTL+R_ALT+USB_L	//doubles for brt in Mi-24/AH-64; L_SHIFT+R_SHIFT+L doesnt work
+define	UH1_NavLights_Flash		L_CTL+R_CTL+USB_L			//doubles for dim in Mi-24/AH-64
+define	UH1_NavLights_Off		L_ALT+R_ALT+USB_L			//R_CTL+USB_L default, changed for cross-platform compatibility
+define	UH1_DomeLt_Green		R_ALT+R_SHIFT+USB_L
+define	UH1_DomeLt_White		R_ALT+R_SHIFT+USB_P
+define	UH1_DomeLt_Off			R_ALT+R_SHIFT+USB_O
+
+define	UH1_StarterGen_Sw		L_SHIFT+USB_X
+
+// -----------------------------------
+//        		 Radio
+// -----------------------------------
+define	UH1_Pilot_ICS			R_SHIFT+USB_SPACEBAR
+define	UH1_CoPilot_ICS			L_SHIFT+USB_SPACEBAR
+define	UH1_Pilot_Radio			R_CTL +	USB_SPACEBAR	//R_ALT + USB[0x31]	//backslash	
+define	UH1_CoPilot_Radio		L_CTL +	USB_SPACEBAR
+
+//VHF FM
+define	UH1_FM_Mode_Cyc				R_ALT+R_CTL+USB_GRAVEACCENTANDTILDE
+define	UH1_FM_Sql_Cyc				R_ALT+R_CTL+USB_5
+define	UH1_FM_10M_Decr				R_ALT+R_CTL+USB_Q
+define	UH1_FM_10M_Incr				R_ALT+R_CTL+USB_W
+define	UH1_FM_1M_Decr				R_ALT+R_CTL+USB_E
+define	UH1_FM_1M_Incr				R_ALT+R_CTL+USB_R
+define	UH1_FM_100k_Decr			R_ALT+R_CTL+USB_T
+define	UH1_FM_100k_Incr			R_ALT+R_CTL+USB_Y
+define	UH1_FM_50k_Decr				R_ALT+R_CTL+USB_U
+define	UH1_FM_50k_Incr				R_ALT+R_CTL+USB_I
+define	UH1_FM_Vol_Decr				R_ALT+R_CTL+USB_HYPHEN
+define	UH1_FM_Vol_Incr				R_ALT+R_CTL+USB_EQUALSIGN
+
+//VHF AM Radio
+define	UH1_AM_Pwr_Cyc				L_CTL+L_SHIFT+USB_9					
+define	UH1_AM_M_Decr				L_CTL+L_SHIFT+USB_O
+define	UH1_AM_M_Incr				L_CTL+L_SHIFT+USB_P
+define	UH1_AM_k_Decr				L_CTL+L_SHIFT+USB_OPENBRACKET
+define	UH1_AM_k_Incr				L_CTL+L_SHIFT+USB_CLOSEBRACKET
+define	UH1_AM_Vol_Decr				L_CTL+L_SHIFT+USB_HYPHEN
+define	UH1_AM_Vol_Incr				L_CTL+L_SHIFT+USB_EQUALSIGN
+
+//VHF AM Navigation
+define	UH1_VN_Mode_Cyc				L_ALT+L_SHIFT+USB_GRAVEACCENTANDTILDE
+define	UH1_VN_M_Decr				L_ALT+L_SHIFT+USB_O
+define	UH1_VN_M_Incr				L_ALT+L_SHIFT+USB_P
+define	UH1_VN_k_Decr				L_ALT+L_SHIFT+USB_OPENBRACKET
+define	UH1_VN_k_Incr				L_ALT+L_SHIFT+USB_CLOSEBRACKET
+define	UH1_VN_Vol_Decr				L_ALT+L_SHIFT+USB_HYPHEN
+define	UH1_VN_Vol_Incr				L_ALT+L_SHIFT+USB_EQUALSIGN
+
+//UHF
+define	UH1_U_Mode_Cyc				L_CTL+L_SHIFT+USB_GRAVEACCENTANDTILDE
+define	UH1_U_Freq_Mode_Cyc			L_CTL+L_SHIFT+USB_5
+define	UH1_U_10M_Decr				L_CTL+L_SHIFT+USB_W
+define	UH1_U_10M_Incr				L_CTL+L_SHIFT+USB_E
+define	UH1_U_1M_Decr				L_CTL+L_SHIFT+USB_R
+define	UH1_U_1M_Incr				L_CTL+L_SHIFT+USB_T
+define	UH1_U_50k_Decr				L_CTL+L_SHIFT+USB_Y
+define	UH1_U_50k_Incr				L_CTL+L_SHIFT+USB_U
+define	UH1_U_Ch_Decr				L_CTL+L_SHIFT+USB_A
+define	UH1_U_Ch_Incr				L_CTL+L_SHIFT+USB_S
+define	UH1_U_Vol_Decr				L_CTL+L_SHIFT+USB_SEMICOLON
+define	UH1_U_Vol_Incr				L_CTL+L_SHIFT+USB_QUOTE
+
+
+// ******************************************************
+//					   Mi-8MTV2 Hip
+// ******************************************************
+define	ICS_Radio_Sw_DX			DX20	//was CHAIN(DX31,D(ModDelay),DX11)
+define	Mi8_Radio_Left			L_ALT	+ L_SHIFT	+ USB_E			
+define	Mi8_Radio_Right			L_ALT	+ L_CTL		+ USB_E
+define	Mi8_Corrector_Incr		USB_PAGEUP
+define	Mi8_Corrector_Decr		USB_PAGEDOWN
+define	Lt_Throttle_Up			R_ALT	+ USB_PAGEUP
+define	Lt_Throttle_Dn			R_ALT	+ USB_PAGEDOWN
+define	Rt_Throttle_Up			R_SHIFT + USB_PAGEUP
+define	Rt_Throttle_Dn			R_SHIFT + USB_PAGEDOWN
+define	Mi8_Throttle_Up			R_CTL	+ USB_HOME
+define	Mi8_Throttle_Dn			R_CTL	+ USB_END
+define	Mi8_Lt_Fuel_Cut			R_CTL	+ USB_PAGEUP
+define	Mi8_Rt_Fuel_Cut			R_CTL	+ USB_PAGEDOWN
+//define	Mi8_Eng_Sel_Sw			USB_E	//obsolete
+define	Mi8_Eng_Sel_Sw_Left		L_SHIFT+R_SHIFT+USB_E
+define	Mi8_Eng_Sel_Sw_Right	R_SHIFT+USB_E
+define 	Mi8_Eng_Sel_Sw_Off		USB_E
+define	ESBR_Power_DX			CHAIN(DX32,D(ModDelay),DX16)	//no DX30 in chain because already implied with S3 (shifted command)
+define	ESBR_Rotate				R_ALT+R_SHIFT+USB_B
+
+define	Tactical_Cargo_Unhook		R_SHIFT+R_CTL+R_ALT+USB_L
+define	Tactical_Cargo_Unhook_Cover	R_SHIFT+R_CTL+R_ALT+USB_T
+define	Emer_Cargo_Unhook			R_SHIFT+R_CTL+R_ALT+USB_P
+define	Emer_Cargo_Unhook_Cover		R_SHIFT+R_CTL+R_ALT+USB_R
+
+define	StartupInterrupt		R_ALT+USB_HOME
+define	APUStart				R_SHIFT+USB_HOME
+define	APUStop					USB_END
+
+define	Mi8_UV26_Side_Sw_Lt_DX	CHAIN(DX32,D(ModDelay),DX27)
+define	Mi8_UV26_Side_Sw_Rt_DX	CHAIN(DX32,D(ModDelay),DX28)
+define	Mi8_UV26_Side_Sw_RT		L_CTL+R_CTL+USB_CLOSEBRACKET
+define	Mi8_UV26_Side_Sw_LT		L_CTL+R_CTL+USB_OPENBRACKET
+define	Mi8_UV26_Side_Sw_BOTH	L_CTL+R_CTL+USB_QUOTE
+
+define	Mi8_Sight_Elev_Incr		L_CTL+USB_O
+define	Mi8_Sight_Elev_Decr		L_ALT+USB_O
+define	Mi8_Sight_Int_Incr		R_CTL+USB_O
+define	Mi8_Sight_Int_Decr		R_ALT+USB_O
+
+define	Mi8_AP_Hdg_Lt			CHAIN(L_SHIFT,USB_LEFTGUI,D(ModDelay),USB_S)
+define	Mi8_AP_Hdg_Rt			CHAIN(L_SHIFT,USB_LEFTGUI,D(ModDelay),USB_D)
+define	Mi8_AP_Alt_Up			L_ALT+USB_F
+define	Mi8_AP_Alt_Dn			L_ALT+USB_V
+define	Mi8_AP_Roll_Lt			CHAIN(R_CTL,USB_LEFTGUI,D(ModDelay),USB_S)
+define	Mi8_AP_Roll_Rt			CHAIN(R_CTL,USB_LEFTGUI,D(ModDelay),USB_D)
+define	Mi8_AP_Pitch_Lt			L_CTL+L_SHIFT+USB_S
+define	Mi8_AP_Pitch_Rt			L_CTL+L_SHIFT+USB_D
+// -----------------------------------
+//        Armament Panels
+// -----------------------------------
+define	Mi8_PUSArming				L_CTL+USB_R
+define	Mi8_PUSArming_DX			CHAIN(DX31,D(ModDelay),DX4)
+define	Mi8_Pylon_Sel_Sw_Up			R_CTL+USB_CLOSEBRACKET
+define	Mi8_Pylon_Sel_Sw_Dn			R_CTL+USB_OPENBRACKET
+define	Mi8_GUV_Sel_Sw_Up			R_ALT+R_CTL+USB_OPENBRACKET
+define	Mi8_GUV_Sel_Sw_Dn			R_ALT+R_CTL+USB_CLOSEBRACKET
+define	Mi8_Pylon_Setup_Sw_CW		USB_SEMICOLON
+define	Mi8_Pylon_Setup_Sw_CCW		USB_PERIOD
+define	Mi8_Pylon_Sel_Sw_Up_DX		CHAIN(DX31,D(ModDelay),DX25)
+define	Mi8_Pylon_Sel_Sw_Dn_DX		CHAIN(DX31,D(ModDelay),DX26)
+define	Mi8_GUV_Sel_Sw_Up_DX		CHAIN(DX31,D(ModDelay),DX23)
+define	Mi8_GUV_Sel_Sw_Dn_DX		CHAIN(DX31,D(ModDelay),DX24)
+define	Mi8_Weapon_Safe_Sw_DX		CHAIN(DX30,DX31,D(ModDelay),DX1)
+define	Mi8_Weapon_Safe_Sw_On_DX	CHAIN(DX30,DX32,D(ModDelay),DX1)
+define	Mi8_Weapon_Safe_Sw_Off_DX	CHAIN(DX32,D(ModDelay),DX1)
+define	Mi8_Armament_Sw_DX			CHAIN(DX31,D(ModDelay),DX5)
+define	Mi8_Armament_Sw_On_DX		CHAIN(DX30,DX31,D(ModDelay),DX5)
+
+define	Mi8_Salvo_Sel_Sw_Up_DX		CHAIN(DX31,D(ModDelay),DX17)
+define	Mi8_Salvo_Sel_Sw_Dn_DX		CHAIN(DX31,D(ModDelay),DX16)
+define	Mi8_Salvo_Sel_Sw_4			L_CTL+L_ALT+USB_4
+define	Mi8_Salvo_Sel_Sw_8			L_CTL+L_ALT+USB_8
+define	Mi8_Salvo_Sel_Sw_16			L_CTL+L_ALT+USB_6
+
+define	Mi8_Cut_Sw_DX				CHAIN(DX31,D(ModDelay),DX9)
+define	Mi8_Cut_Sw_On_DX			CHAIN(DX30,DX31,D(ModDelay),DX9)
+
+//define	Mi8_Wpn_Guns_DX				CHAIN(DX32,D(ModDelay),DX7)	//for use only with H2
+//define	Mi8_Wpn_Rockets_DX			CHAIN(DX32,D(ModDelay),DX9)
+define	Mi8_Wpn_Guns_WH_DX			CHAIN(DX30,DX32,D(ModDelay),DX10)	//for use only with WH base switch
+define	Mi8_Wpn_Rockets_WH_DX		CHAIN(DX32,D(ModDelay),DX10)
+
+
+// -----------------------------------
+//        		CB Panels
+// -----------------------------------
+
+define	Mi8_CB_Panel_1			R_CTL+R_SHIFT+USB_1
+define	Mi8_CB_Panel_2			R_CTL+R_SHIFT+USB_2
+define	Mi8_CB_Panel_3			R_CTL+R_SHIFT+USB_3
+define	Mi8_CB_Panel_4			R_CTL+R_SHIFT+USB_4
+define	Mi8_CB_Panel_5			R_CTL+R_SHIFT+USB_5
+define	Mi8_CB_Panel_6			R_CTL+R_SHIFT+USB_6
+define	Mi8_CB_Panel_7			R_CTL+R_SHIFT+USB_7
+define	Mi8_CB_Panel_8			R_CTL+R_SHIFT+USB_8
+define	Mi8_CB_Panel_9			R_CTL+R_SHIFT+USB_9
+
+define	Mi8_CB_Panels_1_3		CHAIN(	Mi8_CB_Panel_1,D(Switch_Delay), Mi8_CB_Panel_2,D(Switch_Delay), Mi8_CB_Panel_3)
+define	Mi8_CB_Panels_4_9		CHAIN(	Mi8_CB_Panel_4,D(Switch_Delay), Mi8_CB_Panel_5,D(Switch_Delay), Mi8_CB_Panel_6,D(Switch_Delay),	Mi8_CB_Panel_7,D(Switch_Delay), Mi8_CB_Panel_8,D(Switch_Delay), Mi8_CB_Panel_9)											
+
+// -----------------------------------
+//        	   Headlights
+// -----------------------------------
+
+define	Mi8_HeadlightL_Pwr		L_SHIFT	+ USB_L
+define	Mi8_HeadlightR_Pwr		R_SHIFT	+ USB_L
+define	Mi8_HeadlightL_Sw_Dn	L_SHIFT + USB_SEMICOLON
+define	Mi8_HeadlightR_Sw_Dn	R_SHIFT + USB_SEMICOLON
+//define	Mi8_HeadlightL_Pwr_DX	CHAIN(DX31,DX32,D(ModDelay),DX19)	//obsolete in 1.71
+//define	Mi8_HeadlightR_Pwr_DX	CHAIN(DX31,	    D(ModDelay),DX19)
+define	Mi8_HeadlightR_On		R_SHIFT+USB_I
+define	Mi8_HeadlightR_Off		R_CTL+USB_I
+define	Mi8_HeadlightR_Retr		R_ALT+R_CTL+USB_I
+define	Mi8_HeadlightL_On		L_SHIFT+USB_I
+define	Mi8_HeadlightL_Off		L_CTL+USB_I
+define	Mi8_HeadlightL_Retr		L_ALT+L_CTL+USB_I
+
+define	Mi8_HeadlightL_Rt		CHAIN(DX31,D(ModDelay),	DXHATRIGHT)
+define	Mi8_HeadlightL_Lt		CHAIN(DX31,D(ModDelay),	DXHATLEFT)
+define	Mi8_HeadlightL_Up		CHAIN(DX31,D(ModDelay),	DXHATUP)
+define	Mi8_HeadlightL_Dn		CHAIN(DX31,D(ModDelay),	DXHATDOWN)
+
+define	Mi8_HeadlightR_Rt		CHAIN(DX31,DX32,D(ModDelay), DXHATRIGHT)
+define	Mi8_HeadlightR_Lt		CHAIN(DX31,DX32,D(ModDelay), DXHATLEFT)
+define	Mi8_HeadlightR_Up		CHAIN(DX31,DX32,D(ModDelay), DXHATUP)
+define	Mi8_HeadlightR_Dn		CHAIN(DX31,DX32,D(ModDelay), DXHATDOWN)
+
+// -----------------------------------
+//        		Doors
+// -----------------------------------
+define	Cockpit_Door			R_CTL+USB_C
+define	Cargo_Door				L_CTL+L_ALT+USB_C
+define	Left_Door				L_CTL+L_SHIFT+USB_C
+define	Blister_Lt				L_CTL+USB_C
+define	Blister_Rt				L_SHIFT+USB_C
+define	Mi8_Left_Gunner_Burst	CHAIN(L_SHIFT,USB_LEFTGUI,D(ModDelay),USB_4)
+define	Mi8_Left_Gunner_ROE		CHAIN(L_CTL,USB_LEFTGUI,D(ModDelay),USB_4)
+define	Mi8_Rear_Gunner_Burst	L_SHIFT+USB_5
+define	Mi8_Rear_Gunner_ROE		L_CTL+USB_5
+define	Mi8_Hints				R_ALT+R_SHIFT+USB_K
+
+// -----------------------------------
+//        		Mi-24
+// -----------------------------------
+
+define	PetrovichToggle			L_CTL+USB_V
+
+define	Mi24_CB_Left			R_CTL+R_SHIFT+USB_1
+define	Mi24_CB_Right			R_CTL+R_SHIFT+USB_2
+
+define	Mi24_TaxiLts_On			R_SHIFT+USB_X
+define	Mi24_TaxiLts_Off		R_CTL+USB_X
+define	Mi24_StrobeLts_On		R_SHIFT+USB_L
+define	Mi24_StrobeLts_Off		R_ALT+USB_L
+
+define	Mi24_Observe_On			R_SHIFT+USB_O
+define	Mi24_Observe_Off		R_CTL+USB_O
+
+define	Mi24_CPGBombSw_Up		CHAIN(DOWN+R_CTL,DOWN+R_ALT,	D(ModDelay), PULSE+USB_PAGEDOWN,D(Switch_Delay),	PULSE+USB_B,	D(),UP+R_CTL,UP+R_ALT)	//first is left fuel cut, second is CPG only
+define	Mi24_CPGBombSw_Dn		CHAIN(DOWN+R_CTL,DOWN+R_SHIFT,	D(ModDelay), PULSE+USB_2,		D(Switch_Delay),	PULSE+USB_B,	D(),UP+R_CTL,UP+R_SHIFT)	//first is left CB, second is CPG only
+
+define	Mi24_CPGControlSwCover_Up	R_ALT+R_SHIFT+USB_PAGEUP
+define	Mi24_CPGControlSwCover_Dn	R_ALT+R_SHIFT+USB_PAGEDOWN
+
+define	Mi24_GunHigh_WH_DX		CHAIN(DX30,DX32,D(ModDelay),DX1)	//for use only with WH base switch
+define	Mi24_GunLow_WH_DX		CHAIN(DX32,D(ModDelay),DX1)
+
+//define	Mi24_GunHigh_WH_DX		CHAIN(DX30,DX32,D(ModDelay),DX1)	//for use only with WH base switch
+//define	Mi24_GunLow_WH_DX		CHAIN(DX32,D(ModDelay),DX1)
+
+
+// ******************************************************
+//					   F-86F Sabre
+// ******************************************************
+define	F86_Starter				R_ALT+R_SHIFT+USB_S
+define	F86_Battery_On			R_ALT+R_SHIFT+USB_B
+define	F86_Battery_Off			R_CTL+R_SHIFT+USB_B
+
+define	F86_Nav_Lt_Sw_Dn		R_ALT+R_SHIFT+USB_SEMICOLON	
+define	F86_Nav_Lt_Sw_Up		R_ALT+R_SHIFT+USB_P
+define	F86_Nav_Lts_Steady		R_CTL+R_SHIFT+USB_SEMICOLON
+define	F86_Nav_Lts_Flash		R_ALT+R_CTL+USB_SEMICOLON
+define	F86_Nav_Lts_Off			L_ALT+L_CTL+USB_SEMICOLON
+define	F86_Nav_Lts_Brt			R_ALT+R_CTL+USB_L
+define	F86_Nav_Lts_Dim			R_ALT+R_SHIFT+USB_L
+
+//define	F86_Gen_On				
+//define	F86_Gen_Off
+define	F86_Gen_Reset			R_ALT+R_SHIFT+USB_R
+
+define	F86_Eng_Master_On		R_ALT+R_SHIFT+USB_M
+define	F86_Eng_Master_Off		R_ALT+R_CTL+USB_M
+
+define	F86_Emer_Fuel_On		L_ALT+L_SHIFT+USB_V
+define	F86_Emer_Fuel_Off		L_ALT+USB_V
+
+define	F86_Flaps_Off			L_ALT+USB_F
+
+define	F86_Land_Lt_Sw_Up		L_ALT+L_SHIFT+USB_O
+define	F86_Land_Lt_Sw_Dn		L+ALT+L_SHIFT+USB_L
+define	F86_Land_Lt_Sw_Ext		L_CTL+L_SHIFT+USB_O
+define	F86_Land_Lt_Sw_Retr		L_CTL+L_SHIFT+USB_L
+define	F86_Land_Lt_Sw_Off		R_ALT+R_CTL+USB_O
+
+define	F86_Engine_Ice_Sw_Up	L_ALT+L_SHIFT+USB_E
+define	F86_Engine_Ice_Sw_Dn	L_ALT+L_SHIFT+USB_S
+define	F86_Engine_Ice_Sw_Ext	R_ALT+R_CTL+USB_E
+define	F86_Engine_Ice_Sw_Retr	L_CTL+L_SHIFT+USB_S
+define	F86_Engine_Ice_Sw_Ice	R_ALT+R_CTL+USB_S
+
+define	F86_AirStart_Sw					USB_I
+define	F86_AirStart_Sw_Cover_Open		R_ALT+R_SHIFT+USB_I
+define	F86_AirStart_Sw_Cover_Close		R_ALT+R_CTL+USB_I
+
+define	F86_Nav_Lt_Sw_Up_DX		CHAIN(DX32,D(ModDelay), DX23)	
+define	F86_Nav_Lt_Sw_Dn_DX		CHAIN(DX32,D(ModDelay), DX24)
+define	F86_Land_Lt_Sw_Up_DX	DX11	
+define	F86_Land_Lt_Sw_Dn_DX	DX13
+
+define	F86_Pitot_Heat_On		R_CTL+R_SHIFT+USB_P
+define	F86_Pitot_Heat_Off		L_CTL+L_SHIFT+USB_P
+
+define	F86_Gun_Heat_On			R_ALT+R_CTL+USB_H
+define	F86_Gun_Heat_Off		L_CTL+L_SHIFT+USB_H
+
+define	F86_Bomb_Rel_Toggle		R_ALT+R_CTL+USB_B
+define	F86_Bomb_Fuse_Off		R_ALT+R_CTL+USB_F
+
+define	F86_Rkt_Fuse_Off		L_SHIFT+USB_T
+define	F86_Rkt_Sel_Sw_Up		R_CTL+USB_T
+
+//define	F86_Tgt_Rng_Incr		USB_SEMICOLON	//K-14 (P-51) used instead to save memory
+//define	F86_Tgt_Rng_Decr		USB_PERIOD 
+//define	F86_Tgt_Wingspan_Incr	USB_SLASH
+//define	F86_Tgt_Wingspan_Decr	USB_COMMA
+
+
+define	F86_Weapon_Sel_Lt_DX	CHAIN(DX30,D(ModDelay),DX10)
+define	F86_Weapon_Sel_Rt_DX	CHAIN(DX30,D(ModDelay),DX8)
+define	F86_Weapon_Sel_Lt		R_ALT+USB_W
+define	F86_Weapon_Sel_Rt		R_CTL+USB_W
+define	F86_Weapon_Sel_Msl		R_ALT+R_CTL+USB_W
+define	F86_Weapon_Sel_Gun		R_ALT+R_SHIFT+USB_W
+define	F86_Weapon_Sel_Cam		L_CTL+L_SHIFT+USB_W
+define	F86_Weapon_Sel_Off		L_CTL+R_CTL+USB_W
+
+define	F86_Sight_Funct_Rkt		R_CTL+R_SHIFT+USB_V
+define	F86_Sight_Funct_Gun		R_ALT+R_SHIFT+USB_V
+define	F86_Sight_Funct_Bomb	R_ALT+R_CTL+USB_V
+
+define	F86_Rocket_Salvo_CW		L_CTL+L_ALT+USB_CLOSEBRACKET
+define	F86_Rocket_Salvo_CCW	L_CTL+L_ALT+USB_OPENBRACKET
+
+define	F86_Rkt_Depr_Decr_DX	DX7
+define	F86_Rkt_Depr_Incr_DX	DX9
+
+define	F86_UHF_Freq_Incr_DX	DX16
+define	F86_UHF_Freq_Decr_DX	DX18
+
+
+// ******************************************************
+//			Fw-190D9 Dora (includes Bf-109)
+// ******************************************************
+
+
+define	Fw190_LdgGear_Cover_Up		CHAIN(R_SHIFT,USB_RIGHTGUI,D(ModDelay),USB_H)
+define	Fw190_LdgGear_Cover_Down	CHAIN(R_ALT,USB_RIGHTGUI,D(ModDelay),USB_H)
+define	Gear_Retract_Cover			R_ALT+R_CTL+USB_G
+define	Fw190_Flaps_Landing			USB_F
+
+define	Rdo_Channel_Incr			R_ALT	+	USB_N
+define	Rdo_Channel_Decr			L_ALT	+	USB_N
+define	Fw190_RdoMode_Toggle		CHAIN(USB_LEFTGUI,D(ModDelay),USB_C)
+define	Fw190_Canopy_Jettison		L_SHIFT+L_CTL+USB_C		//also works for Bf-109 and P-47
+
+define	Fw190_EZ42_Gyro_On			CHAIN(L_CTL,  USB_LEFTGUI,D(ModDelay),USB_M)
+define	Fw190_EZ42_Gyro_Off			CHAIN(L_SHIFT,USB_LEFTGUI,D(ModDelay),USB_M)
+define	Fw190_EZ42_Gyro				USB_M
+define	Fw190_EZ42_NightLens_On		CHAIN(L_CTL,  USB_LEFTGUI,D(ModDelay),USB_N)
+define	Fw190_EZ42_NightLens_Off	CHAIN(L_SHIFT,USB_LEFTGUI,D(ModDelay),USB_N)
+define	Fw190_EZ42_NightLens		USB_N
+
+define	Fw190_Radio_Freq_1_DX		CHAIN(DX31,D(ModDelay),DX14)
+define	Fw190_Radio_Freq_2_DX		CHAIN(DX31,D(ModDelay),DX13)
+define	Fw190_Radio_Freq_3_DX		CHAIN(DX31,D(ModDelay),DX12)
+define	Fw190_Radio_Freq_4_DX		CHAIN(DX31,D(ModDelay),DX11)
+define	Bf109_Radio_Freq_1_DX		CHAIN(DX32,D(ModDelay),DX15)
+define	Bf109_Radio_Freq_2_DX		CHAIN(DX32,D(ModDelay),DX14)
+define	Bf109_Radio_Freq_3_DX		CHAIN(DX32,D(ModDelay),DX13)
+define	Bf109_Radio_Freq_4_DX		CHAIN(DX32,D(ModDelay),DX12)
+
+define	Fw190_Stopwatch				R_SHIFT+USB_W
+define	Fw190_Stopwatch_DX			CHAIN(DX32,D(ModDelay),DX7)
+define	Bf109_Stopwatch_DX			CHAIN(DX32,D(ModDelay),DX3)
+
+define	Bf109_SignalFlare			L_CTL+L_SHIFT+USB_F
+define	Bf109_SmokedScreen			L_ALT+USB_O
+define	Bf109_SightStow				USB_O
+
+// -----------------------------------
+//        		 Weapons
+// -----------------------------------
+define	Fw190_BombFuse_Off			L_CTL	+	USB_3
+define	Fw190_BombFuse_DOV			L_CTL	+	USB_1
+define	Fw190_BombFuse_DMV			L_CTL	+	USB_2
+define	Fw190_BombFuse_LMV			L_CTL	+	USB_4
+define	Fw190_BombFuse_LOV			L_CTL	+	USB_5
+
+define	Fw190_Rocket_Emer_Rel_Cover_Open	L_SHIFT+USB_K
+define	Rocket_Emer_Rel_On			L_SHIFT	+	USB_I
+define	Rocket_Emer_Rel_Off			L_CTL	+	USB_I
+
+// -----------------------------------
+//        		 Engine
+// -----------------------------------
+define	Fw190_Throttle_Idle			R_ALT	+	USB_HOME
+define	Fw190_Throttle_Stop			R_ALT	+	USB_END
+
+define	Bf109_Starter_Cover			USB_HOME
+
+define	Fw190_Magneto_Off			R_SHIFT	+	USB_0
+define	Fw190_Magneto_1				R_SHIFT	+	USB_1
+define	Fw190_Magneto_2				R_SHIFT	+	USB_2
+define	Fw190_Magneto_12			R_SHIFT	+	USB_3
+
+define	Bf109_Boost_Off				L_CTL+R_CTL+USB_B
+define	Bf109_Boost_P1				L_CTL+L_SHIFT+USB_B
+define	Bf109_Boost_P2				R_CTL+R_SHIFT+USB_B
+define	Bf109_Boost_P12				L_SHIFT+R_SHIFT+USB_B
+define	Bf109_Boost_Next			L_SHIFT+USB_T
+define	Bf109_Boost_Prev			L_CTL+USB_T
+
+define	Bf109_Radiator_Auto			USB_A
+define	Bf109_Radiator_Open			L_ALT+L_SHIFT+USB_A
+define	Bf109_Radiator_DriveOff		L_CTL+L_SHIFT+USB_A
+define	Bf109_Radiator_Close		L_ALT+L_CTL+USB_A
+
+define	Fw190_Fueltank_Lt_DX		CHAIN(DX32,D(ModDelay),DX4)
+define	Fw190_Fueltank_Rt_DX		CHAIN(DX32,D(ModDelay),DX5)
+
+// -----------------------------------
+//        	 Circuit Breakers
+// -----------------------------------
+define	Fw190_CB_Cover						CHAIN(USB_RIGHTGUI,D(ModDelay),USB_C)
+define	Fw190_CB_Cover_DX					CHAIN(DX30,D(ModDelay),USB_C)
+define	Fw190_CB_FlapTrimADI_On				CHAIN(USB_LEFTGUI,D(ModDelay),USB_1)		//A8 Drop Ord & Opt armament
+define	Fw190_CB_LdgGear_On					CHAIN(USB_LEFTGUI,D(ModDelay),USB_2)		//A8 Gunsight/Cam
+define	Fw190_CB_PitotHeat_On				CHAIN(USB_LEFTGUI,D(ModDelay),USB_3)		//A8 Instruments
+define	Fw190_CB_FuG25a_On					CHAIN(USB_LEFTGUI,D(ModDelay),USB_4)		//A8 Nav Lts
+define	Fw190_CB_FuG16ZY_On					CHAIN(USB_LEFTGUI,D(ModDelay),USB_5)		//A8 Cabin Illum
+define	Fw190_CB_Instr_On					CHAIN(USB_LEFTGUI,D(ModDelay),USB_6)		//A8 Clothes Heating
+define	Fw190_CB_Generator_On				CHAIN(USB_LEFTGUI,D(ModDelay),USB_7)		//A8 Pitot Heating
+define	Fw190_CB_Battery_On					CHAIN(USB_LEFTGUI,D(ModDelay),USB_8)		//A8 Ignition
+
+define	Fw190_CB_FlapTrimADI_Off			CHAIN(L_CTL,USB_LEFTGUI,D(ModDelay),USB_1)
+define	Fw190_CB_LdgGear_Off				CHAIN(L_CTL,USB_LEFTGUI,D(ModDelay),USB_2)
+define	Fw190_CB_PitotHeat_Off				CHAIN(L_CTL,USB_LEFTGUI,D(ModDelay),USB_3)
+define	Fw190_CB_FuG25a_Off					CHAIN(L_CTL,USB_LEFTGUI,D(ModDelay),USB_4)
+define	Fw190_CB_FuG16ZY_Off				CHAIN(L_CTL,USB_LEFTGUI,D(ModDelay),USB_5)
+define	Fw190_CB_Instr_Off					CHAIN(L_CTL,USB_LEFTGUI,D(ModDelay),USB_6)
+define	Fw190_CB_Generator_Off				CHAIN(L_CTL,USB_LEFTGUI,D(ModDelay),USB_7)
+define	Fw190_CB_Battery_Off				CHAIN(L_CTL,USB_LEFTGUI,D(ModDelay),USB_8)
+
+define	Fw190_CB_Nav_Lights_On				CHAIN(USB_RIGHTGUI,D(ModDelay),USB_1)
+define	Fw190_CB_E14_Fwd_Tank_Pump_On		CHAIN(USB_RIGHTGUI,D(ModDelay),USB_2)
+define	Fw190_CB_E13_Rear_Tank_Pump_On		CHAIN(USB_RIGHTGUI,D(ModDelay),USB_3)
+define	Fw190_CB_E85_Ext_Tank_Pump_On		CHAIN(USB_RIGHTGUI,D(ModDelay),USB_4)
+define	Fw190_CB_E96_MW50_On				CHAIN(USB_RIGHTGUI,D(ModDelay),USB_5)
+
+define	Fw190_CB_Nav_Lights_Off				CHAIN(R_CTL,USB_RIGHTGUI,D(ModDelay),USB_1)
+define	Fw190_CB_E14_Fwd_Tank_Pump_Off		CHAIN(R_CTL,USB_RIGHTGUI,D(ModDelay),USB_2)
+define	Fw190_CB_E13_Rear_Tank_Pump_Off		CHAIN(R_CTL,USB_RIGHTGUI,D(ModDelay),USB_3)
+define	Fw190_CB_E85_Ext_Tank_Pump_Off		CHAIN(R_CTL,USB_RIGHTGUI,D(ModDelay),USB_4)
+define	Fw190_CB_E96_MW50_Off				CHAIN(R_CTL,USB_RIGHTGUI,D(ModDelay),USB_5)
+
+define	Fw190_CB_Nav_Lights_On_DX			CHAIN(		DX32,D(ModDelay),DX6)
+define	Fw190_CB_E14_Fwd_Tank_Pump_On_DX	CHAIN(		DX32,D(ModDelay),DX7)
+define	Fw190_CB_E13_Rear_Tank_Pump_On_DX	CHAIN(		DX32,D(ModDelay),DX8)
+define	Fw190_CB_E85_Ext_Tank_Pump_On_DX	CHAIN(		DX32,D(ModDelay),DX9)
+define	Fw190_CB_E96_MW50_On_DX				CHAIN(		DX32,D(ModDelay),DX10)
+
+define	Fw190_CB_Nav_Lights_Off_DX			CHAIN(DX30,	DX32,D(ModDelay),DX6)
+define	Fw190_CB_E14_Fwd_Tank_Pump_Off_DX	CHAIN(DX30,	DX32,D(ModDelay),DX7)
+define	Fw190_CB_E13_Rear_Tank_Pump_Off_DX	CHAIN(DX30,	DX32,D(ModDelay),DX8)
+define	Fw190_CB_E85_Ext_Tank_Pump_Off_DX	CHAIN(DX30,	DX32,D(ModDelay),DX9)
+define	Fw190_CB_E96_MW50_Off_DX			CHAIN(DX30,	DX32,D(ModDelay),DX10)
+
+//A8 Delta
+define	Fw190A8_CB_Cover2					CHAIN(R_SHIFT,USB_RIGHTGUI,D(ModDelay),USB_C)
+define	Fw190A8_CB_Cover2_DX				CHAIN(DX30,D(ModDelay),USB_V)
+
+define	Fw190A8_CB_FuG25aIFF_On				CHAIN(USB_LEFTGUI,D(ModDelay),USB_9)
+define	Fw190A8_CB_Generator_On				CHAIN(USB_LEFTGUI,D(ModDelay),USB_0)
+define	Fw190A8_CB_Battery_On				CHAIN(USB_LEFTGUI,D(ModDelay),USB_GRAVEACCENTANDTILDE)
+define	Fw190A8_CB_FuG25aIFF_Off			CHAIN(L_CTL,USB_LEFTGUI,D(ModDelay),USB_9)
+define	Fw190A8_CB_Generator_Off			CHAIN(L_CTL,USB_LEFTGUI,D(ModDelay),USB_0)
+define	Fw190A8_CB_Battery_Off				CHAIN(L_CTL,USB_LEFTGUI,D(ModDelay),USB_GRAVEACCENTANDTILDE)
+
+define	Fw190A8_FwdTankPump_On				CHAIN(USB_RIGHTGUI,D(ModDelay),USB_1)
+define	Fw190A8_AftTankPump_On				CHAIN(USB_RIGHTGUI,D(ModDelay),USB_2)
+define	Fw190A8_DropTankPump_On				CHAIN(USB_RIGHTGUI,D(ModDelay),USB_3)
+define	Fw190A8_AuxTankPump_On				CHAIN(USB_RIGHTGUI,D(ModDelay),USB_4)
+define	Fw190A8_FwdTankPump_Off				CHAIN(R_CTL,USB_RIGHTGUI,D(ModDelay),USB_1)
+define	Fw190A8_AftTankPump_Off				CHAIN(R_CTL,USB_RIGHTGUI,D(ModDelay),USB_2)
+define	Fw190A8_DropTankPump_Off			CHAIN(R_CTL,USB_RIGHTGUI,D(ModDelay),USB_3)
+define	Fw190A8_AuxTankPump_Off				CHAIN(R_CTL,USB_RIGHTGUI,D(ModDelay),USB_4)
+
+define	Fw190A8_FuG16ZY_On					CHAIN(USB_RIGHTGUI,D(ModDelay),USB_5)
+define	Fw190A8_UCDrives_On					CHAIN(USB_RIGHTGUI,D(ModDelay),USB_6)
+define	Fw190A8_LdgFlaps_On					CHAIN(USB_RIGHTGUI,D(ModDelay),USB_7)
+define	Fw190A8_PropPitchDrive_On			CHAIN(USB_RIGHTGUI,D(ModDelay),USB_8)
+define	Fw190A8_PitchCtl_On					CHAIN(USB_RIGHTGUI,D(ModDelay),USB_9)
+define	Fw190A8_StabTrim_On					CHAIN(USB_RIGHTGUI,D(ModDelay),USB_0)
+define	Fw190A8_ADI_On						CHAIN(USB_RIGHTGUI,D(ModDelay),USB_HYPHEN)
+define	Fw190A8_MotorGen_On					CHAIN(USB_RIGHTGUI,D(ModDelay),USB_EQUALSIGN)
+define	Fw190A8_RepeaterCompass_On			CHAIN(USB_RIGHTGUI,D(ModDelay),USB_DELETEORBACKSPACE)
+define	Fw190A8_UCCtrl_On					CHAIN(USB_RIGHTGUI,D(ModDelay),USB_U)
+define	Fw190A8_FuG25aSD_On					CHAIN(USB_RIGHTGUI,D(ModDelay),USB_GRAVEACCENTANDTILDE)
+
+define	Fw190A8_FuG16ZY_Off					CHAIN(R_CTL,USB_RIGHTGUI,D(ModDelay),USB_5)
+define	Fw190A8_UCDrives_Off				CHAIN(R_CTL,USB_RIGHTGUI,D(ModDelay),USB_6)
+define	Fw190A8_LdgFlaps_Off				CHAIN(R_CTL,USB_RIGHTGUI,D(ModDelay),USB_7)
+define	Fw190A8_PropPitchDrive_Off			CHAIN(R_CTL,USB_RIGHTGUI,D(ModDelay),USB_8)
+define	Fw190A8_PitchCtl_Off				CHAIN(R_CTL,USB_RIGHTGUI,D(ModDelay),USB_9)
+define	Fw190A8_StabTrim_Off				CHAIN(R_CTL,USB_RIGHTGUI,D(ModDelay),USB_0)
+define	Fw190A8_ADI_Off						CHAIN(R_CTL,USB_RIGHTGUI,D(ModDelay),USB_HYPHEN)
+define	Fw190A8_MotorGen_Off				CHAIN(R_CTL,USB_RIGHTGUI,D(ModDelay),USB_EQUALSIGN)
+define	Fw190A8_RepeaterCompass_Off			CHAIN(R_CTL,USB_RIGHTGUI,D(ModDelay),USB_DELETEORBACKSPACE)
+define	Fw190A8_UCCtrl_Off					CHAIN(R_CTL,USB_RIGHTGUI,D(ModDelay),USB_U)
+define	Fw190A8_FuG25aSD_Off				CHAIN(R_CTL,USB_RIGHTGUI,D(ModDelay),USB_GRAVEACCENTANDTILDE)
+
+define	Fw190A8_Fueltank_Gauge_Fwd			R_ALT+USB_5
+define	Fw190A8_Fueltank_Gauge_Aft			R_ALT+USB_7
+define	Fw190A8_Fueltank_Gauge_Ctr			R_ALT+USB_6
+
+define	Fw190_CB_Bank1_On					CHAIN(			DOWN+USB_LEFTGUI,D(ModDelay),PULSE+USB_1,	D(Switch_Delay),PULSE+USB_1,	D(Switch_Delay),PULSE+USB_2,	D(Switch_Delay),PULSE+USB_3,	D(Switch_Delay),PULSE+USB_4,	D(Switch_Delay),PULSE+USB_5,	D(Switch_Delay),PULSE+USB_6,	D(Switch_Delay),PULSE+USB_7,	D(Switch_Delay),PULSE+USB_8,	D(ModDelay),UP+USB_LEFTGUI,				D(Switch_Delay),PULSE+Fw190_CB_Cover_DX)	//1 twice in case cover needs to be opened
+define	Fw190_CB_Bank1_Off					CHAIN(DOWN+L_CTL,DOWN+USB_LEFTGUI,D(ModDelay),PULSE+USB_1,									D(Switch_Delay),PULSE+USB_2,	D(Switch_Delay),PULSE+USB_3,	D(Switch_Delay),PULSE+USB_4,	D(Switch_Delay),PULSE+USB_5,	D(Switch_Delay),PULSE+USB_6,	D(Switch_Delay),PULSE+USB_7,	D(Switch_Delay),PULSE+USB_8,	D(ModDelay),UP+USB_LEFTGUI,UP+L_CTL)	
+
+define	Fw190A8_CB_Bank1_On					CHAIN(			DOWN+USB_LEFTGUI,D(ModDelay),PULSE+USB_1,	D(Switch_Delay),PULSE+USB_1,	D(Switch_Delay),PULSE+USB_2,	D(Switch_Delay),PULSE+USB_3,	D(Switch_Delay),PULSE+USB_4,	D(Switch_Delay),PULSE+USB_5,	D(Switch_Delay),PULSE+USB_6,	D(Switch_Delay),PULSE+USB_7,	D(Switch_Delay),PULSE+USB_8,	D(Switch_Delay),PULSE+USB_9,	D(Switch_Delay),PULSE+USB_0,	D(Switch_Delay),PULSE+USB_GRAVEACCENTANDTILDE,	D(ModDelay),UP+USB_LEFTGUI,				D(Switch_Delay),PULSE+Fw190_CB_Cover_DX)	//1 twice in case cover needs to be opened
+define	Fw190A8_CB_Bank1_Off				CHAIN(DOWN+L_CTL,DOWN+USB_LEFTGUI,D(ModDelay),PULSE+USB_1,									D(Switch_Delay),PULSE+USB_2,	D(Switch_Delay),PULSE+USB_3,	D(Switch_Delay),PULSE+USB_4,	D(Switch_Delay),PULSE+USB_5,	D(Switch_Delay),PULSE+USB_6,	D(Switch_Delay),PULSE+USB_7,	D(Switch_Delay),PULSE+USB_8,	D(Switch_Delay),PULSE+USB_9,	D(Switch_Delay),PULSE+USB_0,	D(Switch_Delay),PULSE+USB_GRAVEACCENTANDTILDE,	D(ModDelay),UP+USB_LEFTGUI,UP+L_CTL)	
+define	Fw190A8_CB_Bank2_On					CHAIN(			DOWN+USB_RIGHTGUI,D(ModDelay),PULSE+USB_5,	D(Switch_Delay),PULSE+USB_5,	D(Switch_Delay),PULSE+USB_6,	D(Switch_Delay),PULSE+USB_7,	D(Switch_Delay),PULSE+USB_8,	D(Switch_Delay),PULSE+USB_9,	D(Switch_Delay),PULSE+USB_0,	D(Switch_Delay),PULSE+USB_HYPHEN,	D(Switch_Delay),PULSE+USB_EQUALSIGN,	D(Switch_Delay),PULSE+USB_DELETEORBACKSPACE,	D(Switch_Delay),PULSE+USB_U,	D(Switch_Delay),									D(ModDelay),UP+USB_RIGHTGUI,				D(Switch_Delay),PULSE+Fw190A8_CB_Cover2_DX)	//5 twice in case cover needs to be opened, no S/D IFF on startup
+define	Fw190A8_CB_Bank2_Off				CHAIN(DOWN+R_CTL,DOWN+USB_RIGHTGUI,D(ModDelay),PULSE+USB_5,									D(Switch_Delay),PULSE+USB_6,	D(Switch_Delay),PULSE+USB_7,	D(Switch_Delay),PULSE+USB_8,	D(Switch_Delay),PULSE+USB_9,	D(Switch_Delay),PULSE+USB_0,	D(Switch_Delay),PULSE+USB_HYPHEN,	D(Switch_Delay),PULSE+USB_EQUALSIGN,	D(Switch_Delay),PULSE+USB_DELETEORBACKSPACE,	D(Switch_Delay),PULSE+USB_U,	D(Switch_Delay),	PULSE+USB_GRAVEACCENTANDTILDE,	D(ModDelay),UP+USB_RIGHTGUI,UP+R_CTL)	
+
+define	Fw190A8_Gov_Off_DX					DX24
+define	Fw190A8_Gov_On_DX					CHAIN(DX30,D(ModDelay),DX24)
+
+// ******************************************************
+//				     MiG-21bis Fishbed N
+// ******************************************************
+
+define	MiG21_Wpn_Rel_Cover_Open			R_SHIFT+USB_EQUALSIGN
+define	MiG21_Gear_Neutral					L_CTL+USB_G
+define	MiG21_Ldg_Lt_Off					L_ALT+L_CTL+USB_L
+define	MiG21_Ldg_Lt_Taxi					L_CTL+USB_L
+define	MiG21_Ldg_Lt_Land					L_ALT+USB_L
+define	MiG21_Ldg_Lt_Cyc					L_CTL+USB_L		//cyc instead of cycle to deconflict with subroutine of same name
+
+define	MiG21_ButtonCap_Open				R_ALT+USB_D
+define	MiG21_ButtonCap_Close				R_CTL+R_ALT+USB_D
+define	MiG21_DragChute						USB_P
+
+define	MiG21_Nav_Lts_Off					L_CTL+L_SHIFT+USB_L
+define	MiG21_Nav_Lts_Min					L_ALT+L_CTL+L_SHIFT+USB_L
+define	MiG21_Nav_Lts_Med					L_ALT+L_SHIFT+USB_L
+define	MiG21_Nav_Lts_Max					L_SHIFT+USB_L
+define	MiG21_Nav_Lts_Cyc					L_SHIFT+USB_L	//cyc instead of cycle to deconflict with subroutine of same name
+
+define	MiG21_WingFuelJett_Cover_Close		R_SHIFT+R_CTL+USB_PAGEDOWN
+define	MiG21_WingOuterJett_Cover_Close		R_SHIFT+R_CTL+USB_INSERT
+define	MiG21_WingInnerJett_Cover_Close		R_SHIFT+R_CTL+USB_DELETEFORWARD
+define	MiG21_WingFuelJett_Cover_Open		R_SHIFT+USB_PAGEDOWN
+define	MiG21_WingOuterJett_Cover_Open		R_SHIFT+USB_INSERT
+define	MiG21_WingInnerJett_Cover_Open		R_SHIFT+USB_DELETEFORWARD
+
+define	MiG21_Emer_AA_Cover_Open			R_ALT+USB_N
+define	MiG21_Emer_AA_Cover_Close			R_SHIFT+R_ALT+USB_N
+define	MiG21_Tac_Drop_Sw_On				R_CTL+USB_EQUALSIGN
+define	MiG21_Tac_Drop_Sw_Off				R_SHIFT+R_ALT+USB_EQUALSIGN
+define	MiG21_Tac_Drop_Cover_Open			R_ALT+USB_EQUALSIGN
+define	MiG21_Tac_Drop_Cover_Close			R_CTL+R_ALT+USB_EQUALSIGN
+
+define	MiG21_Throttle_StartStop_Toggle		CHAIN(L_SHIFT,USB_RIGHTGUI,D(ModDelay),USB_E)
+define	MiG21_Throttle_StartStop_Toggle_DX	DX4
+
+define	MiG21_Nosegear_Lock_On				L_ALT+USB_W
+define	MiG21_Nosegear_Lock_Off				L_CTL+L_ALT+USB_W
+define	MiG21_EBrake_On						L_CTL+USB_W
+define	MiG21_EBrake_Off					L_CTL+L_SHIFT+USB_W
+
+define	MiG21_Main_Pitot_Sel				R_ALT+USB_T
+define	MiG21_Main_Pitot_On					L_SHIFT+USB_H
+define	MiG21_Main_Pitot_Off				L_CTL+L_SHIFT+USB_H
+define	MiG21_Emer_Pitot_Sel				R_ALT+R_CTL+USB_T
+define	MiG21_Emer_Pitot_On					L_ALT+USB_H
+define	MiG21_Emer_Pitot_Off				L_CTL+L_ALT+USB_H
+
+define	MiG21_Emer_Airstart_On				R_SHIFT+USB_E
+define	MiG21_Emer_Airstart_Off				R_CTL+USB_E
+
+define	MiG21_SORC							USB_DELETEORBACKSPACE
+define	MiG21_NPP_Cage						L_CTL+USB_N
+// -----------------------------------
+//        	 Avionics
+// -----------------------------------
+
+//Danger Altitude
+define	MiG21_DA_Off						R_CTL+USB_0
+define	MiG21_DA_050m						R_CTL+USB_1
+define	MiG21_DA_100m						R_CTL+USB_2
+define	MiG21_DA_150m						R_CTL+USB_3
+define	MiG21_DA_200m						R_CTL+USB_4
+define	MiG21_DA_250m						R_CTL+USB_5
+define	MiG21_DA_300m						R_CTL+USB_6
+define	MiG21_DA_400m						R_CTL+USB_7
+
+//RSBN
+define	MiG21_RSBN_Descend					L_ALT+L_CTL+USB_R
+define	MiG21_RSBN_Landing					L_ALT+USB_R
+define	MiG21_RSBN_Nav						L_CTL+USB_R
+define	MiG21_RSBN_Land_Ch_Incr				USB_U
+define	MiG21_RSBN_Land_Ch_Decr				L_SHIFT+USB_U
+define	MiG21_RSBN_Nav_Ch_Incr				USB_Y
+define	MiG21_RSBN_Nav_Ch_Decr				L_SHIFT+USB_Y
+
+define	MiG21_RSBN_Both_Ch_Incr				CHAIN(USB_U,USB_Y)	//CHAIN(USB_U,(ModDelay),USB_Y)
+define	MiG21_RSBN_Both_Ch_Decr				CHAIN(L_SHIFT,USB_U,USB_Y)	//CHAIN(DOWN+L_SHIFT,D(ModDelay),PULSE+USB_U,D(ModDelay),PULSE+USB_Y,D(ModDelay),UP+L_SHIFT)
+//Radio
+define	MiG21_Radio_Vol_Incr				USB_H
+define	MiG21_Radio_Vol_Decr				L_CTL+USB_H
+define	MiG21_Radio_Ch_Incr					USB_OPENBRACKET
+define	MiG21_Radio_Ch_Decr					USB_CLOSEBRACKET
+define	MiG21_Radio_Pwr						USB_SLASH
+
+//SAU
+define	MiG21_SAU_Low_Recovery_Off			R_ALT+R_SHIFT+USB_S
+define	MiG21_SAU_Low_Recovery_On			R_CTL+USB_S
+
+//ARK
+define	MiG21_ARK_I1						R_ALT+USB_1
+define	MiG21_ARK_I2						R_ALT+USB_2
+define	MiG21_ARK_II1						R_ALT+USB_3
+define	MiG21_ARK_II2						R_ALT+USB_4
+define	MiG21_ARK_III1						R_ALT+USB_5
+define	MiG21_ARK_III2						R_ALT+USB_6
+define	MiG21_ARK_IV1						R_ALT+USB_7
+define	MiG21_ARK_IV2						R_ALT+USB_8
+
+// -----------------------------------
+//        	 	Radar
+// -----------------------------------
+define	MiG21_Radar_Off						L_CTL+L_SHIFT+USB_4
+define	MiG21_Radar_On						L_ALT+L_SHIFT+USB_4
+define	MiG21_Radar_Stby					L_ALT+USB_4
+define	MiG21_Radar_Alt_Filter_On			L_ALT+USB_5
+define	MiG21_Radar_Alt_Filter_Off			L_CTL+L_SHIFT+USB_5
+define	MiG21_Radar_Alt_Tilt				L_ALT+L_SHIFT+USB_5
+define	MiG21_Radar_Lockbeam_On				L_ALT+USB_6
+define	MiG21_Radar_Lockbeam_Off			L_SHIFT+L_CTL+USB_6
+
+
+//define	MiG21_SPO10_Lts_Day					R_ALT+R_SHIFT+USB_Z
+//define	MiG21_SPO10_Lts_Night				L_ALT+USB_Z
+define	MiG21_SPO10_Lts_Toggle				R_ALT+USB_Z
+
+// -----------------------------------
+//        		Weapons
+// -----------------------------------
+
+//Master Control
+define	MiG21_WepsMM_Air					CHAIN(USB_LEFTGUI,D(ModDelay),USB_1)
+define	MiG21_WepsMM_Gnd					CHAIN(USB_LEFTGUI,D(ModDelay),USB_2)
+define	MiG21_WepsAA_SAR					CHAIN(USB_LEFTGUI,D(ModDelay),USB_3)
+define	MiG21_WepsAA_IR						CHAIN(USB_LEFTGUI,D(ModDelay),USB_4)
+define	MiG21_WepsAA_Neutral				CHAIN(L_ALT,USB_LEFTGUI,D(ModDelay),USB_4)
+
+//Weapons Select
+define	MiG21_WepsSel_AA1					USB_1
+define	MiG21_WepsSel_AA12					USB_HYPHEN
+define	MiG21_WepsSel_AA2					USB_2
+define	MiG21_WepsSel_AA3					USB_3
+define	MiG21_WepsSel_AA34					USB_0
+define	MiG21_WepsSel_AA4					USB_4
+define	MiG21_WepsSel_B12					USB_5
+define	MiG21_WepsSel_B34					USB_6
+define	MiG21_WepsSel_B14					USB_7
+define	MiG21_WepsSel_S24_12				USB_8
+define	MiG21_WepsSel_S24_34				USB_9
+define	MiG21_WepsSel_Next					L_SHIFT+USB_EQUALSIGN
+define	MiG21_WepsSel_Prev					L_SHIFT+USB_HYPHEN
+
+
+//Weapons ASP
+					
+define	MiG21_ASP_Gun						L_SHIFT+USB_1
+define	MiG21_ASP_MissRock					L_CTL+USB_1
+
+define	MiG21_ASP_Shooting					L_SHIFT+USB_2
+define	MiG21_ASP_Bomb						L_CTL+USB_2
+
+define	MiG21_ASPMM_Auto					L_SHIFT+USB_3
+define	MiG21_ASPMM_Man						L_CTL+USB_3
+
+define	MiG21_ASP_Gyro						L_SHIFT+USB_4
+define	MiG21_ASP_Missile					L_CTL+USB_4
+
+define	MiG21_Pipper_Off					R_CTL+R_SHIFT+USB_C
+define	MiG21_Pipper_On						R_SHIFT+USB_C
+define	MiG21_Pipper_Cycle					R_SHIFT+USB_C
+
+define	MiG21_FixNet_Off					R_ALT+R_SHIFT+USB_X
+define	MiG21_FixNet_On						R_SHIFT+USB_X
+define	MiG21_FixNet_Cycle					R_SHIFT+USB_X
+
+define	MiG21_Intercept_Angle_Incr			USB_I
+define	MiG21_Intercept_Angle_Decr			L_ALT+USB_I
+
+define	MiG21_Target_Size_Incr				USB_S
+define	MiG21_Target_Size_Decr				L_ALT+USB_S
+
+
+// ******************************************************
+//				     MiG-15bis Fagot
+// ******************************************************
+
+define	MiG15_Stick_Airbrake				DX5
+
+define	MiG15_FuelValve_Close_DX			CHAIN(DX31,D(ModDelay),DX25)
+define	MiG15_FuelValve_Open_DX				CHAIN(DX31,D(ModDelay),DX26)
+
+define	MiG15_FuelValve_Close				USB_END
+define	MiG15_FuelValve_Open				USB_HOME
+
+define	MiG15_Flaps_Down					L_SHIFT+USB_F
+define	MiG15_Flaps_Up						L_CTL+USB_F
+
+define	MiG15_GearLampTest					R_ALT+USB_G
+
+define	MiG15_DropTankSignalSw				USB_D
+define	MiG15_TacticalReleaseSw				L_SHIFT+USB_D
+
+
+// ******************************************************
+//				     M-2000C
+// ******************************************************
+
+define	M2k_FBW_Limiter_Toggle				L_SHIFT+L_CTL+USB_G
+define	M2k_FBW_Spin_Sw						L_SHIFT+L_CTL+USB_V
+
+define	M2k_Flashlight						L_ALT+USB_L
+define	M2k_LdgLight_Cycle					R_ALT+USB_L
+define	M2k_AntiColl_Toggle					R_CTL+R_SHIFT+USB_L
+define	M2k_FormLts_Toggle					R_CTL+USB_L
+define	M2k_NavLts_Toggle					R_SHIFT+USB_L
+define	M2k_FormLts_On						L_SHIFT+USB_F
+define	M2k_FormLts_Off						L_CTL+USB_F
+define	M2k_FormLts_Dim						L_ALT+USB_F
+define	M2k_NavLts_On						L_SHIFT+USB_L
+define	M2k_NavLts_Off						L_CTL+USB_L
+define	M2k_NavLts_Dim						L_ALT+R_CTL+USB_L
+define	M2k_AntiColl_On						L_ALT+L_SHIFT+USB_L
+define	M2k_AntiColl_Off					L_CTL+L_SHIFT+USB_L
+define	M2k_AntiColl_Dim					R_ALT+R_SHIFT+USB_L
+define	M2k_FuelLts_On						L_ALT+L_SHIFT+USB_U
+define	M2k_FuelLts_Off						L_ALT+L_CTL+USB_U
+define	M2k_LdgLts_Off						L_SHIFT+USB_T			//L_ALT+L_CTL+USB_T
+define	M2k_LdgLts_Taxi						L_CTL+L_SHIFT+USB_T
+define	M2k_LdgLts_Land						L_ALT+L_SHIFT+USB_T
+define	M2k_PoliceLts_On					R_ALT+R_SHIFT+USB_P
+define	M2k_PoliceLts_Off					R_ALT+R_CTL+USB_P
+
+define	M2k_TDC_Up							USB_SEMICOLON
+define	M2k_TDC_Dn							USB_PERIOD
+define	M2k_TDC_Lt							USB_COMMA
+define	M2k_TDC_Rt							USB_SLASH
+
+define	M2k_MasterCaution_Reset				L_CTL+USB_R
+
+define	M2k_MasterArm_Toggle				USB_0
+
+define	M2k_Seat_Up							L_SHIFT+USB_S
+define	M2k_Seat_Dn							L_ALT+L_SHIFT+USB_S
+
+//define	M2k_Radio_Pri						USB_KP_PLUS
+//define	M2k_Radio_Sec						USB_KP_HYPHEN
+
+
+//Custom controls (must be defined in game)
+define	M2k_Hide_Stick						R_CTL+R_SHIFT+USB_S
+define	M2k_Hide_Throttle					R_CTL+R_SHIFT+USB_T
+
+define	M2k_Slats_Dn						L_CTL+L_SHIFT+USB_F
+define	M2k_Slats_Up						L_CTL+L_ALT+L_SHIFT+USB_F
+define	M2k_Slats_Auto						L_ALT+L_CTL+USB_F
+define	M2k_Park_Brake_On					L_CTL+L_SHIFT+USB_P
+define	M2k_Park_Brake_Off					L_CTL+L_ALT+USB_P
+
+define	M2k_Battery_On						L_ALT+R_SHIFT+USB_B
+define	M2k_Battery_Off						L_ALT+L_CTL+USB_B
+define	M2k_Starter_Cover_Open				R_CTL+R_SHIFT+USB_C	//+DX30 for Close
+define	M2k_Starter_Pump_Off				L_CTL+L_ALT+L_SHIFT+USB_P
+define	M2k_Emer_Fuel_Cutoff_Sw_Off			R_ALT+R_CTL+USB_E
+define	M2k_Emer_Fuel_Cutoff_Sw_Cover_Open	R_CTL+R_SHIFT+USB_E
+define	M2k_Emer_Fuel_Cutoff_Sw_Cover_Close	R_ALT+R_SHIFT+USB_R
+define	M2k_Inflight_Start_On				R_CTL+R_SHIFT+USB_I
+define	M2k_Inflight_Start_Off				R_CTL+R_ALT+USB_I
+define	M2k_Vent_Sw_Off						L_CTL+R_CTL+USB_V
+define	M2k_Vent_Sw_Left					L_CTL+USB_V
+define	M2k_Vent_Sw_Right					R_CTL+USB_V
+define	M2k_L_Boost_Pump_On					L_CTL+L_SHIFT+USB_O	//+DX30 for Off
+define	M2k_R_Boost_Pump_On					R_CTL+R_SHIFT+USB_O	//+DX30 for Off
+define	M2k_Lights_Test						R_CTL+R_SHIFT+USB_R
+define	M2k_HSI_Mode_1_NavCv				R_CTL+R_SHIFT+USB_1
+define	M2k_HSI_Mode_2_Nav					R_CTL+R_SHIFT+USB_2
+define	M2k_HSI_Mode_3_TAC					R_CTL+R_SHIFT+USB_3
+define	M2k_HSI_Mode_4_VAD					R_CTL+R_SHIFT+USB_4
+define	M2k_HSI_Mode_5						R_CTL+R_SHIFT+USB_5
+define	M2k_HSI_Mode_6						R_CTL+R_SHIFT+USB_6
+define	M2k_HSI_Mode_7_TEL					R_CTL+R_SHIFT+USB_7
+define	M2k_Altim_Incr						R_SHIFT+USB_EQUALSIGN
+define	M2k_Altim_Decr						R_SHIFT+USB_HYPHEN
+define	M2k_Decoy_Prog_Incr					L_CTL+L_SHIFT+USB_C
+define	M2k_Decoy_Prog_Decr					L_CTL+L_ALT+USB_C
+
+define	M2k_530_Left						L_SHIFT+USB_3
+define	M2k_530_Right						R_SHIFT+USB_3
+define	M2k_530_Auto						L_SHIFT+R_SHIFT+USB_3
+define	M2k_Stores1							L_CTL+USB_1
+define	M2k_Stores2							L_CTL+USB_2
+define	M2k_Stores3							L_CTL+USB_3
+define	M2k_Stores4							L_CTL+USB_4
+define	M2k_Stores5							L_CTL+USB_5
+define	M2k_Gun_Sel_AA_AG					L_CTL+USB_0
+define	M2k_Aux_Sight_Off					L_CTL+USB_X
+define	M2k_Aux_Sight_On					L_SHIFT+USB_X
+define	M2k_Salvo_Incr						R_CTL+USB_EQUALSIGN
+define	M2k_Salvo_Decr						R_CTL+USB_HYPHEN
+
+define	M2k_UVHF_Preset						USB_S			//these are with DX30 modifier to deconflict
+define	M2k_UVHF_Manual						USB_N
+define	M2k_UVHF_Guard						USB_D
+
+define	M2k_Scan_60							R_ALT+USB_R
+define	M2k_Scan_30							R_CTL+USB_R
+define	M2k_Scan_15							R_SHIFT+USB_R
+define	M2k_Bars_1							L_ALT+R_ALT+USB_B	//L_ALT added in 2.21 for TACView deconfliction
+define	M2k_Bars_2							R_CTL+USB_B
+define	M2k_Bars_4							R_SHIFT+USB_B
+define	M2k_Radar_Off						USB_Y			//with TQS MAN RNG logic all Radar modes must be DX30 only and no other modifiers in key lua
+define	M2k_Radar_Warm						USB_U			
+define	M2k_Radar_Stby						USB_I				
+define	M2k_Radar_On						USB_O			
+define	M2k_Radar_B							R_CTL+R_SHIFT+USB_B
+define	M2k_Radar_PPI						R_CTL+R_SHIFT+USB_P
+define	M2k_TDC_S							R_SHIFT+USB_S
+define	M2k_TDC_Z							R_SHIFT+USB_Z
+define	M2k_PRF_High						L_SHIFT+USB_P
+define	M2k_PRF_Int							L_CTL+USB_P
+define	M2k_PRF_Low							L_ALT+USB_P
+define	M2k_Radar_Rng_Incr					USB_EQUALSIGN
+define	M2k_Radar_Rng_Decr					USB_HYPHEN
+
+define	M2k_VTB_On							R_CTL+R_ALT+R_SHIFT+USB_V
+define	M2k_VTB_Export						R_CTL+R_ALT+R_SHIFT+USB_E
+define	M2k_VTB_On_Export					CHAIN(DOWN+USB_RIGHTCONTROL,DOWN+USB_RIGHTALT,DOWN+USB_RIGHTSHIFT,D(ModDelay),USB_V,USB_E,UP+USB_RIGHTSHIFT,UP+USB_RIGHTALT,UP+USB_RIGHTCONTROL)
+
+define	M2k_VTB_N_Up						R_ALT+R_SHIFT+USB_N
+define	M2k_VTB_N_Dn						R_ALT+R_CTL+USB_N
+define	M2k_VTB_Deb							CHAIN(KB_LCONU,EXEC("GraceFlag = 1;"))
+define	M2k_VTB_Fin							CHAIN(KB_LCOND,EXEC("GraceFlag = 1;"))
+define	M2k_VTB_RhoTheta_Up					R_ALT+R_SHIFT+USB_T
+define	M2k_VTB_RhoTheta_Dn					R_ALT+R_CTL+USB_T
+//define	M2k_VTB_Theta_Up					CHAIN(DX30,USB_RIGHTALT,USB_RIGHTSHIFT,  D(ModDelay),USB_T)
+//define	M2k_VTB_Theta_Dn					CHAIN(DX30,USB_RIGHTALT,USB_RIGHTCONTROL,D(ModDelay),USB_T)
+define	M2k_VTB_CZ_Up						R_ALT+R_SHIFT+USB_C
+define	M2k_VTB_CZ_Dn						R_ALT+R_CTL+USB_C
+//define	M2k_VTB_Z_Up						
+//define	M2k_VTB_Z_Dn						
+define	M2k_VTB_MT_Up						R_ALT+R_SHIFT+USB_M
+define	M2k_VTB_MT_Dn						R_ALT+R_CTL+USB_M
+//define	M2k_VTB_T_Up						
+//define	M2k_VTB_T_Dn						
+
+define	M2k_RadAlt_On						R_SHIFT+USB_A
+define	M2k_RadAlt_Off						R_ALT+USB_A
+define	M2k_HUD_Altim_Rdr					R_ALT+USB_H
+define	M2k_HUD_Altim_Baro					R_SHIFT+USB_H
+define	M2k_HUD_Altim_Low					R_CTL+USB_H
+define	M2k_HUD_Decl_On						R_ALT+R_SHIFT+USB_U
+define	M2k_HUD_Decl_Off					R_ALT+R_CTL+USB_U
+define	M2k_HUD_Pwr_On						R_ALT+R_CTL+USB_H
+
+define	M2k_FBW_Gain_On						R_SHIFT+USB_G
+define	M2k_FBW_Gain_Off					R_CTL+USB_G
+define	M2k_FBW_Gain_Cover_Open				R_ALT+R_SHIFT+USB_G
+define	M2k_FBW_Gain_Cover_Close			R_ALT+R_CTL+USB_G
+define	M2k_FBW_Reset						L_SHIFT+L_CTL+USB_W
+
+define	M2k_Cannon_Sel						USB_C
+define	M2k_Magic_Sel						USB_M
+define	M2k_PCA_Sel							USB_V
+
+define	M2k_SelJett_Cover_Open				L_SHIFT+L_ALT+USB_J
+define	M2k_SelJett_Cover_Close				L_SHIFT+L_CTL+USB_J
+define	M2k_SelJett_On						L_ALT+USB_J
+define	M2k_SelJett_Off						L_CTL+USB_J
+define	M2k_EmerJett						L_SHIFT+USB_E
+
+
+define	M2k_INS_PCN_RDTD					L_SHIFT+L_CTL+USB_0
+define	M2k_INS_PCN_BUT_LG					L_SHIFT+L_CTL+USB_1
+define	M2k_INS_PCN_BUT_ALT					L_SHIFT+L_CTL+USB_2
+define	M2k_INS_PCN_BUT_CPDP				L_SHIFT+L_CTL+USB_3
+define	M2k_INS_PCN_DRLT					L_SHIFT+L_CTL+USB_4
+define	M2k_INS_PCN_TRVS					L_SHIFT+L_CTL+USB_5
+define	M2k_INS_PCN_DEC						L_SHIFT+L_CTL+USB_6
+define	M2k_INS_PCN_DVFV					L_SHIFT+L_CTL+USB_7
+define	M2k_INS_PCN_BAD_POLAR				L_SHIFT+L_CTL+USB_8
+define	M2k_INS_PCN_BAD_ALT					L_SHIFT+L_CTL+USB_9
+define	M2k_INS_PCN_BAD_LG					L_SHIFT+L_CTL+USB_GRAVEACCENTANDTILDE
+define	M2k_INS_PCN_CW						L_SHIFT+L_CTL+USB_EQUALSIGN		//USB_KP_PLUS
+define	M2k_INS_PCN_CCW						L_SHIFT+L_CTL+USB_HYPHEN		//USB_KP_HYPHEN
+
+//define	M2k_INS_PSM_AR						L_SHIFT+USB_END
+//define	M2k_INS_PSM_VEI						L_SHIFT+USB_DELETEFORWARD
+//define	M2k_INS_PSM_CAL						L_SHIFT+R_SHIFT+USB_C
+//define	M2k_INS_PSM_TST						L_SHIFT+R_SHIFT+USB_T
+//define	M2k_INS_PSM_ALN						L_SHIFT+USB_PAGEDOWN
+//define	M2k_INS_PSM_ALCM					L_SHIFT+USB_PAGEUP
+define	M2k_INS_PSM_NAV						USB_HOME	//used with S3, was L_SHIFT+USB_HOME
+define	M2k_INS_PSM_SEC						USB_INSERT	//used with S3, was L_SHIFT+USB_INSERT
+define	M2k_INS_PSM_CW						L_ALT+USB_END
+define	M2k_INS_PSM_CCW						R_ALT+USB_END
+
+define	M2k_INS_PREP						USB_HOME
+define	M2k_INS_DEST						USB_END
+define	M2k_Wpt_Next						USB_PAGEUP
+define	M2k_Wpt_Prev						USB_PAGEDOWN
+
+define	M2k_Visor_Toggle					L_SHIFT+USB_HOME
+define	M2k_NVG_Mount						R_ALT+USB_HOME
+define	M2k_NVG_Stow						L_CTL+USB_HOME
+
+define	M2k_ECM_Stby						R_ALT+R_CTL+USB_J
+define	M2k_ECM_Norm						R_ALT+R_SHIFT+USB_J
+define	M2k_ECM_Pri							R_CTL+R_SHIFT+USB_J
+define	M2k_Decoy_Auto						R_CTL+R_SHIFT+USB_D
+define	M2k_Decoy_Semi						R_ALT+R_CTL+USB_D
+define	M2k_Decoy_ProgOff					R_ALT+R_CTL+USB_GRAVEACCENTANDTILDE
+define	M2k_Decoy_Prog1						R_ALT+R_CTL+USB_1
+define	M2k_Decoy_Prog2						R_ALT+R_CTL+USB_2
+define	M2k_Decoy_Prog3						R_ALT+R_CTL+USB_3
+define	M2k_Decoy_Prog4						R_ALT+R_CTL+USB_4
+define	M2k_Decoy_Prog5						R_ALT+R_CTL+USB_5
+define	M2k_Decoy_Prog6						R_ALT+R_CTL+USB_6
+define	M2k_Decoy_Prog7						R_ALT+R_CTL+USB_7
+define	M2k_Decoy_Prog8						R_ALT+R_CTL+USB_8
+define	M2k_Decoy_Prog9						R_ALT+R_CTL+USB_9
+define	M2k_Decoy_Prog10					R_ALT+R_CTL+USB_0
+define	M2k_D2M_On							R_SHIFT+USB_D
+define	M2k_D2M_Off							R_ALT+USB_D
+define	M2k_IFF_Sector						R_CTL+R_SHIFT+USB_F
+define	M2k_IFF_Cont						R_ALT+R_SHIFT+USB_F
+define	M2k_IFF_Off							R_ALT+R_CTL+USB_F
+
+define	M2k_ILS_On							R_SHIFT+USB_I
+define	M2k_ILS_Off							R_CTL+USB_I
+
+define	M2k_EmerThr_Incr					R_CTL+USB_CLOSEBRACKET
+define	M2k_EmerThr_Decr					R_CTL+USB_OPENBRACKET
+
+
+// ******************************************************
+//				Mirage F1 (what isnt on M2k)
+// ******************************************************
+
+define	MF1_Ebrake_Set						L_CTL+USB_W
+define	MF1_Ebrake_Rel						L_SHIFT+USB_W
+define	MF1_Seat_Up							R_SHIFT+USB_Y
+define	MF1_Seat_Dn							R_CTL+USB_Y
+define	MF1_GearCover_Open					L_CTL+L_SHIFT+USB_G
+define	MF1_GearCover_Close					L_CTL+L_ALT+USB_G
+
+//Engine/Fuel
+define	MF1_LP_L_On							L_SHIFT+USB_U
+define	MF1_LP_L_Off						L_CTL+USB_U
+define	MF1_LP_R_On							R_SHIFT+USB_U
+define	MF1_LP_R_Off						R_CTL+USB_U
+define	MF1_MainCock_Guard_Open				L_CTL+L_SHIFT+USB_F
+define	MF1_MainCock_Guard_Close			L_CTL+L_ALT+USB_F
+define	MF1_MainCock_Open					R_CTL+R_ALT+USB_F
+define	MF1_MainCock_Off					R_CTL+R_SHIFT+USB_F
+define	MF1_Start							L_SHIFT+USB_E
+define	MF1_Start_Cover_Open				L_CTL+L_SHIFT+USB_E
+define	MF1_Start_Cover_Close				L_CTL+L_ALT+USB_E
+define	MF1_StartPump_On					R_SHIFT+USB_S
+define	MF1_StartPump_Off					R_CTL+USB_S
+define	MF1_Vent_L							R_ALT+USB_I
+define	MF1_Vent_R							R_CTL+USB_I
+define	MF1_Vent_Vent						R_SHIFT+USB_I
+define	MF1_Relight							L_ALT+USB_E
+define	MF1_Thr_Cut							USB_I
+
+//Radar/Weps
+define	MF1_Radar_Off						L_ALT+USB_8
+define	MF1_Radar_Stby						L_CTL+USB_8
+define	MF1_Radar_Tx						L_SHIFT+USB_8
+define	MF1_Radar_1Bar						L_CTL+USB_9
+define	MF1_Radar_4Bar						L_SHIFT+USB_9
+
+define	MF1_FireSel_Man						L_CTL+USB_5
+define	MF1_FireSel_Auto					L_SHIFT+USB_5
+define	MF1_Sel_Aft							L_CTL+USB_4
+define	MF1_Sel_Fore						L_SHIFT+USB_4
+define	MF1_BombSel_Inbd					L_ALT+USB_2
+define	MF1_BombSel_Outbd					L_SHIFT+USB_2
+define	MF1_Bombsel_12						L_CTL+USB_2
+define	MF1_Fuse_Safe						L_ALT+USB_7
+define	MF1_Fuse_Dly						L_CTL+USB_7
+define	MF1_Fuse_Inst						L_SHIFT+USB_7
+define	MF1_M550_On							L_SHIFT+USB_3
+define	MF1_M550_Off						L_CTL+USB_3
+define	MF1_Single							L_SHIFT+USB_6
+define	MF1_Salvo							L_CTL+USB_6
+define	MF1_Sight_App						L_SHIFT+USB_1
+define	MF1_Sight_On						L_CTL+USB_1
+define	MF1_Sight_Off						L_ALT+USB_1
+define	MF1_R530_Snap						L_SHIFT+USB_0
+define	MF1_R530_Norm						L_CTL+USB_0
+
+//Ext Lights
+define	MF1_Nav_Brt							R_SHIFT+USB_N
+define	MF1_Nav_Dim							R_ALT+USB_N
+define	MF1_Nav_Off							R_CTL+USB_N
+define	MF1_Form_Brt						R_SHIFT+USB_L
+define	MF1_Form_Dim						R_ALT+USB_L
+define	MF1_Form_Off						R_CTL+USB_L
+
+//Navaids
+define	MF1_VOR_On							R_SHIFT+R_CTL+USB_V
+define	MF1_VOR_Off							R_CTL+R_ALT+USB_V
+define	MF1_VOR_MHz_CCW						L_SHIFT+USB_V
+define	MF1_VOR_MHz_CW						L_ALT+USB_V
+define	MF1_VOR_kHz_CCW						R_SHIFT+USB_V
+define	MF1_VOR_kHz_CW						R_ALT+USB_V
+
+//Countermeasures
+define	MF1_Chaff_Reset						L_SHIFT+R_SHIFT+USB_C
+define	MF1_Flare_Reset						L_ALT+R_ALT+USB_C
+define	MF1_Prog_CW							R_SHIFT+USB_C
+define	MF1_Prog_CCW						R_CTL+USB_C
+
+
+// ******************************************************
+//				     SA342M Gazelle
+// ******************************************************
+define	SA342_Collective_Hold				USB_C
+
+define	SA342_Brake_Fwd						USB_HOME
+define	SA342_Brake_Aft						USB_END
+
+define	SA342_LdgLight_On					L_CTL+L_SHIFT+USB_L
+define	SA342_LdgLight_Off					L_CTL+L_ALT+USB_L
+define	SA342_LdgLight_Vario				L_ALT+L_SHIFT+USB_L
+
+define	SA342_AP_Mode_Sw_Up_DX				DX27	//CHAIN(DX32,D(ModDelay),DX23)
+define	SA342_AP_Mode_Sw_Dn_DX				DX28	//CHAIN(DX32,D(ModDelay),DX24)
+define	SA342_AP_Mode_Alt					USB_J
+define	SA342_AP_Mode_Spd					USB_M
+define	SA342_AP_Master_Sw					L_SHIFT+USB_Q
+define	SA342_AP_Pitch_Ch					L_SHIFT+USB_W
+define	SA342_AP_Roll_Ch					L_SHIFT+USB_E
+define	SA342_AP_Yaw_Ch						L_SHIFT+USB_U
+
+define	SA342_Master_Arm					R_ALT+USB_W
+
+define	SA342_Nav_Lts_Sw_Dn					USB_N
+define	SA342_Nav_Lts_Sw_Up					L_SHIFT+USB_N
+
+define	SA342_Strobe_Lts_Sw_Dn				USB_S
+define	SA342_Strobe_Lts_Sw_Up				L_SHIFT+USB_S
+
+define	SA342_Panel_Lts						L_CTL+USB_P
+
+define	SA342_Roof_Lamp_LowNorm				L_SHIFT+USB_L
+define	SA342_Roof_Lamp_Dn					USB_L
+define	SA342_Roof_Lamp_Up					R_SHIFT+USB_L
+define	SA342_Roof_Lamp_WhiteRed			R_CTL+USB_L
+
+define	SA342_Form_Lts						L_SHIFT+USB_F
+define	SA342_Form_Lts_Dn					USB_F
+define	SA342_Form_Lts_Up					R_SHIFT+USB_F
+
+define	SA342_Warn_Lts_Test					R_CTL+USB_T
+define	SA342_Lts_Test						R_ALT+USB_T
+
+define	SA342_Weps_Stn1						L_ALT+USB_1
+define	SA342_Weps_Stn2						L_ALT+USB_2
+define	SA342_Weps_Stn3						L_ALT+USB_3
+define	SA342_Weps_Stn4						L_ALT+USB_4
+
+define	SA342L_WpnSw_Left					L_CTL+L_ALT+USB_E
+define	SA342L_WpnSw_Left_Cover				L_SHIFT+L_CTL+USB_E
+define	SA342L_WpnSw_Right					L_CTL+L_ALT+USB_R
+define	SA342L_WpnSw_Right_Cover			L_SHIFT+L_CTL+USB_R
+define	SA342L_WpnSw_Right_Cover_DX			CHAIN(DX30,DX31,D(ModDelay),DX12)
+define	SA342L_WpnPnl_Pwr_Up				R_SHIFT+USB_W
+define	SA342L_WpnPnl_Pwr_Dn				R_CTL+USB_W
+define	SA342L_Salvo_Sw						L_CTL+L_SHIFT+USB_S
+
+define	SA342L_Fire_DX						DX5
+define	SA342L_Pilot_Sight_Toggle			USB_I
+define	SA342_AP_Master_Stick				L_SHIFT+USB_A
+
+define	SA342_Aux_Fuel_Sw					L_SHIFT+USB_T
+define	SA342_Sand_Filter_Sw				L_SHIFT+USB_Y
+define	SA342_Pitot_Heat_Sw					R_CTL+USB_H
+
+define	SA342_Cam_Mode_Incr					R_SHIFT+USB_PERIOD
+define	SA342_Cam_Mode_Decr					R_SHIFT+USB_COMMA
+
+// ******************************************************
+//				     L-39 Albatross
+// ******************************************************
+define	L39_Gear_Neutral_DX					DX11
+define	L39_Gear_Neutral					L_ALT+USB_G
+define	L39_Tgt_Dist_Incr_DX				DX15	//shift for sight angle
+define	L39_Tgt_Dist_Decr_DX				DX17
+define	L39_Tgt_Wing_Incr_DX				DX16	//shift for intensity
+define	L39_Tgt_Wing_Decr_DX				DX18
+
+define	L39_Canopy_Jettison					L_CTL+L_SHIFT+USB_C
+define	L39_Emer_Fuel_Sw_Toggle				R_CTL+USB_F
+
+define	L39_Ldg_Light_Taxi					R_ALT+USB_S
+define	L39_Ldg_Light_Land					R_CTL+USB_S
+define	L39_Ldg_Light_Off					R_SHIFT+USB_S
+
+define	L39_Cpt_Lts_Off						R_SHIFT+USB_Y
+define	L39_Cpt_Lts_Red						R_CTL+USB_Y
+define	L39_Cpt_Lts_White					R_ALT+USB_Y
+
+define	L39_Pitot_Heat_Right_On				R_CTL+USB_P
+define	L39_Pitot_Heat_Right_Off			R_ALT+USB_P
+define	L39_Pitot_Heat_Left_On				L_CTL+USB_P
+define	L39_Pitot_Heat_Left_Off				L_ALT+USB_P
+define	L39_Pitot_Sel_Right					L_ALT+L_SHIFT+USB_P
+define	L39_Pitot_Sel_Left					L_CTL+L_SHIFT+USB_P
+
+define	L39_Nav_Lts_Off						R_ALT+USB_N
+define	L39_Nav_Lts_Steady					R_CTL+USB_N
+define	L39_Nav_Lts_Flash					R_SHIFT+USB_N
+define	L39_Nav_Brt_30						L_ALT+R_ALT+USB_B	//L_ALT added in 2.21 for TACView deconfliction
+define	L39_Nav_Brt_60						R_CTL+USB_B
+define	L39_Nav_Brt_100						R_SHIFT+USB_B
+
+define	L39_Fire_Ext_Btn					USB_E
+define	L39_Fire_Ext_Cover_Open				L_SHIFT+L_CTL+USB_E	//possible implementation
+define	L39_Fire_Ext_Cover_Close			L_SHIFT+L_ALT+USB_E	//possible implementation
+
+
+define	L39_Pylon_Port_Sel					R_ALT+R_SHIFT+USB_R
+define	L39_Pylon_Stbd_Sel					R_ALT+R_CTL+USB_R
+
+define	L39_Heat_On							L_ALT+L_SHIFT+USB_8
+define	L39_Heat_Off						L_ALT+L_CTL+USB_8
+define	L39_Glow_On							L_ALT+L_SHIFT+USB_9
+define	L39_Glow_Off						L_ALT+L_CTL+USB_9
+define	L39_U16_S4							R_CTL+USB_V
+define	L39_U16_S2							R_ALT+USB_V
+define	L39_U16_Auto						R_SHIFT+USB_V
+
+define	L39_Emer_Jett_Arm_Sw_Toggle			L_CTL+L_SHIFT+USB_U
+define	L39_Emer_Jett_Arm_Cover_Open		R_ALT+R_SHIFT+USB_U
+define	L39_Emer_Jett_Arm_Cover_Close		R_ALT+R_CTL+USB_U
+define	L39_EKSR46_Pwr_On					L_ALT+L_SHIFT+USB_GRAVEACCENTANDTILDE
+define	L39_EKSR46_Pwr_Off					L_ALT+L_CTL+USB_GRAVEACCENTANDTILDE
+
+//L-39C Specific Macros
+define	L39C_Arms_On						L_ALT+L_SHIFT+USB_5
+define	L39C_Arms_Off						L_ALT+L_CTL+USB_5
+define	L39C_U16_On							L_ALT+L_SHIFT+USB_6
+define	L39C_U16_Off						L_ALT+L_CTL+USB_6
+define	L39C_Sight_On						L_ALT+L_SHIFT+USB_7
+define	L39C_Sight_Off						L_ALT+L_CTL+USB_7
+define	L39C_Msl_Tone_Vol_Incr				R_SHIFT+USB_EQUALSIGN
+define	L39C_Msl_Tone_Vol_Decr				R_SHIFT+USB_HYPHEN
+
+define	L39C_Emer_Jett_Sw_Toggle			L_SHIFT+L_CTL+L_ALT+USB_K
+define	L39C_Emer_Jett_Cover_Open			L_ALT+L_SHIFT+USB_J
+define	L39C_Emer_Jett_Cover_Close			L_ALT+L_CTL+USB_J
+
+//L-39ZA Specific Macros
+define	L39Z_Arms_On						L_ALT+L_SHIFT+USB_1
+define	L39Z_Arms_Off						L_ALT+L_CTL+USB_1
+define	L39Z_Sight_On						L_ALT+L_SHIFT+USB_2
+define	L39Z_Sight_Off						L_ALT+L_CTL+USB_2
+define	L39Z_U16_On							L_ALT+L_SHIFT+USB_3
+define	L39Z_U16_Off						L_ALT+L_CTL+USB_3
+define	L39Z_Bombs_On						L_ALT+L_SHIFT+USB_4
+define	L39Z_Bombs_Off						L_ALT+L_CTL+USB_4
+define	L39Z_Guns_Outer_On					L_ALT+L_SHIFT+USB_5
+define	L39Z_Guns_Outer_Off					L_ALT+L_CTL+USB_5
+define	L39Z_Guns_Inner_On					L_ALT+L_SHIFT+USB_6
+define	L39Z_Guns_Inner_Off					L_ALT+L_CTL+USB_6
+
+define	L39Z_Bomb_Sel_I						L_CTL+L_SHIFT+L_ALT+USB_B
+define	L39Z_Bomb_Sel_Train					L_CTL+L_SHIFT+USB_B
+define	L39Z_Bomb_Sel_Salvo					L_CTL+L_ALT+USB_B
+define	L39Z_Outer_Stn_Sel					L_SHIFT+USB_5
+define	L39Z_Inner_Stn_Sel					L_SHIFT+USB_6
+define	L39Z_Charge_Guns_Outer_Toggle		L_ALT+L_CTL+L_SHIFT+USB_W
+define	L39Z_Charge_Guns_Inner_Toggle		L_ALT+L_CTL+L_SHIFT+USB_E
+define	L39Z_GS_Arm							L_ALT+L_SHIFT+USB_0
+define	L39Z_GS_Safe						L_ALT+L_CTL+USB_0
+define	L39Z_PK3_GS_Cover_Toggle			L_ALT+L_CTL+L_SHIFT+USB_Q
+define	L39Z_PK3_GS_Sw_Toggle				L_ALT+L_CTL+L_SHIFT+USB_A
+define	L39Z_Msl_Tone_Vol_Incr				L_SHIFT+USB_EQUALSIGN
+define	L39Z_Msl_Tone_Vol_Decr				L_SHIFT+USB_HYPHEN
+
+define	L39Z_Outer_Stn_Jett_Sw_Toggle		L_SHIFT+L_CTL+L_ALT+USB_K
+define	L39Z_Outer_Stn_Jett_Cover_Open		L_CTL+L_SHIFT+USB_J
+define	L39Z_Outer_Stn_Jett_Cover_Close		L_ALT+L_CTL+USB_J
+
+define	L39Z_Inner_Stn_Jett_Sw_Toggle		L_SHIFT+L_CTL+L_ALT+USB_SEMICOLON
+define	L39Z_Inner_Stn_Jett_Cover_Open		L_CTL+L_SHIFT+USB_SEMICOLON
+define	L39Z_Inner_Stn_Jett_Cover_Close		L_ALT+L_CTL+USB_SEMICOLON
+
+
+
+define	L39_Rdo_Ch_Next						R_SHIFT+USB_R
+define	L39_Rdo_Ch_Prev						R_CTL+USB_R
+define	L39_Rdo_ToggleCtl					R_CTL+R_SHIFT+USB_R
+
+define	L39_RSBN_Ch_Next					L_ALT+L_SHIFT+USB_N
+define	L39_RSBN_Ch_Prev					L_ALT+L_CTL+USB_N
+define	L39_PRMG_Ch_Next					R_ALT+R_SHIFT+USB_N
+define	L39_PRMG_Ch_Prev					R_ALT+R_CTL+USB_N
+
+define	L39_RSBN_Glide						L_ALT+USB_N
+define	L39_RSBN_Nav						L_SHIFT+USB_N
+define	L39_RSBN_Land						L_CTL+USB_N
+define	L39_SDU_Toggle						R_ALT+R_CTL+USB_S
+
+// ******************************************************
+//				     F-5E Tiger II
+// ******************************************************
+
+define	F5E_FlapLever_EmerUp				L_SHIFT+USB_D
+define	F5E_FlapLever_ThumbSw				USB_D
+define	F5E_FlapLever_Full					L_CTL+USB_D
+define	F5E_FlapSwitch_Up					L_SHIFT+USB_F
+define	F5E_FlapSwitch_Auto					USB_F
+define	F5E_FlapSwitch_Fixed				L_CTL+USB_F
+//define	F5E_FlapSwitch_Fixed_DX				DX25
+
+define	F5E_RdrScanDown						R_SHIFT+USB_OPENBRACKET
+define	F5E_RdrScanUp						R_SHIFT+USB_CLOSEBRACKET
+define	F5E_RdrRngIncr						USB_EQUALSIGN
+define	F5E_RdrRngDecr						USB_HYPHEN
+define	F5E_RdrModeCCW						USB_9
+define	F5E_RdrModeCW						USB_0
+
+define	F5E_SpeedBrake_Off					L_ALT+R_ALT+USB_B	//L_ALT added in 2.21 for TACView deconfliction
+define	F5E_SpeedBrake_Off_DX				DX26
+define	F5E_Countermeasures					USB_Q
+define	F5E_SightCage_DX					DX5
+define	F5E_SeekerUncage					R_SHIFT+USB_M
+define	F5E_SeekerUncage_DX					DX25
+
+define	F5E_SelJettBtn						L_CTL+L_SHIFT+USB_D	//default
+define	F5E_SelJettSw_All					L_CTL+L_SHIFT+USB_L
+define	F5E_SelJettSw_Off					L_CTL+L_SHIFT+USB_O
+define	F5E_SelJettSw_Sel					L_CTL+L_SHIFT+USB_P
+define	F5E_EmerJettCover					L_CTL+L_SHIFT+USB_9
+define	F5E_EmerJettBtn						L_CTL+L_SHIFT+USB_0
+
+define 	F5E_MasterCaution					R_ALT+USB_SLASH
+define	F5E_HornSilencer					USB_I
+define	F5E_Strut_Extend					R_SHIFT+USB_S
+define	F5E_Strut_Retract					R_ALT+USB_S
+define	F5E_PitotHeat_On					L_SHIFT+L_CTL+USB_I
+define	F5E_PitotHeat_Off					L_ALT+L_CTL+USB_I
+define	F5E_EngineHeat_On					R_ALT+R_SHIFT+USB_N
+define	F5E_EngineHeat_Off					R_ALT+R_CTL+USB_N
+define	F5E_Fuse_Nose						L_SHIFT+USB_O
+define	F5E_Fuse_Tail						L_CTL+USB_O
+define	F5E_Fuse_NoseTail					L_SHIFT+L_ALT+USB_O
+define	F5E_Fuse_Safe						L_SHIFT+USB_O		//same as nose but uses DX30
+define	F5E_Arm_Gun							R_SHIFT+USB_G
+define	F5E_Arm_Cam							R_ALT+USB_G
+define	F5E_Arm_Off							R_ALT+R_SHIFT+USB_G
+define	F5E_Arm_Cover						L_CTL+L_SHIFT+USB_T	//default
+
+define	F5E_Batt_On							R_ALT+R_SHIFT+USB_B
+define	F5E_Batt_Off						R_ALT+R_CTL+USB_B
+
+define	F5E_LandingLt_On					R_ALT+R_SHIFT+USB_Z
+define	F5E_LandingLt_Off					R_ALT+R_CTL+USB_Z
+
+define	F5E_Chaff_Off						L_ALT+L_CTL+USB_A
+define	F5E_Chaff_Single					R_ALT+R_CTL+USB_A
+define	F5E_Chaff_Mult						L_ALT+R_ALT+USB_A
+define	F5E_Chaff_Prog						L_CTL+R_CTL+USB_A
+define	F5E_Flare_Off						L_ALT+L_CTL+USB_D
+define	F5E_Flare_Single					L_ALT+R_ALT+USB_D
+define	F5E_Flare_Prog						L_CTL+R_CTL+USB_D
+
+define	F5E_RWR_Mode						R_ALT+USB_6
+define	F5E_RWR_T							R_ALT+USB_Y
+define	F5E_RWR_Search						R_ALT+USB_7
+define	F5E_RWR_SysTest						R_ALT+USB_U
+define	F5E_RWR_HandOff						R_ALT+USB_8
+define	F5E_RWR_Ship						R_ALT+USB_I
+define	F5E_RWR_Launch						R_ALT+USB_9
+define	F5E_RWR_ActPwr						R_ALT+USB_O
+define	F5E_RWR_Alt							R_ALT+USB_0
+define	F5E_RWR_Pwr							R_ALT+USB_P
+
+//	air cart comms moved to Communications at top of file
+
+// ******************************************************
+//				  	   Spitfire
+// ******************************************************
+
+define	Spit_CarbFilter_On					L_SHIFT+USB_H
+define	Spit_CarbFilter_Off					L_CTL+USB_H
+
+define	Spit_Booster						USB_DELETEFORWARD
+define	Spit_Booster_DX						DX22
+define	Spit_BoosterCoverOpen				L_SHIFT+L_ALT+USB_DELETEFORWARD
+define	Spit_BoosterCoverClose				L_SHIFT+L_CTL+USB_DELETEFORWARD
+define	Spit_Starter						USB_HOME
+define	Spit_Starter_DX						DX23
+define	Spit_StarterCoverOpen				L_SHIFT+L_ALT+USB_HOME
+define	Spit_StarterCoverClose				L_SHIFT+L_CTL+USB_HOME
+
+define	Spit_Magneto1_Off					L_ALT+L_CTL+USB_END
+define	Spit_Magneto1_On					L_ALT+L_SHIFT+USB_END
+define	Spit_Magneto2_Off					R_ALT+R_CTL+USB_END
+define	Spit_Magneto2_On					R_ALT+R_SHIFT+USB_END
+
+define	Spit_MainFuelCock_On				L_SHIFT+USB_T
+define	Spit_MainFuelCock_Off				L_CTL+USB_T
+
+define	Spit_Radiator_Open					L_SHIFT+USB_A
+define	Spit_Radiator_Auto					L_CTL+USB_A
+define	Spit_Pitot_On						L_SHIFT+USB_P
+define	Spit_Pitot_Off						L_CTL+USB_P
+define	Spit_FuelPump_On					L_SHIFT+USB_0
+define	Spit_FuelPump_Off					L_CTL+USB_0
+
+define	Spit_GS_Base_Incr					L_SHIFT+USB_O
+define	Spit_GS_Base_Decr					L_CTL+USB_O
+define	Spit_GS_Rng_Incr					R_SHIFT+USB_O
+define	Spit_GS_Rng_Decr					R_CTL+USB_O
+define	Spit_GS_On							L_SHIFT+USB_S
+define	Spit_GS_Off							L_CTL+USB_S
+define	Spit_GS_Tint_On						R_SHIFT+USB_T
+define	Spit_GS_Tint_Off					R_CTL+USB_T
+
+define	Spit_Canopy_Open					L_SHIFT+USB_C
+define	Spit_Door_Open						L_ALT+L_SHIFT+USB_C	
+define	Spit_Door_Close						L_ALT+L_CTL+USB_C	//consider changing for VAICOM
+
+define	Spit_NavLts_On						L_SHIFT+USB_U
+define	Spit_NavLts_Off						L_CTL+USB_U
+define	UC_Indicator_On						R_SHIFT+USB_U
+define	UC_Indicator_Off					R_CTL+USB_U
+define	UC_Indicator_On_DX					DX27
+define	UC_Indicator_Off_DX					DX28
+
+// ******************************************************
+//				  	 Mosquito FB Mk VI
+// ******************************************************
+
+define	Mos_Prop_Incr						USB_PAGEUP
+define	Mos_Prop_Decr						USB_PAGEDOWN
+define	Mos_Supercharger_Mod				R_CTL+R_SHIFT+USB_S
+define	Mos_Supercharger_Auto				R_CTL+R_ALT+USB_S
+
+define	Mos_Flaplock_Open					L_ALT+L_SHIFT+USB_F
+define	Mos_Flaplock_Close					L_ALT+L_CTL+USB_F
+define	Mos_Gearlock_Close					L_ALT+L_SHIFT+USB_G
+define	Mos_Gearlock_Open					L_ALT+L_CTL+USB_G
+define	Mos_BombBay_Up						L_CTL+USB_B
+define	Mos_BombBay_Down					L_SHIFT+USB_B
+define	Mos_GunCam_Toggle					R_SHIFT+USB_C
+define	Mos_MasterArm_Cover					L_SHIFT+USB_SPACEBAR
+
+define	Mos_MagnetoL1_On					L_ALT+L_SHIFT+USB_HOME
+define	Mos_MagnetoL1_Off					L_ALT+L_SHIFT+USB_END
+define	Mos_MagnetoL2_On					L_ALT+L_CTL+USB_HOME
+define	Mos_MagnetoL2_Off					L_ALT+L_CTL+USB_END
+define	Mos_MagnetoR1_On					R_ALT+R_SHIFT+USB_HOME
+define	Mos_MagnetoR1_Off					R_ALT+R_SHIFT+USB_END
+define	Mos_MagnetoR2_On					R_ALT+R_CTL+USB_HOME
+define	Mos_MagnetoR2_Off					R_ALT+R_CTL+USB_END
+define	Mos_MagnetoL_On						CHAIN(Mos_MagnetoL1_On,	D(Switch_Delay),Mos_MagnetoL2_On)
+define	Mos_MagnetoL_Off					CHAIN(Mos_MagnetoL1_Off,D(Switch_Delay),Mos_MagnetoL2_Off)
+define	Mos_MagnetoR_On						CHAIN(Mos_MagnetoR1_On,	D(Switch_Delay),Mos_MagnetoR2_On)
+define	Mos_MagnetoR_Off					CHAIN(Mos_MagnetoR1_Off,D(Switch_Delay),Mos_MagnetoR2_Off)
+
+
+define	Mos_LStarterCoverOpen				L_SHIFT+R_ALT+L_ALT+USB_HOME	//extra LALT to deconflict with VR Center
+define	Mos_LStarterCoverClose				L_CTL+R_ALT+USB_HOME
+define	Mos_RStarterCoverOpen				R_SHIFT+L_ALT+USB_HOME
+define	Mos_RStarterCoverClose				R_CTL+L_ALT+USB_HOME
+
+define	Mos_LBoosterCoverOpen				L_SHIFT+R_ALT+USB_INSERT
+define	Mos_LBoosterCoverClose				L_CTL+R_ALT+USB_INSERT
+define	Mos_RBoosterCoverOpen				R_SHIFT+L_ALT+USB_INSERT
+define	Mos_RBoosterCoverClose				R_CTL+L_ALT+USB_INSERT
+
+define	Mos_LStarter_DX						DX12
+define	Mos_LBooster_DX						DX13
+define	Mos_RStarter_DX						DX14
+define	Mos_RBooster_DX						DX24
+
+define	Mos_LLdgLight_On					L_ALT+L_SHIFT+USB_L
+define	Mos_LLdgLight_Off					L_ALT+L_CTL+USB_L
+define	Mos_RLdgLight_On					R_ALT+R_SHIFT+USB_L
+define	Mos_RLdgLight_Off					R_ALT+R_CTL+USB_L
+
+define	Mos_Tanks_Main						CHAIN(PULSE+KB_LBRTU,D(Switch_Delay),PULSE+KB_LCONU)
+define	Mos_Tanks_Outer						CHAIN(PULSE+KB_LBRTD,D(Switch_Delay),PULSE+KB_LCOND)
+
+
+// ******************************************************
+//				  	  AJS-37 Viggen
+// ******************************************************
+define	AJS37_Idle							L_ALT+USB_I
+define	AJS37_Throttle_Off					L_SHIFT+L_CTL+L_ALT+USB_I
+define 	AJS37_Starter						L_ALT+USB_S
+
+//define	AJS37_Wpn_Arm						L_SHIFT+USB_W
+//define	AJS37_Wpn_Safe						L_CTL+USB_W
+
+define	AJS37_RadarFilter_Up				R_CTL+R_ALT+USB_F
+define	AJS37_RadarFilter_Dn				R_CTL+R_SHIFT+USB_F
+
+define	AJS37_NavLts_Full					L_SHIFT+USB_N
+define	AJS37_NavLts_Half					L_CTL+USB_N
+define	AJS37_NavLts_Off					L_SHIFT+L_CTL+USB_N
+define	AJS37_AntiColl_On					L_SHIFT+USB_L
+define	AJS37_AntiColl_Off					L_SHIFT+L_CTL+USB_L
+define	AJS37_FormLts_On					L_SHIFT+USB_F
+define	AJS37_FormLts_Off					L_SHIFT+L_CTL+USB_F
+define	AJS37_PosLts_On						R_SHIFT+USB_L
+define	AJS37_PosLts_Off					R_SHIFT+R_CTL+USB_L
+define	AJS37_TaxiLndLts_On					R_SHIFT+R_CTL+USB_I
+define	AJS37_TaxiLndLts_Off				R_CTL+R_ALT+USB_I
+define	AJS37_TaxiLndLts_Taxi				R_SHIFT+R_ALT+USB_I
+define	AJS37_EmerLts_On					L_SHIFT+USB_E
+define	AJS37_EmerLts_Off					L_ALT+USB_E
+define	AJS37_Kontroll						USB_L
+define	AJS37_MasterCaution					USB_V
+define	AJS37_Caution_Illum_Toggle			L_SHIFT+USB_V
+define	AJS37_LtsTst						L_CTL+L_SHIFT+USB_V
+define	AJS37_Canopy_Close					R_CTL+R_SHIFT+USB_C
+define	AJS37_Canopy_Open					R_CTL+R_ALT+USB_C
+define	AJS37_Seat_Up						R_ALT+USB_S
+define	AJS37_Seat_Down						R_CTL+USB_S
+define	AJS37_Man_Fuel_Regulator			R_ALT+USB_M
+
+define	AJS37_Radar_Rng_Incr				R_SHIFT+R_CTL+USB_R
+define	AJS37_Radar_Rng_Decr				R_ALT+R_CTL+USB_R
+define	AJS37_Radar_MKR_Incr_DX				CHAIN(DX31,D(ModDelay),DXHATRIGHT)
+define	AJS37_Radar_MKR_Decr_DX				CHAIN(DX31,D(ModDelay),DXHATLEFT)
+
+define	AJS37_CounterMeasure_Off			USB_Q			//use with DX30
+define	AJS37_CounterMeasure_Kont			L_SHIFT+USB_Q
+define	AJS37_CounterMeasure_Int			L_CTL+L_SHIFT+USB_Q
+define	AJS37_U22_Mod_0						R_CTL+USB_0
+define	AJS37_U22_Mod_A						R_CTL+USB_A
+define	AJS37_U22_Mod_B						R_CTL+USB_B
+define	AJS37_U22_Mod_D						R_CTL+USB_D
+define	AJS37_U22_Mod_E						R_CTL+USB_E
+define	AJS37_U22_Band_F					R_CTL+USB_F
+define	AJS37_U22_Band_G					R_CTL+USB_G
+define	AJS37_U22_Band_H					R_CTL+USB_H
+define	AJS37_U22_Band_J					R_CTL+USB_J
+define	AJS37_U22_Band_K					L_CTL+USB_K
+define	AJS37_RWR_Off						L_SHIFT+L_CTL+USB_R
+define	AJS37_RWR_Light						L_CTL+USB_R
+define	AJS37_RWR_LightSound				L_ALT+USB_R
+define	AJS37_Countermeasure_S_Mod0			L_SHIFT+USB_0
+define	AJS37_Countermeasure_S_Mod4			L_SHIFT+USB_4
+define	AJS37_Countermeasure_ModA			R_SHIFT+USB_A
+define	AJS37_Countermeasure_Mod0			R_SHIFT+USB_0
+define	AJS37_Countermeasure_Mod1			R_SHIFT+USB_1
+define	AJS37_Countermeasure_Mod2			R_SHIFT+USB_2
+define	AJS37_Countermeasure_Mod3			R_SHIFT+USB_3
+
+
+define	AJS37_EP13_Brt_Up					L_SHIFT+USB_SEMICOLON
+define	AJS37_EP13_Brt_Dn					L_SHIFT+USB_PERIOD
+define	AJS37_EP13_Cnt_Up					L_SHIFT+USB_SLASH
+define	AJS37_EP13_Cnt_Dn					L_SHIFT+USB_COMMA
+
+define	AJS37_Mode_ANF						R_CTL+USB_Q
+define	AJS37_Mode_BER						L_ALT+USB_Q
+define	AJS37_Mode_FK						L_CTL+USB_Q
+define	AJS37_Mode_LANDNAV					R_CTL+USB_W
+define	AJS37_Mode_LANDPO					R_SHIFT+USB_W
+define	AJS37_Mode_NAV						R_ALT+USB_Q
+define	AJS37_Mode_SPA						R_SHIFT+USB_Q
+define	AJS37_Doppler_Toggle				R_SHIFT+USB_D
+define	AJS37_RadAlt						R_ALT+USB_R
+
+define	AJS37_Rdr_AS0						L_CTL+USB_0
+define	AJS37_Rdr_AS1						L_CTL+USB_1
+define	AJS37_Rdr_AS2						L_CTL+USB_2
+define	AJS37_Rdr_AS3						L_CTL+USB_3
+define	AJS37_Rdr_AS4						L_CTL+USB_4
+define	AJS37_Rdr_AS5						L_CTL+USB_5
+define	AJS37_Rdr_AS6						L_CTL+USB_6
+define	AJS37_Rdr_AS7						L_CTL+USB_7
+
+define	AJS37_Rdr_LOG						R_SHIFT+USB_R
+define	AJS37_Rdr_LIN						R_CTL+USB_R
+define	AJS37_Rdr_Pass						L_CTL+USB_P
+define	AJS37_Rdr_Memory					USB_M
+define	AJS37_Rdr_ObstacleMode				L_CTL+USB_H
+define	AJS37_Rdr_Elev_Up					R_SHIFT+R_CTL+USB_PAGEUP
+define	AJS37_Rdr_Elev_Dn					R_SHIFT+R_CTL+USB_PAGEDOWN
+define	AJS37_Rdr_Elev_Up_DX				CHAIN(DX31,D(ModDelay),DXHATUP)
+define	AJS37_Rdr_Elev_Dn_DX				CHAIN(DX31,D(ModDelay),DXHATDOWN)
+define	AJS37_Rdr_Elev_Ctr					L_CTL+R_CTL+USB_M
+
+define	AJS37_Roll_Trim_Neutral				USB_O
+define	AJS37_Thrust_Rev_On					R_ALT+USB_P
+define	AJS37_Thrust_Rev_Off				R_SHIFT+USB_P
+
+define	AJS37_Wpn_Jett						L_CTL+L_SHIFT+USB_J
+define	AJS37_Wpn_Jett_Cover				L_ALT+L_CTL+USB_J
+define	AJS37_Fuel_Jett						R_CTL+R_SHIFT+USB_J
+define	AJS37_Fuel_Jett_Cover				R_ALT+R_CTL+USB_J
+
+define	AJS37_VigWalkman_Play				R_CTL+USB_P
+define	AJS37_VigWalkman_Stop				L_SHIFT+USB_S
+define	AJS37_VigWalkman_PlayStop			R_SHIFT+R_CTL+USB_P
+define	AJS37_VigWalkman_FF					L_CTL+USB_F
+define	AJS37_VigWalkman_Rew				L_CTL+USB_W
+
+define	AJS37_T0							USB_R				//changed in 2.00 since T now defaults to clock function
+define	AJS37_IR_Uncage						R_ALT+R_SHIFT+USB_C	//L_ALT+L_CTL+USB_C
+define	AJS37_AutoThrottle_Discon_AA		L_CTL+L_ALT+USB_S
+define	AJS37_AutoThrottle_AOA				L_CTL+USB_J
+
+define	AJS37_DataCart_Incr					L_CTL+L_SHIFT+USB_C
+define	AJS37_DataCart_Decr					L_ALT+L_CTL+USB_C	//consider changing for VAICOM
+
+define	AJS37_Altim_Incr					L_CTL+L_SHIFT+USB_A
+define 	AJS37_Altim_Decr					L_ALT+L_CTL+USB_A
+//define	AJS37_Altim_Incr_Fast				R_CTL+R_SHIFT+USB_A
+//define 	AJS37_Altim_Decr_Fast				R_ALT+R_CTL+USB_A
+define	AJS37_Altim_Incr_DX					CHAIN(DX31,D(ModDelay),DX9)
+define 	AJS37_Altim_Decr_DX					CHAIN(DX31,D(ModDelay),DX7)
+
+define	AJS37_ParkBrake						L_SHIFT+L_ALT+L_CTL+USB_W
+
+//FunkyFranky Keys
+define	AJS37_Canopy_Close_Sw				L_SHIFT+R_CTL+USB_C
+define	AJS37_Canopy_Open_Sw				L_ALT+R_CTL+USB_C
+define	AJS37_Canopy_Jett					R_SHIFT+USB_C
+define	AJS37_Airstart						USB_S
+
+//define	AJS37_CM_F_Sw						
+//define	AJS37_CM_R_Sw						
+
+define	AJS37_CK37_0_IDNR					L_CTL+R_ALT+USB_0
+define	AJS37_CK37_1_TAKT					L_CTL+R_ALT+USB_1
+define	AJS37_CK37_2_TID					L_CTL+R_ALT+USB_2
+define	AJS37_CK37_3_VIND					L_CTL+R_ALT+USB_3
+define	AJS37_CK37_4_BANA					L_CTL+R_ALT+USB_4
+define	AJS37_CK37_5_REF					L_CTL+R_ALT+USB_5
+define	AJS37_CK37_6_POS					L_CTL+R_ALT+USB_6
+define	AJS37_CK37_CW						L_CTL+R_ALT+USB_EQUALSIGN
+define	AJS37_CK37_CCW						L_CTL+R_ALT+USB_HYPHEN
+
+
+//define	AJS37_WepSel_0_PLAN					R_CTL+R_ALT+USB_0
+//define	AJS37_WepSel_1_RB75					R_CTL+R_ALT+USB_1
+//define	AJS37_WepSel_2_LUFT					R_CTL+R_ALT+USB_2
+//define	AJS37_WepSel_3_AKAN					R_CTL+R_ALT+USB_3
+//define	AJS37_WepSel_4_ATTACK				R_CTL+R_ALT+USB_4
+//define	AJS37_WepSel_5_IRRB					R_CTL+R_ALT+USB_5
+define	AJS37_WepSel_CW						L_CTL+L_SHIFT+USB_W
+define	AJS37_WepSel_CCW					L_ALT+L_CTL+USB_W
+
+//define	AJS37_WepInt_00_VA					R_CTL+R_SHIFT+USB_GRAVEACCENTANDTILDE
+//define	AJS37_WepInt_01_RAKT				R_CTL+R_SHIFT+USB_1
+//define	AJS37_WepInt_02_HO					R_CTL+R_SHIFT+USB_2
+//define	AJS37_WepInt_03_10m					R_CTL+R_SHIFT+USB_3
+//define	AJS37_WepInt_04_15m					R_CTL+R_SHIFT+USB_4
+//define	AJS37_WepInt_05_20m					R_CTL+R_SHIFT+USB_5
+//define	AJS37_WepInt_06_25m					R_CTL+R_SHIFT+USB_6
+//define	AJS37_WepInt_07_30m					R_CTL+R_SHIFT+USB_7
+//define	AJS37_WepInt_08_40m					R_CTL+R_SHIFT+USB_8
+//define	AJS37_WepInt_09_50m					R_CTL+R_SHIFT+USB_9
+//define	AJS37_WepInt_10_60m					R_CTL+R_SHIFT+USB_0
+define	AJS37_WepInt_CW						R_CTL+R_SHIFT+USB_EQUALSIGN
+define	AJS37_WepInt_CCW					R_CTL+R_SHIFT+USB_HYPHEN
+
+
+// ******************************************************
+//				  	    Hawk
+// ******************************************************
+
+//remappings for MFD
+
+define	Hawk_Hyd2_Reset_DX					CHAIN(DX31,D(ModDelay),DX9)
+
+//LMFD deconfliction
+define	Hawk_Pitot_DX						CHAIN(DX31,D(ModDelay),DX11)
+define	Hawk_Pitot							R_CTL+R_SHIFT+USB_P				//added to diff.lua
+
+define	Hawk_Ign_On							L_SHIFT+USB_7
+define	Hawk_Ign_Off						L_CTL+L_SHIFT+USB_7
+define	Hawk_FuelPump_On					L_SHIFT+USB_P					
+define	Hawk_FuelPump_Off					L_CTL+USB_P
+define	Hawk_Batt1_On						R_SHIFT+USB_1
+define	Hawk_Batt1_Off						R_CTL+R_SHIFT+USB_2
+define	Hawk_Batt2_On						R_SHIFT+USB_2
+define	Hawk_Batt2_Off						R_CTL+R_SHIFT+USB_2
+
+//RMFD deconfliction (Lights)
+define	Hawk_WComp_Lts						R_CTL+R_SHIFT+USB_H
+define	Hawk_Emer_Lts						R_CTL+R_SHIFT+USB_G
+define	Hawk_Pnl_Lts						R_CTL+R_SHIFT+USB_F
+define	Hawk_AntiColl_U_Lts					R_CTL+R_SHIFT+USB_E
+define	Hawk_AntiColl_L_Lts					R_CTL+R_SHIFT+USB_D
+define	Hawk_Nav_Lts						R_CTL+R_SHIFT+USB_C
+define	Hawk_Ldg_Lts						R_CTL+R_SHIFT+USB_B
+define	Hawk_MkrBcn_Lts						R_CTL+R_SHIFT+USB_A
+
+define	Hawk_FuelCock_On					L_SHIFT+USB_D
+define	Hawk_FuelCock_Off					L_CTL+USB_D
+
+define	Hawk_EngStart_Off					R_SHIFT+USB_E
+define	Hawk_EngStart_On					L_SHIFT+USB_E
+define	Hawk_EngStart_Up					L_CTL+L_SHIFT+USB_E
+
+
+//keys
+
+// ******************************************************
+//				    AV-8B N/A Harrier II
+// ******************************************************
+
+//Default Commands
+define	AV8_MM_AA_Cannon					USB_C	
+define	AV8_MM_AA_Bore						USB_D
+define	AV8_MM_AA_SEAM						L_SHIFT+USB_D
+define	AV8_MM_AG							L_ALT+USB_3
+define	AV8_MM_NAV							L_ALT+USB_1
+define	AV8_MM_VSTOL						L_ALT+USB_2
+define	AV8_MasterArm						L_CTL+USB_M	
+define	AV8_MasterArm_On					L_CTL+L_SHIFT+USB_M
+define	AV8_MasterArm_Off					L_CTL+L_ALT+USB_M
+
+define	AV8_MasterCaution					USB_M
+define	AV8_Refuel_Probe_Out				L_ALT+R_CTL+USB_A
+define	AV8_Refuel_Probe_In					L_CTL+R_CTL+USB_A
+define	AV8_Refuel_Probe					CHAIN(USB_LEFTGUI,D(ModDelay),USB_A)
+define	AV8_Uncage							CHAIN(USB_LEFTGUI,D(ModDelay),USB_C)
+define	AV8_Fuel_Cock_Release				CHAIN(USB_LEFTGUI,D(ModDelay),USB_F)
+define	AV8_Throttle_Cutoff					CHAIN(USB_RIGHTGUI,D(ModDelay),USB_T)
+
+define	AV8_ECM_Up							USB_GRAVEACCENTANDTILDE	//Flares, was 7 in default
+define	AV8_ECM_Dn							USB_8	//Chaff
+define	AV8_ECM_Lt							USB_9	//Mini-Jammer
+define	AV8_ECM_Rt							USB_0	//All Countermeasures
+define	AV8_Flare_Salvo						L_CTL+USB_F
+
+define	AV8_Water_Sw_Up						L_CTL+USB_5
+define	AV8_Water_Sw_Dn						L_CTL+USB_6
+define	AV8_Flaps_Up						L_CTL+USB_1
+define	AV8_Flaps_Dn						L_CTL+USB_2
+define	AV8_Nozzle_Up						L_SHIFT+USB_KP_PLUS
+define	AV8_Nozzle_Dn						L_SHIFT+USB_KP_HYPHEN
+define	AV8_STO_Stop_Up						R_SHIFT+USB_KP_PLUS	
+define	AV8_STO_Stop_Dn						R_SHIFT+USB_KP_HYPHEN
+define	AV8_STO_Stop_UpR					REXEC(6, STO_Stop_Rate_AV8B, "ActKey(KEYON+PULSE+AV8_STO_Stop_Up);", RNOSTOP)
+define	AV8_STO_Stop_DnR					REXEC(6, STO_Stop_Rate_AV8B, "ActKey(KEYON+PULSE+AV8_STO_Stop_Dn);", RNOSTOP)
+define	AV8_STO_Stop_Stow					R_SHIFT+USB_0
+define	AV8_STO_Stop_82						R_SHIFT+USB_8
+define	AV8_STO_Stop_60						R_SHIFT+USB_7
+define	AV8_STO_Stop_55						R_SHIFT+USB_6
+define	AV8_STO_Stop_50						R_SHIFT+USB_5
+//define	AV8_JPTL							USB_T	//change when added
+define	AV8_E_Brake_Rel						L_CTL+R_CTL+USB_W
+define	AV8_Emer_Flap_Disengage_DX			CHAIN(DX30,D(ModDelay),DX24)
+define	AV8_DMT								CHAIN(USB_LEFTGUI,D(ModDelay),USB_D)
+define	AV8_FLIR							CHAIN(USB_LEFTGUI,D(ModDelay),USB_F)
+define	AV8_Wheelbrake						USB_Q	//was W, remapped to West
+
+
+//Digital TDC
+define	AV8_TDC_Up							USB_U
+define	AV8_TDC_Dn							USB_J
+define	AV8_TDC_Lt							USB_Y	//Was H, remapped to altitude hold
+define	AV8_TDC_Rt							USB_I	//was K, remapped to kneeboard
+define	AV8_TDC_Act							USB_L	//was N, remapped to North
+define	AV8_TDC_NoAct						USB_INSERT
+
+define	AV8_TDC_Up_DX						DX7
+define	AV8_TDC_Dn_DX						DX8
+define	AV8_TDC_Lt_DX						DX9
+define	AV8_TDC_Rt_DX						DX10
+
+define	AV8_SSw_Up							L_ALT+USB_U		//L_SHIFT+R_SHIFT+USB_U
+define	AV8_SSw_Dn							L_ALT+USB_J		//L_SHIFT+R_SHIFT+USB_J
+define	AV8_SSw_Lt							L_SHIFT+USB_Y	//L_SHIFT+R_SHIFT+USB_Y
+define	AV8_SSw_Rt							L_ALT+USB_I		//L_SHIFT+R_SHIFT+USB_I
+define	AV8_SSw_Push						L_ALT+USB_N		//L_SHIFT+R_SHIFT+USB_N
+
+//Armament Control Panel (added)
+define	AV8_ACP_FUZ_Up						R_SHIFT+R_CTL+USB_1
+define	AV8_ACP_FUZ_Dn						R_CTL+R_ALT+USB_1
+define	AV8_ACP_QTY10_Up					R_SHIFT+R_CTL+USB_2
+define	AV8_ACP_QTY10_Dn					R_CTL+R_ALT+USB_2
+define	AV8_ACP_QTY01_Up					R_SHIFT+R_CTL+USB_3
+define	AV8_ACP_QTY01_Dn					R_CTL+R_ALT+USB_3
+define	AV8_ACP_MULT_Up						R_SHIFT+R_CTL+USB_4
+define	AV8_ACP_MULT_Dn						R_CTL+R_ALT+USB_4
+define	AV8_ACP_INTV100_Up					R_SHIFT+R_CTL+USB_5
+define	AV8_ACP_INTV100_Dn					R_CTL+R_ALT+USB_5
+define	AV8_ACP_INTV010_Up					R_SHIFT+R_CTL+USB_6
+define	AV8_ACP_INTV010_Dn					R_CTL+R_ALT+USB_6
+define	AV8_ACP_INTV001_Up					R_SHIFT+R_CTL+USB_7
+define	AV8_ACP_INTV001_Dn					R_CTL+R_ALT+USB_7
+define	AV8_ACP_ARMT_Up						R_SHIFT+R_CTL+USB_GRAVEACCENTANDTILDE
+define	AV8_ACP_ARMT_Dn						R_CTL+R_ALT+USB_GRAVEACCENTANDTILDE
+
+define	AV8_ACP_WpnStn1						USB_1
+define	AV8_ACP_WpnStn2						USB_2
+define	AV8_ACP_WpnStn3						USB_3
+define	AV8_ACP_WpnStn4						USB_4
+define	AV8_ACP_WpnStn5						USB_5
+define	AV8_ACP_WpnStn6						USB_6
+define	AV8_ACP_WpnStn7						USB_7	//was flares in default
+
+define	AV8_Jett_Sel_Sw_Lt					L_SHIFT+L_CTL+USB_J
+define	AV8_Jett_Sel_Sw_Rt					R_SHIFT+R_CTL+USB_J
+define	AV8_Jett_Btn						R_SHIFT+L_CTL+USB_J	
+
+//External Lights (added)
+define	AV8_Ext_Master_Sw_Up				L_SHIFT+L_ALT+USB_X
+define	AV8_Ext_Master_Sw_Dn				L_CTL+L_ALT+USB_X
+define	AV8_Posit_Lt_Sw_Up					L_SHIFT+L_CTL+USB_P
+define	AV8_Posit_Lt_Sw_Dn					L_CTL+L_ALT+USB_P
+define	AV8_Land_Lt_Sw_Up					L_SHIFT+L_CTL+USB_L
+define	AV8_Land_Lt_Sw_Dn					L_CTL+L_ALT+USB_L
+
+define	AV8_AntiColl_Sw						L_SHIFT+R_SHIFT+USB_C
+define	AV8_Aux_Lt_Sw						L_SHIFT+R_SHIFT+USB_X
+define	AV8_Refuel_Lt_Sw					L_SHIFT+R_SHIFT+USB_A
+
+//UFC (added)
+define	AV8_UFC_TMR							L_SHIFT+L_CTL+USB_1
+define	AV8_UFC_IFF							L_SHIFT+L_CTL+USB_2
+define	AV8_UFC_TCN							L_SHIFT+L_CTL+USB_3
+define	AV8_UFC_AWL							L_SHIFT+L_CTL+USB_4
+define	AV8_UFC_WPN							L_SHIFT+L_CTL+USB_5
+
+define	AV8_UFC_TOO							L_CTL+L_ALT+USB_1
+define	AV8_UFC_WOF							L_CTL+L_ALT+USB_2
+define	AV8_UFC_BCN							L_CTL+L_ALT+USB_3
+define	AV8_UFC_ALT							L_CTL+L_ALT+USB_4
+define	AV8_UFC_EMCON						L_CTL+L_ALT+USB_5
+
+define	AV8_ODU1							L_ALT+R_SHIFT+USB_1
+define	AV8_ODU2							L_ALT+R_SHIFT+USB_2
+define	AV8_ODU3							L_ALT+R_SHIFT+USB_3
+define	AV8_ODU4							L_ALT+R_SHIFT+USB_4
+define	AV8_ODU5							L_ALT+R_SHIFT+USB_5
+
+//Replaced L_CTL with L_SHIFT for VR compatibility (L_CTL was default)
+define	AV8_HUD_Rej_Dn						CHAIN(L_SHIFT,USB_LEFTGUI,D(ModDelay),USB_KP_1)
+define	AV8_HUD_Rej_Up						CHAIN(L_SHIFT,USB_LEFTGUI,D(ModDelay),USB_KP_2)
+define	AV8_HUD_Mode_Dn						CHAIN(L_SHIFT,USB_LEFTGUI,D(ModDelay),USB_KP_3)
+define	AV8_HUD_Mode_Up						CHAIN(L_SHIFT,USB_LEFTGUI,D(ModDelay),USB_KP_4)
+define	AV8_HUD_Altim						CHAIN(L_SHIFT,USB_LEFTGUI,D(ModDelay),USB_KP_5)
+
+
+//MFD (added)
+define	AV8_LMFD_Day						L_SHIFT+L_ALT+USB_D
+define	AV8_LMFD_Night						L_SHIFT+L_ALT+USB_N
+define	AV8_RMFD_Day						R_SHIFT+R_ALT+USB_D
+define	AV8_RMFD_Night						R_SHIFT+R_ALT+USB_N
+
+define	AV8_LMFD_Export						L_SHIFT+L_ALT+USB_T
+define	AV8_RMFD_Export						R_SHIFT+R_ALT+USB_T
+
+define	AV8_NVGVisorSwap					R_SHIFT+L_SHIFT+USB_H
+
+//ECM (added)
+define	AV8_ECM_STBY						R_CTL+L_CTL+USB_J
+define	AV8_ECM_RCV							R_SHIFT+R_ALT+USB_J
+define	AV8_ECM_RPT							R_CTL+R_ALT+USB_J
+
+
+// ******************************************************
+//				    F/A-18C Hornet
+// ******************************************************
+
+//Default Commands
+define	F18_Flaps_Up						L_ALT+L_SHIFT+USB_F
+define	F18_Flaps_Dn						L_ALT+L_CTL+USB_F
+define	F18_Hook_Up							CHAIN(L_SHIFT,USB_RIGHTGUI,D(ModDelay), USB_H)
+define	F18_Hook_Dn							CHAIN(L_CTL,USB_RIGHTGUI,D(ModDelay), USB_H)
+define	F18_LaunchBar						L_CTL+R_CTL+USB_U
+define	F18_Cat_Hookup						USB_U
+define	F18_Att_Src_AUTO					CHAIN(L_CTL,USB_LEFTGUI,D(ModDelay),USB_KP_5)
+define	F18_UFC_OnOff						USB_KP_PLUS
+define	F18_Eng_Crank_Lt					L_SHIFT+L_CTL+USB_C
+define	F18_Eng_Crank_Rt					R_SHIFT+R_CTL+USB_C
+define	F18_Eng_Crank_Off					L_SHIFT+L_CTL+R_SHIFT+R_CTL+USB_C
+define	F18_Ext_Lts_On						R_SHIFT+USB_L
+define	F18_Ext_Lts_Off						R_CTL+USB_L
+define	F18_Land_Lts_On						R_CTL+R_SHIFT+USB_L
+define	F18_Land_Lts_Off					R_CTL+R_ALT+USB_L
+
+define	F18_Tank_Wing_Oride					R_SHIFT+USB_W
+define	F18_Tank_Wing_Norm					R_CTL+USB_W
+define	F18_Tank_Wing_Stop					R_ALT+USB_W
+define	F18_Tank_Ctr_Oride					R_SHIFT+USB_X
+define	F18_Tank_Ctr_Norm					R_CTL+USB_X
+define	F18_Tank_Ctr_Stop					R_ALT+USB_X
+define	F18_Fuel_Dump						R_SHIFT+USB_F
+
+define	F18_Aux_Rel_Enable					R_SHIFT+L_SHIFT+USB_A
+define	F18_Aux_Rel_Norm					R_CTL+L_CTL+USB_A
+
+define	F18_Radar_Elev_Incr					R_SHIFT+USB_EQUALSIGN
+define	F18_Radar_Elev_Decr					R_SHIFT+USB_HYPHEN
+define	F18_FOV_Sel							USB_I
+
+define	F18_Flare_Disp						USB_D
+define	F18_Chaff_Disp						USB_J	//was USB_E
+define	F18_Wall_Disp						R_CTL+USB_D
+define	F18_TO_Trim							USB_V
+define	F18_MasterCaution					R_SHIFT+USB_N
+define	F18_Warn_Silence					R_SHIFT+USB_M
+define	F18_FCS_Reset						L_SHIFT+R_SHIFT+USB_R
+define	F18_FCS_BIT							USB_Y
+
+define	F18_Weps_AIM7						L_SHIFT+USB_W
+define	F18_Weps_AIM9						L_SHIFT+USB_S
+define	F18_Weps_Guns						L_SHIFT+USB_X
+define	F18_Weps_AIM120						L_SHIFT+USB_D
+
+define	F18_SSw_Up							R_ALT+USB_SEMICOLON
+define	F18_SSw_Dn							R_ALT+USB_PERIOD
+define	F18_SSw_Lt							R_ALT+USB_COMMA
+define	F18_SSw_Rt							R_ALT+USB_SLASH
+
+define	F18_TDC_Up							USB_SEMICOLON
+define	F18_TDC_Dn							USB_PERIOD
+define	F18_TDC_Lt							USB_COMMA
+define	F18_TDC_Rt							USB_SLASH
+
+define	F18_MM_AA							L_ALT+USB_1	//was USB_1
+define	F18_MM_AG							L_ALT+USB_2	//was USB_2
+
+define	F18_MasterArm_On					L_SHIFT+USB_M
+define	F18_MasterArm_Safe					L_CTL+USB_M
+
+define	F18_JHMCS_Incr						R_ALT+R_SHIFT+USB_UPARROW
+define	F18_JHMCS_Decr						R_ALT+R_SHIFT+USB_DOWNARROW
+
+define	F18_Seat_Up							R_ALT+R_SHIFT+USB_RIGHTARROW
+define	F18_Seat_Down						R_ALT+R_SHIFT+USB_LEFTARROW
+
+define	F18_Radar_Off						R_ALT+R_CTL+USB_R
+define	F18_Radar_Stby						R_ALT+R_SHIFT+USB_R
+define	F18_Radar_Oper						R_SHIFT+R_CTL+USB_R
+define	F18_INS_NAV							R_SHIFT+R_CTL+USB_N
+define	F18_INS_IFA							R_SHIFT+R_CTL+USB_I
+
+define	F18_FLIR_On							R_SHIFT+R_CTL+USB_F
+define	F18_FLIR_Off						R_ALT+R_CTL+USB_F
+define	F18_FLIR_Stby						R_ALT+R_SHIFT+USB_F
+define	F18_LTDR_Arm						R_SHIFT+R_CTL+USB_D
+define	F18_LTDR_Safe						R_ALT+R_SHIFT+USB_D
+define	F18_LTDR_Aft						R_ALT+R_CTL+USB_D
+define	F18_LST_On							R_SHIFT+R_CTL+USB_T
+define	F18_LST_Off							R_ALT+R_CTL+USB_T
+define	F18_LST_Toggle						R_ALT+R_SHIFT+USB_T
+
+define	F18_Plt_Salute						L_CTL+L_SHIFT+USB_S
+define	F18_CallBall						L_CTL+L_SHIFT+USB_B
+
+define	F18_ECM_Rcv							R_SHIFT+R_ALT+USB_E
+define	F18_ECM_Xmit						R_SHIFT+R_CTL+USB_E
+
+// ******************************************************
+//				    F-15E Srike Eagle
+// ******************************************************
+
+define	F15E_UFC1							R_ALT+R_SHIFT+USB_1
+define	F15E_UFC2							R_ALT+R_SHIFT+USB_2
+define	F15E_UFC3							R_ALT+R_SHIFT+USB_3
+define	F15E_UFC4							R_ALT+R_SHIFT+USB_4
+define	F15E_UFC5							R_ALT+R_SHIFT+USB_5
+
+define	F15E_Fuel_Dump_Off					R_CTL+USB_F
+define	F15E_Fingerlift_Lt					L_ALT+USB_I
+define	F15E_Fingerlift_Rt					R_ALT+USB_I
+
+//startup macro items
+//left panel
+define	F15E_ConfTank_StopTransfer			L_CTL+R_CTL+USB_T
+define	F15E_ConfTank_Norm					L_ALT+R_ALT+USB_T
+define	F15E_LRamp_Auto						L_SHIFT+L_CTL+USB_R
+define	F15E_RRamp_Auto						R_SHIFT+R_CTL+USB_R
+define	F15E_CASPitch_Reset					L_SHIFT+R_SHIFT+USB_C
+define	F15E_CASRoll_Reset					L_SHIFT+R_ALT+USB_C
+define	F15E_CASYaw_Reset					L_ALT+R_ALT+USB_C
+define	F15E_Mic_Oride						R_SHIFT+R_CTL+USB_X
+define	F15E_Mic_On							R_SHIFT+R_ALT+USB_X
+define	F15E_Mic_Off						R_CTL+R_ALT+USB_X
+//Right panel
+define	F15E_O2Supply_On					L_CTL+R_CTL+USB_O
+define	F15E_LGen_On						L_SHIFT+L_CTL+USB_G
+define	F15E_RGen_On						R_SHIFT+R_CTL+USB_G
+define	F15E_LEngCtl_On						L_CTL+R_ALT+USB_N
+define	F15E_REngCtl_On						R_CTL+L_ALT+USB_N
+define	F15E_LEngMast_Guard_Up				L_SHIFT+L_ALT+USB_N
+define	F15E_LEngMast_Guard_Dn				L_CTL+L_ALT+USB_N
+define	F15E_LEngMast_On					L_SHIFT+L_CTL+USB_N
+define	F15E_REngMast_Guard_Up				R_SHIFT+R_ALT+USB_N
+define	F15E_REngMast_Guard_Dn				R_CTL+R_ALT+USB_N
+define	F15E_REngMast_On					R_SHIFT+R_CTL+USB_N
+define	F15E_JFSPower_On					L_CTL+R_CTL+USB_J
+define	F15E_AC_Man							R_CTL+R_ALT+USB_A
+define	F15E_AC_Auto						R_SHIFT+R_CTL+USB_A
+
+// ******************************************************
+//				    A-4E-C Skyhawk
+// ******************************************************
+
+define	A4E_TailLts_On						L_SHIFT+USB_T
+define	A4E_TailLts_Off						L_SHIFT+L_CTL+USB_T
+define	A4E_TailLts_Dim						L_ALT+USB_T
+define	A4E_ProbeLt_On						R_ALT+R_SHIFT+USB_O
+define	A4E_ProbeLt_Dim						R_ALT+R_CTL+USB_O
+//define	A4E_ProbeLt_Off						R_SHIFT+R_ALT+USB_L	//obsolete
+define	A4E_FuseLts_On						R_ALT+R_SHIFT+USB_F
+define	A4E_FuseLts_Dim						R_ALT+R_CTL+USB_F
+//define	A4E_FloodLt_Dim						R_SHIFT+R_ALT+USB_L	//obsolete
+define	A4E_Ext_Lts_On						R_CTL+R_SHIFT+USB_L
+define	A4E_Ext_Lts_Off						R_CTL+R_ALT+USB_L
+
+
+define	A4E_ArmSel_CCW						USB_7
+define	A4E_ArmSel_CW						USB_8
+define	A4E_GunArm_Toggle					USB_9
+define	A4E_GunArm_On						R_SHIFT+USB_9
+define	A4E_GunArm_Off						R_CTL+USB_9
+define	A4E_MasterArm_Toggle				USB_0
+define	A4E_MasterArm_On					R_SHIFT+USB_0
+define	A4E_MasterArm_Off					R_CTL+USB_0
+define	A4E_AFCS_Toggle						USB_A
+define	A4E_AFCS_Engage						R_SHIFT+USB_A
+define	A4E_AFCS_Off						R_CTL+USB_A
+define	A4E_AFCS_Alt						L_SHIFT+USB_A
+define	A4E_AFCS_Hdg						L_CTL+L_SHIFT+USB_A
+define	A4E_Radar_Stby						L_CTL+R_CTL+USB_R
+
+define	A4E_Stn1_Off						R_CTL+USB_1
+define	A4E_Stn1_On							R_SHIFT+USB_1
+define	A4E_Stn2_Off						R_CTL+USB_2
+define	A4E_Stn2_On							R_SHIFT+USB_2
+define	A4E_Stn3_Off						R_CTL+USB_3
+define	A4E_Stn3_On							R_SHIFT+USB_3
+define	A4E_Stn4_Off						R_CTL+USB_4
+define	A4E_Stn4_On							R_SHIFT+USB_4
+define	A4E_Stn5_Off						R_CTL+USB_5
+define	A4E_Stn5_On							R_SHIFT+USB_5
+define	A4E_AWRSx1							R_CTL+R_ALT+USB_1
+define	A4E_AWRSx10							R_CTL+R_ALT+USB_0
+
+define	A4E_CM_1							L_CTL+R_CTL+USB_1	//shifted ALQ_APR27 Audio
+define	A4E_CM_2							L_CTL+R_CTL+USB_2	//shifted ALQ_APR25 Audio
+define	A4E_CM_B							L_CTL+R_CTL+USB_3
+//define	A4E_CM_Cyc							L_CTL+R_CTL+USB_Q
+define	A4E_CM_Auto							L_SHIFT+R_SHIFT+USB_Q
+//define	A4E_CM_Pwr							L_CTL+USB_Q
+
+define	A4E_APR25_Stby						L_CTL+R_CTL+USB_6
+define	A4E_APR25_RCV						L_CTL+R_CTL+USB_8	//shifted A4E_CM_Pwr
+define	A4E_APR25_RPT						L_CTL+R_CTL+USB_9
+define	A4E_ECM_PRFVol_Incr					L_SHIFT+R_SHIFT+USB_EQUALSIGN
+define	A4E_ECM_PRFVol_Decr					L_SHIFT+R_SHIFT+USB_HYPHEN
+define	A4E_ECM_MisVol_Incr					L_CTL+R_CTL+USB_EQUALSIGN
+define	A4E_ECM_MisVol_Decr					L_CTL+R_CTL+USB_HYPHEN
+define	A4E_ECM_On							CHAIN(DOWN+R_CTL,DOWN+L_CTL,D(ModDelay),PULSE+USB_5, D(Switch_Delay), PULSE+USB_7,D(KBDelay),UP+R_CTL,UP+L_CTL)
+
+define	A4E_NavSel_D1						L_SHIFT+R_SHIFT+USB_1
+define	A4E_NavSel_D2						L_SHIFT+R_SHIFT+USB_2
+define	A4E_Doppler_Stby					L_SHIFT+R_SHIFT+USB_B
+define	A4E_Doppler_Sea						L_SHIFT+R_SHIFT+USB_S
+define	A4E_Doppler_Land					L_SHIFT+R_SHIFT+USB_L
+
+define	A4E_PresLat_Push					USB_HOME
+define	A4E_PresLat_CW						USB_PERIOD
+define	A4E_PresLat_CCW						USB_SEMICOLON
+define	A4E_PresLong_Push					USB_END
+define	A4E_PresLong_CW						USB_SLASH
+define	A4E_PresLong_CCW					USB_COMMA
+define	A4E_Wind_Push						USB_I
+define	A4E_Wind_CW							USB_DELETEFORWARD
+define	A4E_Wind_CCW						USB_INSERT
+
+define	A4E_Weap_Jett						R_CTL+USB_W
+define	A4E_TankPress_Refuel				R_ALT+R_CTL+USB_P
+define	A4E_TankPress_Cycle					L_CTL+USB_D
+
+//define	A4E_ArmSel_Off
+//define	A4E_ArmSel_Rockets
+//define	A4E_ArmSel_GMUnarm
+//define	A4E_ArmSel_Spray
+//define	A4E_ArmSel_LABS
+//define	A4E_ArmSel_Bombs
+
+//define	A4E_AWRS_Qty_Incr
+//define	A4E_AWRS_Qty_Decr
+//define	A4E_AWRS_Mode_CW
+//define	A4E_AWRS_Mode_CCW
+
+//define	A4E_BDHI_Comp
+//define	A4E_BDHI_TACAN
+//define	A4E_BDHI_Pac
+
+//define	A4E_Fuse_Tail
+//define	A4E_Fuse_NT
+//define	A4E_Fuse_Off
+
+//define	A4E_LtsFloodW_Incr
+//define	A4E_LtsFloodW_Decr
+//define	A4E_LtsInstr_Incr
+//define	A4E_LtsInstr_Decr
+//define	A4E_LtsConsole_Incr
+//define	A4E_LtsConsole_Decr
+
+define	A4E_APCPwr_Off						R_CTL+R_SHIFT+USB_E
+define	A4E_APCPwr_Stby						R_CTL+USB_E
+define	A4E_APCPwr_Engage					R_SHIFT+USB_E
+//define	A4E_APCTemp_Cold
+//define	A4E_APCTemp_Std						R_CTL+R_SHIFT+USB_T
+//define	A4E_APCTemp_Hot
+
+
+
+// ******************************************************
+//				    C-101 Aviojet
+// ******************************************************
+
+define	C101_Master_Caution					R_SHIFT+USB_M
+define	C101_Master_Warn					L_SHIFT+USB_M
+define	C101_Master_Caution_R				R_CTL+R_SHIFT+USB_M
+define	C101_Master_Warn_R					L_CTL+L_SHIFT+USB_M
+define	C101_Master_Caution_Gear			CHAIN(R_SHIFT,L_ALT,D(ModDelay),USB_M,USB_G)
+define	C101_Master_Caution_Gear_R			CHAIN(R_SHIFT,R_CTL,D(ModDelay),USB_M,USB_G)
+define	C101_Fire_Warn						L_ALT+USB_F
+define	C101_Fire_Warn_R					R_ALT+USB_F
+define	C101_AntiSkid						L_SHIFT+USB_K
+define	C101_AntiSkid_R						L_CTL+USB_K
+define	C101_Canopy_Jett					R_CTL+R_SHIFT+USB_C
+
+define	C101_VOR_TACAN_Sel					L_ALT+USB_T
+define	C101_VOR_TACAN_Sel_R				L_SHIFT+L_ALT+USB_T
+define	C101_Nav_Priority					L_ALT+USB_N
+define	C101_Nav_Priority_R					L_SHIFT+L_ALT+USB_N
+
+define	C101_Nav_Brt						R_SHIFT+USB_N
+define	C101_Nav_Dim						R_ALT+USB_N
+define	C101_Nav_Off						R_CTL+USB_N
+define	C101_LSpot_Land						L_CTL+L_ALT+USB_L
+define	C101_LSpot_Taxi						L_CTL+USB_L
+define	C101_LSpot_Off						L_SHIFT+USB_L
+define	C101_LSpot_Land_R					KB_LBRTD
+define	C101_LSpot_Taxi_R					KB_LBRTU
+define	C101_RSpot_Land						R_ALT+USB_L
+define	C101_RSpot_Taxi						R_CTL+USB_L
+define	C101_RSpot_Off						R_SHIFT+USB_L
+define	C101_LSpot_Off_R					L_SHIFT+USB_L	//just in case this is added later so no need to recode
+define	C101_RSpot_Off_R					R_SHIFT+USB_L	//just in case 
+define	C101_RSpot_Land_R					KB_LCOND
+define	C101_RSpot_Taxi_R					KB_LCONU
+define	C101_Flood_Brt						L_SHIFT+R_SHIFT+USB_F
+define	C101_Flood_Dim						L_CTL+R_CTL+USB_F
+define	C101_Flood_Brt_R					KB_RBRTU
+define	C101_Flood_Dim_R					KB_RBRTD
+define	C101_Storm_Off						L_SHIFT+R_SHIFT+USB_S
+define	C101_Storm_Off_R					L_CTL+R_CTL+USB_S
+//Off is DX30 + U/D
+
+define	C101_AntiColl_On					R_SHIFT+USB_J
+define	C101_AntiColl_Off					R_CTL+USB_J
+define	C101_Battery_On						L_SHIFT+R_SHIFT+USB_B
+define	C101_Battery_Off					L_CTL+R_CTL+USB_B
+
+define	C101_HSI_Hdg_Incr					R_SHIFT+USB_I
+define	C101_HSI_Hdg_Decr					R_CTL+USB_I
+define	C101_HSI_Crs_Incr					L_SHIFT+USB_I
+define	C101_HSI_Crs_Decr					L_CTL+USB_I
+//define	C101_DH_Incr						L_SHIFT+R_SHIFT+USB_D
+//define	C101_DH_Decr						L_CTL+R_CTL+USB_D
+define	C101_ASI_Bug_Incr					L_CTL+USB_A
+define	C101_ASI_Bug_Decr					L_SHIFT+USB_A
+define	C101_ADI_Pitch_Incr					R_CTL+USB_A
+define	C101_ADI_Pitch_Decr					R_SHIFT+USB_A
+define	C101_VOR_TAC_Sel					L_ALT+USB_T
+define	C101_VOR_TAC_Sel_R					L_SHIFT+L_ALT+USB_T
+define	C101_Nav_Pri						L_ALT+USB_N
+define	C101_Nav_Pri_R						L_SHIFT+L_ALT+USB_N
+define	C101_UHF_Pri						L_ALT+USB_U
+define	C101_VHF_Pri						L_ALT+USB_V
+define	C101_ICS_Mode_Incr					L_CTL+L_SHIFT+USB_Q
+define	C101_ICS_Mode_Decr					L_CTL+L_ALT+USB_Q
+define	C101_ICS_Mode_Incr_R				R_CTL+R_SHIFT+USB_Q
+define	C101_ICS_Mode_Decr_R				R_CTL+R_ALT+USB_Q
+define	C101_Fast_Erect						R_SHIFT+USB_E
+define	C101_Fast_Erect_R					R_CTL+USB_E
+define	C101_Chronograph					L_ALT+USB_Q
+
+define	C101_Seat_Up						R_CTL+USB_W
+define	C101_Seat_Dn						R_CTL+USB_S
+define	C101_Pitot_Heat						L_CTL+R_CTL+USB_H
+define	C101_AntiIce						L_CTL+R_CTL+USB_I
+
+
+//CC
+define	C101_MA_On							L_CTL+L_SHIFT+USB_A
+define	C101_MA_Off							L_CTL+L_ALT+USB_A
+define	C101_MM_Cover_Up					L_CTL+R_CTL+USB_UPARROW
+define	C101_MM_Cover_Dn					L_CTL+R_CTL+USB_DOWNARROW
+define	C101_MM_AA							L_CTL+R_CTL+USB_A
+define	C101_MM_AG							L_CTL+R_CTL+USB_G
+define	C101_MM_Off							L_CTL+R_CTL+USB_M
+define	C101_RadAlt_On						R_SHIFT+USB_R
+define	C101_RadAlt_Off						R_CTL+USB_R
+define	C101_RadAlt_On_R					L_ALT+USB_R		//used for rear cockpit compass in EB
+define	C101_RadAlt_Off_R					L_CTL+USB_R		//used for rear cockpit gyro in EB
+define	C101_SCAR_Mode_Sel					L_SHIFT+USB_S
+define	C101_Ammo_Count_Incr				R_SHIFT+USB_C
+define	C101_Ammo_Count_Decr				R_CTL+USB_C
+define	C101_Range_Next						USB_EQUALSIGN	//L_ALT+USB_R
+define	C101_Range_Prev						USB_HYPHEN		//R_ALT+USB_R
+define	C101_Emer_Jett						L_CTL+USB_J
+define	C101_Weapons_Armed					CHAIN(DOWN+L_CTL,DOWN+L_SHIFT,D(ModDelay),PULSE+USB_UPARROW,	D(),PULSE+USB_RIGHTARROW,	D(),UP+L_CTL,UP+L_SHIFT)
+define	C101_Weapons_Safe					CHAIN(DOWN+L_CTL,DOWN+L_SHIFT,D(ModDelay),PULSE+USB_DOWNARROW,	D(),PULSE+USB_LEFTARROW,	D(),UP+L_CTL,UP+L_SHIFT)
+define	C101_Weapons_Armed_R				CHAIN(DOWN+R_CTL,DOWN+R_SHIFT,D(ModDelay),PULSE+USB_UPARROW,	D(),PULSE+USB_RIGHTARROW,	D(),UP+R_CTL,UP+R_SHIFT)
+define	C101_Weapons_Safe_R					CHAIN(DOWN+R_CTL,DOWN+R_SHIFT,D(ModDelay),PULSE+USB_DOWNARROW,	D(),PULSE+USB_LEFTARROW,	D(),UP+R_CTL,UP+R_SHIFT)
+
+define	C101_DME_Hold						L_SHIFT+USB_D	//doubles for VOR/TCN Sel
+define	C101_DME_Norm						L_CTL+USB_D		//doubles for VOR/TCN Sel
+define	C101_DME_Hold_R						R_SHIFT+USB_D	//doubles for VOR/TCN Sel
+define	C101_DME_Norm_R						R_CTL+USB_D		//doubles for VOR/TCN Sel
+
+
+// ******************************************************
+//				    F-14 Tomcat
+// ******************************************************
+define	F14_Walkman_Play					L_SHIFT+USB_M
+define	F14_Walkman_Stop					L_SHIFT+USB_N
+define	F14_Walkman_FF						L_CTL+USB_M
+define	F14_Walkman_Rew						L_CTL+USB_N
+define	F14_Walkman_Vol_Up					L_CTL+R_CTL+USB_UPARROW
+define	F14_Walkman_Vol_Down				L_CTL+R_CTL+USB_DOWNARROW
+define	F14_Walkman_Side					R_CTL+USB_B
+
+define	F14_Jester_Menu						USB_A			//R_SHIFT included in CommState menu
+define	F14_Jester_Menu_Off					L_SHIFT+USB_A
+define	F14_Lts_1U							L_SHIFT+R_SHIFT+USB_1
+define	F14_Lts_2U							L_SHIFT+R_SHIFT+USB_2
+define	F14_Lts_3U							L_SHIFT+R_SHIFT+USB_3
+define	F14_Lts_4U							L_SHIFT+R_SHIFT+USB_4
+define	F14_Lts_5U							L_SHIFT+R_SHIFT+USB_5
+define	F14_Lts_1D							L_SHIFT+R_SHIFT+USB_6
+define	F14_Lts_2D							L_SHIFT+R_SHIFT+USB_7
+define	F14_Lts_3D							L_SHIFT+R_SHIFT+USB_8
+define	F14_Lts_4D							L_SHIFT+R_SHIFT+USB_9
+define	F14_Lts_5D							L_SHIFT+R_SHIFT+USB_0
+
+define	F14_PTT_ICS							DX18
+define	F14_Mic_Btn_ICS						R_SHIFT+USB[0x31]		//RSHF \
+define	F14_TACAN_Cmd						L_ALT+USB_T
+
+define	F14_Seat_Up							L_SHIFT+USB_S
+define	F14_Seat_Dn							L_ALT+L_SHIFT+USB_S
+
+//Pilot
+define	F14_AWL_ILS							L_SHIFT+R_SHIFT+USB_I
+define	F14_AWL_ACL							L_CTL+R_CTL+USB_I
+define	F14_WepSel_Up						L_SHIFT+USB_UPARROW
+define	F14_WepSel_Down						L_SHIFT+USB_DOWNARROW
+define	F14_Wepsel_Push						L_SHIFT+USB_RIGHTARROW
+define	F14_ACM_On							R_SHIFT+USB_M
+define	F14_ACM_Off							R_CTL+USB_M
+
+define	F14_Sweep_Fwd						USB_V			//Auto and Bomb with S3
+define	F14_Sweep_Aft						USB_C
+define	F14_Sweep_Auto						CHAIN(DX30,D(ModDelay),F14_Sweep_Fwd)
+define	F14_Sweep_Man						CHAIN(DX30,D(ModDelay),F14_Sweep_Aft)
+define	F14_AutoThrottle					L_CTL+USB_T
+define	F14_MasterCaution					L_ALT+USB_M
+define	F14_Autopilot_Toggle				R_ALT+USB_A
+define	F14_Altitude_Hold_On				R_ALT+USB_H
+define	F14_AP_Vec							R_SHIFT+USB_I
+define	F14_AP_ACL							R_CTL+USB_I
+define	F14_APV_Off							R_ALT+USB_I
+define	F14_APH_Off							L_ALT+USB_I
+define	F14_Flaps_Up						L_SHIFT+USB_F
+define	F14_Flaps_Dn						USB_F
+define	F14_SPitch_On						L_SHIFT+R_SHIFT+USB_P
+define	F14_SPitch_Off						L_CTL+R_CTL+USB_P
+define	F14_SRoll_On						L_SHIFT+R_SHIFT+USB_R
+define	F14_SRoll_Off						L_CTL+R_CTL+USB_R
+define	F14_SYaw_On							L_SHIFT+R_SHIFT+USB_Y
+define	F14_SYaw_Off						L_CTL+R_CTL+USB_Y
+
+define	F14_CADC_Reset						R_ALT+USB_S
+define	F14_WingSweep_Cover_Open			R_SHIFT+USB_S
+define	F14_WingSweep_Cover_Close			R_CTL+USB_S
+
+define	F14_WingLts_Brt						L_SHIFT+R_SHIFT+USB_L
+define	F14_TailLts_Brt						L_CTL+R_CTL+USB_L
+define	F14_WingLts_Dim						L_SHIFT+R_SHIFT+USB_D
+define	F14_TailLts_Dim						L_CTL+R_CTL+USB_D
+define	F14_PositLts_Flash					R_CTL+R_SHIFT+USB_L
+define	F14_PositLts_Steady					R_CTL+R_ALT+USB_L
+define	F14_TaxiLts_On						L_SHIFT+USB_L
+define	F14_TaxiLts_Off						L_CTL+USB_L
+define	F14_ExtLts_Master_On				R_SHIFT+USB_L
+define	F14_ExtLts_Master_Off				R_CTL+USB_L
+
+define	F14_FuelProbe_Retract				R_ALT+USB_R
+define	F14_FuelProbe_Fus					R_CTL+USB_R
+define	F14_FuelProbe_All					R_SHIFT+USB_R
+define	F14_FuelDump_On						L_CTL+USB_D
+define	F14_FuelDump_Off					L_SHIFT+USB_D
+
+define	F14_Strut_Extend					L_CTL+USB_Q
+define	F14_Strut_Kneel						L_CTL+USB_A
+define	F14_Strut_Stop						L_SHIFT+USB_Q
+define	F14_Cat_Hookup						USB_U
+define	F14_Cat_Launch						L_SHIFT+USB_U
+
+define	F14_Asym_Lim_Cover_Open				R_ALT+R_SHIFT+USB_A
+define	F14_Asym_Lim_Cover_Close			R_ALT+R_CTL+USB_A
+define	F14_Asym_Lim_Off					R_CTL+R_SHIFT+USB_A
+define	F14_Asym_Lim_On						R_CTL+USB_A
+
+define	F14_Ammo_Count_Incr					USB_R					//addon commands
+define	F14_FuelShutoffL_Close				L_SHIFT+L_ALT+USB_F	
+define	F14_FuelShutoffL_Open				L_CTL+L_ALT+USB_F
+define	F14_FuelShutoffR_Close				R_SHIFT+R_ALT+USB_F
+define	F14_FuelShutoffR_Open				R_CTL+R_ALT+USB_F
+define	F14_FireBottleL						L_CTL+L_ALT+USB_R
+define	F14_FireBottleR						R_CTL+R_ALT+USB_R
+
+define	F14_EmerSweep_Handle_Up				R_SHIFT+R_CTL+USB_S
+define	F14_EmerSweep_Handle_Down			R_ALT+R_CTL+USB_S
+define	F14_EmerSweep_20					R_SHIFT+R_CTL+USB_0		//0 instead of to for potential deconfliction with RIO station change
+define	F14_EmerSweep_25					R_SHIFT+R_CTL+USB_3
+define	F14_EmerSweep_50					R_SHIFT+R_CTL+USB_4
+define	F14_EmerSweep_55					R_SHIFT+R_CTL+USB_5
+define	F14_EmerSweep_60					R_SHIFT+R_CTL+USB_6
+define	F14_EmerSweep_68					R_SHIFT+R_CTL+USB_7
+define	F14_EmerSweep_OVR					R_SHIFT+R_CTL+USB_GRAVEACCENTANDTILDE
+define	F14_EmerSweep_Aft					R_SHIFT+R_CTL+USB_EQUALSIGN
+define	F14_EmerSweep_Fwd					R_SHIFT+R_CTL+USB_HYPHEN
+
+define	F14_MCBCB_Open						R_CTL+USB_C
+define	F14_MCBCB_Close						0	//R_SHIFT+USB_C
+
+//RIO
+define	F14_TWSMan							USB_W
+define	F14_Elev_Bars_Incr					L_SHIFT+USB_Q
+define	F14_Elev_Bars_Decr					L_CTL+USB_Q
+define	F14_Azimuth_Wide					L_SHIFT+USB_A
+define	F14_Azimuth_Narrow					L_CTL+USB_A
+define	F14_Elev_Down						L_ALT+USB_S
+define	F14_Elev_Up							L_ALT+USB_W
+define	F14_Elev_Ctr						L_ALT+L_CTL+USB_W
+define	F14_Azimuth_Left					L_ALT+USB_A
+define	F14_Azimuth_Right					L_ALT+USB_D
+define	F14_Azimuth_Ctr						L_ALT+L_CTL+USB_D
+define	F14_TCS_FOV_Toggle					USB_O
+define	F14_TCS_FOV_Wide					R_SHIFT+USB_O
+define	F14_TCS_FOV_Nar						R_CTL+USB_O
+define	F14_TCS_Auto						R_ALT+USB_Q
+define	F14_TCS_Man							R_SHIFT+USB_Q
+define	F14_TCS_AutoSearch					R_CTL+USB_Q
+define	F14_TCS_LANTIRN						USB_P
+define	F14_TCS_Indep						R_CTL+R_SHIFT+USB_Q
+define	F14_TCS_TCSSlaved					R_CTL+R_ALT+USB_Q
+
+define	F14_TID_Rng100						R_CTL+R_SHIFT+USB_1
+define	F14_TID_Rng200						R_CTL+R_SHIFT+USB_2
+define	F14_TID_Rng25						R_CTL+R_SHIFT+USB_3
+define	F14_TID_Rng400						R_CTL+R_SHIFT+USB_4
+define	F14_TID_Rng50						R_CTL+R_SHIFT+USB_5
+define	F14_TID_Rng_Incr					R_SHIFT+R_CTL+USB_EQUALSIGN
+define	F14_TID_Rng_Decr					R_SHIFT+R_CTL+USB_HYPHEN
+
+define	F14_TID_GStab						R_CTL+R_ALT+USB_1
+define	F14_TID_AStab						R_CTL+R_ALT+USB_2
+define	F14_TID_Attk						R_CTL+R_ALT+USB_3
+define	F14_TID_TV							R_CTL+R_ALT+USB_4
+define	F14_TID_Mode_Next					R_CTL+R_ALT+USB_EQUALSIGN
+define	F14_TID_Mode_Prev					R_CTL+R_ALT+USB_HYPHEN
+
+define	F14_TID_Dest1						R_CTL+L_CTL+USB_1
+define	F14_TID_Dest2						R_CTL+L_CTL+USB_2
+define	F14_TID_Dest3						R_CTL+L_CTL+USB_3
+define	F14_TID_DestFP						R_CTL+L_CTL+USB_4
+define	F14_TID_DestIP						R_CTL+L_CTL+USB_5
+define	F14_TID_DestST						R_CTL+L_CTL+USB_6
+define	F14_TID_DestHB						R_CTL+L_CTL+USB_7
+define	F14_TID_DestMan						R_CTL+L_CTL+USB_8
+
+define	F14_LANTIRN_Pwr_POD					L_CTL+L_SHIFT+USB_P
+define	F14_LANTIRN_TG2						USB_T
+define	F14_LANTIRN_TG1						USB_R
+define	F14_LANTIRN_HotToggle				L_SHIFT+R_SHIFT+USB_T
+define	F14_LANTIRN_PtTrack					R_CTL+R_SHIFT+USB_UPARROW
+define	F14_LANTIRN_AreaTrack				R_CTL+R_SHIFT+USB_DOWNARROW
+define	F14_LANTIRN_QWP_Prev				R_CTL+R_SHIFT+USB_LEFTARROW
+define	F14_LANTIRN_QWP_Next				R_CTL+R_SHIFT+USB_RIGHTARROW
+define	F14_LANTIRN_S4Up					R_SHIFT+USB_UPARROW
+define	F14_LANTIRN_S4Down					R_SHIFT+USB_DOWNARROW
+define	F14_LANTIRN_S4Left					R_SHIFT+USB_LEFTARROW
+define	F14_LANTIRN_S4Right					R_SHIFT+USB_RIGHTARROW
+define	F14_LANTIRN_Up						USB_SEMICOLON
+define	F14_LANTIRN_Down					USB_PERIOD
+define	F14_LANTIRN_Left					USB_COMMA
+define	F14_LANTIRN_Right					USB_FORWARDSLASH
+define	F14_LANTIRN_FOV						L_ALT+R_ALT+USB_R
+define	F14_LANTIRN_SliderUp				L_SHIFT+R_SHIFT+USB_UPARROW
+define	F14_LANTIRN_SliderDown				L_SHIFT+R_SHIFT+USB_DOWNARROW
+define	F14_LANTIRN_Mode					L_SHIFT+R_SHIFT+USB_LEFTARROW
+define	F14_LANTIRN_S4Press					L_SHIFT+R_SHIFT+USB_RIGHTARROW
+define	F14_Laser_Safe						L_CTL+L_ALT+USB_L
+define	F14_Laser_Arm						L_CTL+L_SHIFT+USB_L
+define	F14_Laser_Toggle					L_ALT+R_ALT+USB_L
+define	F14_Laser_Latch						R_ALT+USB_L
+
+define	F14_VSL_High						R_SHIFT+USB_V
+define	F14_VSL_Low							R_CTL+USB_V
+define	F14_Stab_In							R_SHIFT+USB_S
+define	F14_Stab_Out						R_CTL+USB_S
+define	F14_Aspect_Beam						R_CTL+USB_A
+define	F14_Tgt_Small						R_CTL+USB_Z
+
+define	F14_FlareMode_Pilot					L_ALT+L_SHIFT+USB_DELETEFORWARD
+define	F14_FlareMode_Norm					L_CTL+USB_DELETEFORWARD
+define	F14_FlareMode_Mult					L_CTL+L_SHIFT+USB_DELETEFORWARD
+define	F14_ALE37_Off						L_ALT+L_SHIFT+USB_INSERT
+define	F14_ALE37_Man						L_CTL+USB_INSERT
+define	F14_ALE37_Auto						L_CTL+L_SHIFT+USB_INSERT
+
+define	F14_UHF1_Sel						L_SHIFT+USB_X
+define	F14_UHFB_Sel						USB_X
+define	F14_UHF2_Sel						L_CTL+USB_X
+define	F14_HotMic_RIO						R_SHIFT+USB_M
+define	F14_ColdMic_RIO						R_CTL+USB_M
+
+
+// ******************************************************
+//				    F-16C Viper
+// ******************************************************
+
+define	F16C_DMS_Up							R_ALT+USB_SEMICOLON
+define	F16C_DMS_Down						R_ALT+USB_PERIOD
+define	F16C_DMS_Right						R_ALT+USB_SLASH
+define	F16C_DMS_Left						R_ALT+USB_COMMA
+define	F16C_CMS_Up							R_SHIFT+USB_SEMICOLON
+define	F16C_CMS_Down						R_SHIFT+USB_PERIOD
+define	F16C_CMS_Right						R_SHIFT+USB_SLASH
+define	F16C_CMS_Left						R_SHIFT+USB_COMMA	//CM Panic button
+define	F16C_RWR_PwrOff						R_CTL+R_ALT+USB_R	//+DX30
+
+define	F16C_RdrElev_Incr_DX				DX11
+define	F16C_RdrElev_Decr_DX				DX13
+define	F16C_Rng_CW_DX						DX12
+define	F16C_Rng_CCW_DX						DX14
+define	F16C_Crs_CW_DX						DX16
+define	F16C_Crs_CCW_DX						DX15
+define	F16C_MPO_DX							DX18
+
+
+
+define	F16C_APPAlt							L_ALT+R_SHIFT+USB_P
+define	F16C_APPOff							L_ALT+R_CTL+USB_P						
+define	F16C_APPAtt							L_ALT+R_ALT+USB_P	//CHAIN(DOWN+USB_LEFTALT,DOWN+USB_RIGHTALT,D(ModDelay),DOWN+USB_P,D(2*KBPress),UP+USB_P,D(KBDelay),UP+USB_LEFTALT,UP+USB_RIGHTALT)
+define	F16C_APRHdg							L_ALT+R_SHIFT+USB_H
+define	F16C_APRAtt							L_ALT+R_CTL+USB_H
+define	F16C_APRStr							L_ALT+R_ALT+USB_H
+
+define	F16C_Cat_I							R_CTL+R_SHIFT+USB_C
+define	F16C_Cat_III						R_CTL+R_ALT+USB_C
+
+define	F16C_ICP_Com1						R_CTL+USB_5
+define	F16C_ICP_Com2						R_CTL+USB_6
+define	F16C_ICP_IFF						R_CTL+USB_7
+define	F16C_ICP_List						R_CTL+USB_8
+define	F16C_ICP_AA							R_CTL+USB_1
+define	F16C_ICP_AG							R_CTL+USB_2
+define	F16C_ICP_DriftCO					R_SHIFT+USB_OPENBRACKET
+define	F16C_ICP_DriftNorm					R_SHIFT+USB_CLOSEBRACKET
+define	F16C_ICP_WarnReset					L_CTL+USB_KP_ASTERISK
+
+define	F16C_RF_On							R_SHIFT+USB_R
+define	F16C_RF_Quiet						R_CTL+USB_R
+define	F16C_RF_Off							R_ALT+USB_R
+
+define	F16C_HUD_Day						L_CTL+R_SHIFT+USB_B
+define	F16C_HUD_Night						L_CTL+R_ALT+USB_B
+define	F16C_HUD_Auto						L_CTL+R_CTL+USB_B
+define	F16C_HUD_IAS						L_CTL+R_SHIFT+USB_V
+define	F16C_HUD_TAS						L_CTL+R_CTL+USB_V
+define	F16C_HUD_GS							L_CTL+R_ALT+USB_V
+define	F16C_HUD_RdrAlt						L_CTL+R_SHIFT+USB_A
+define	F16C_HUD_BaroAlt					L_CTL+R_CTL+USB_A
+define	F16C_HUD_OffAlt						L_CTL+R_ALT+USB_A
+define	F16C_HUD_DEDData					L_CTL+R_SHIFT+USB_D
+define	F16C_HUD_PFLData					L_CTL+R_CTL+USB_D
+define	F16C_HUD_OffData					L_CTL+R_ALT+USB_D
+define	F16C_HUD_AttRef						L_CTL+R_SHIFT+USB_F
+define	F16C_HUD_FPMRef						L_CTL+R_CTL+USB_F
+define	F16C_HUD_OffRef						L_CTL+R_ALT+USB_F
+define	F16C_HUD_VVScale					L_CTL+R_SHIFT+USB_S
+define	F16C_HUD_VAHScale					L_CTL+R_CTL+USB_S
+define	F16C_HUD_OffScale					L_CTL+R_ALT+USB_S
+define	F16C_Reticle_Pri					L_CTL+R_CTL+USB_R
+define	F16C_Reticle_Stby					L_CTL+R_SHIFT+USB_R
+define	F16C_AirRefuel_Open					R_SHIFT+USB_U
+define	F16C_AirRefuel_Close				R_CTL+USB_U
+
+define	F16C_Laser_Arm						R_SHIFT+USB_L
+define	F16C_Laser_Safe						R_CTL+USB_L
+define	F16C_MasterArm						R_SHIFT+USB_M
+define	F16C_MasterSafe						R_CTL+USB_M
+define	F16C_MasterSim						R_ALT+USB_M
+define	F16C_RadAlt_On						R_SHIFT+R_CTL+USB_R
+define	F16C_LL_Taxi						L_ALT+R_ALT+USB_L
+define	F16C_LL_Land						L_ALT+R_SHIFT+USB_L
+define	F16C_LL_Off							L_ALT+R_CTL+USB_L
+
+define	F16C_ExtL_Flash						L_SHIFT+L_ALT+USB_L
+define	F16C_ExtL_Steady					L_SHIFT+L_CTL+USB_L
+define	F16C_ExtL_Norm						L_SHIFT+R_SHIFT+USB_L
+define	F16C_ExtL_Form						L_SHIFT+R_ALT+USB_L
+define	F16C_ExtL_Off						L_SHIFT+R_CTL+USB_L
+define	F16C_ExtL_All						L_CTL+R_ALT+USB_L
+define	F16C_ExtL_AC						L_CTL+R_SHIFT+USB_L
+
+define	F16C_MasterCaution					L_CTL+USB_M
+define	F16C_FAck							R_CTL+USB_F
+define	F16C_Horn_Silence					R_CTL+USB_H
+define	F16C_FAckHornCombo					CHAIN(USB_RIGHTCONTROL,D(ModDelay),USB_F,USB_H)
+define	F16C_EmerJett						R_CTL+R_SHIFT+USB_J
+
+define	F16C_HideStick						R_SHIFT+USB_DELETEORBACKSPACE
+define	F16C_FCR_On							L_ALT+L_CTL+USB_H
+define	F16C_LHdpt_On						L_CTL+L_SHIFT+USB_H
+define	F16C_RHdpt_On						L_CTL+R_CTL+USB_H
+define	F16C_EHSI_Mode						USB_M
+
+define	F16C_IFF_Out						L_SHIFT+USB_I
+define	F16C_IFF_In							R_SHIFT+USB_I
+
+// ******************************************************
+//				   MiG-19P Farmer
+// ******************************************************
+
+define	MiG19_Gear_Neutral					R_CTL+USB_G
+define	MiG19_NoseBrake_On					R_CTL+R_SHIFT+USB_B
+define	MiG19_NoseBrake_Off					R_CTL+R_ALT+USB_B
+
+define	MiG19_ECCM_Toggle					R_CTL+R_SHIFT+USB_E
+define	MiG19_Radar_Pwr_Up					R_CTL+R_SHIFT+USB_R
+define	MiG19_Radar_Pwr_Dn					R_ALT+R_CTL+USB_R
+define	MiG19_Track_Toggle					R_ALT+R_SHIFT+USB_R
+define	MiG19_Radar_Telemetry_On			L_CTL+L_SHIFT+USB_R
+define	MiG19_Radar_Telemetry_Off			L_CTL+L_ALT+USB_R
+define	MiG19_Radar_Display_Toggle			L_ALT+L_SHIFT+USB_R
+define	MiG19_Radar_Horizon_Incr			USB_INSERT
+define	MiG19_Radar_Horizon_Decr			USB_DELETEFORWARD
+define	MiG19_Radar_Gauge_Toggle			L_ALT+L_SHIFT+USB_V
+
+define	MiG19_Landing_Lts_On				R_CTL+R_SHIFT+USB_L
+define	MiG19_Taxi_Lts_On					R_ALT+R_CTL+USB_L
+define	MiG19_Landing_Lts_Off				R_ALT+R_SHIFT+USB_L
+define	MiG19_Nav_Lts_Toggle				R_SHIFT+USB_N
+define	MiG19_Ext_Lts_Toggle				R_SHIFT+USB_L
+define	MiG19_Gyro_Uncage					USB_HOME
+define	MiG19_Gyro_Cage						USB_END
+define	MiG19_RocketSalvo_Auto				R_CTL+R_SHIFT+USB_S
+define	MiG19_Sight_Uncage					R_CTL+USB_C
+define	MiG19_BombArm_Arm					L_CTL+L_SHIFT+USB_A
+define	MiG19_BombArm_Safe					L_CTL+L_ALT+USB_A
+
+define	MiG19_DragChute_DX					CHAIN(DX31,D(ModDelay),DX1)
+define	MiG19_TankJett_DX					CHAIN(DX31,D(ModDelay),DX2)
+define	MiG19_RdrGlass_DX					DX5	//CHAIN(DX31,D(ModDelay),DX6)
+
+define	MiG19_NDB_Band_Far_Next				R_CTL+R_SHIFT+USB_UPARROW	//far and near switched for now while controls are reversed in-game
+define	MiG19_NDB_Band_Far_Prev				R_CTL+R_SHIFT+USB_DOWNARROW
+
+define	MiG19_NDB_Band_Near_Next			R_CTL+R_ALT+USB_UPARROW
+define	MiG19_NDB_Band_Near_Prev			R_CTL+R_ALT+USB_DOWNARROW
+
+
+// ******************************************************
+//				   MiG-19P Farmer
+// ******************************************************
+
+define	I16_Gear_BrakeSpring_On				R_ALT+USB_B
+define	I16_Gear_BrakeSpring_Off			CHAIN(USB_RIGHTGUI,D(ModDelay),USB_B)
+define	I16_GearLock_On						R_ALT+USB_G
+define	I16_GearLock_Off					CHAIN(USB_RIGHTGUI,D(ModDelay),USB_G)
+define	I16_GearNextState					USB_G
+define	I16_NavLts_On						R_ALT+USB_Y
+define	I16_NavLts_Off						CHAIN(USB_RIGHTGUI,D(ModDelay),USB_Y)
+define	I16_TorchLeft						R_ALT+USB_U
+define	I16_TorchRight						R_ALT+USB_O
+define	I16_TorchJettison					R_ALT+USB_I
+define	I16_OxyValve_Open					R_ALT+USB_A
+define	I16_OxyValve_Close					CHAIN(USB_RIGHTGUI,D(ModDelay),USB_A)
+
+define	I16_CowlFlaps_Incr					R_ALT+USB_N
+define	I16_CowlFlaps_Decr					CHAIN(USB_RIGHTGUI,D(ModDelay),USB_N)
+define	I16_OilRadiatorFlaps_Incr			R_ALT+USB_M
+define	I16_OilRadiatorFlaps_Decr			CHAIN(USB_RIGHTGUI,D(ModDelay),USB_M)
+define	I16_SuperCharger_High				R_ALT+USB_S
+define	I16_SuperCharger_Low				CHAIN(USB_RIGHTGUI,D(ModDelay),USB_S)
+define	I16_Mixture_Cycle					USB_M
+define	I16_Ign_Both						R_ALT+USB_END
+define	I16_Ign_Off							CHAIN(USB_RIGHTGUI,D(ModDelay),USB_END)
+define	I16_PitotHeat_On					R_ALT+USB_T
+define	I16_PitotHeat_Off					CHAIN(USB_RIGHTGUI,D(ModDelay),USB_T)
+define	I16_ClockHeat_On					R_ALT+USB_Q
+define	I16_ClockHeat_Off					CHAIN(USB_RIGHTGUI,D(ModDelay),USB_Q)
+define	I16_PriFuelSw_Carb					R_CTL+USB_H
+define	I16_PriFuelSw_Close					CHAIN(USB_RIGHTGUI,D(ModDelay),USB_H)
+define	I16_PriFuelSw_Motor					R_ALT+USB_H
+define	I16_MixtureBall_Push				R_CTL+USB_M
+
+define	I16_SightFilter_On					R_ALT+USB_3
+define	I16_SightFilter_Off					CHAIN(USB_RIGHTGUI,D(ModDelay),USB_3)
+define	I16_SightBright_Incr				R_ALT+USB_2
+define	I16_SightBright_Decr				CHAIN(USB_RIGHTGUI,D(ModDelay),USB_2)
+define	I16_MechSight_On					R_ALT+USB_1
+define	I16_MechSight_Off					CHAIN(USB_RIGHTGUI,D(ModDelay),USB_1)
+define	I16_BombSw_On						R_ALT+USB_5
+define	I16_BombSw_Off						CHAIN(USB_RIGHTGUI,D(ModDelay),USB_5)
+define	I16_BombSel_Next					R_ALT+USB_6
+define	I16_BombSel_Prev					CHAIN(USB_RIGHTGUI,D(ModDelay),USB_6)
+define	I16_GunCharge_LW					L_CTL+USB_COMMA
+define	I16_GunCharge_RW					L_CTL+USB_SLASH
+define	I16_GunCharge_LN					L_CTL+USB_SEMICOLON
+define	I16_GunCharge_RN					L_CTL+USB_PERIOD
+
+define	I16_FlapDn_DX						DX28
+define	I16_FlapUp_DX						DX27
+
+
+
+// ******************************************************
+//				   MB339
+// ******************************************************
+
+define	MB339_ParkingBrake					L_SHIFT+USB_P
+define	MB339_MasterCaution					R_CTL+USB_M
+define	MB339_Warn_Silence					R_SHIFT+USB_N
+define	MB339_LdgLight_Cycle				R_ALT+USB_L
+define	MB339_Strobes						L_ALT+USB_S
+define	MB339_ControlLock					R_CTL+USB_S
+define	MB339_NavLts_Cycle					R_CTL+USB_L
+define	MB339_NavLts_FlashSteady			L_ALT+USB_F
+define	MB339_BombFuse_Cycle				L_CTL+USB_B
+define	MB339_Salvo_Toggle					CHAIN(USB_RIGHTGUI,D(ModDelay),USB_S)
+
+
+// ******************************************************
+//				   JF-17 Thunder
+// ******************************************************
+
+define	JF17_MM_NAV							L_ALT+USB_1	//L_ALT added to deconflict with standard numbers (later for keypad)
+define	JF17_MM_BVR							L_ALT+USB_2
+define	JF17_MM_AG							L_ALT+USB_7
+define	JF17_S1U							L_ALT+USB_3
+
+define	JF17_S1D							L_CTL+USB_2
+define	JF17_S1P							L_ALT+USB_0
+define	JF17_S1L							L_CTL+USB_1
+define	JF17_S1R							L_CTL+USB_3
+define	JF17_S2U							USB_EQUALSIGN
+define	JF17_S2D							USB_HYPHEN
+define	JF17_S2L							R_ALT+USB_I
+define	JF17_S2R							R_SHIFT+USB_I
+define	JF17_T5P							USB_RETURNORENTER
+define	JF17_S8								L_ALT+USB_D
+
+define	JF17_Chute							USB_P	//DX24	//use shifted only (otherwise Cage/Uncage)  convert to dx later (ideal).  should use pulse in routine to prevent inadvertent S3 activation while uncaging
+define	JF17_Chute_Jett						0				//for when there is a discrete function.  Toggle is not worth mapping due to possible release while going gear up
+
+define	JF17_IFF							USB_I
+define	JF17_IFF_DX							DX19	//DX3
+define	JF17_T5P_DX							CHAIN(DX30,D(ModDelay),DX9)
+define	JF17_T5P_DXI						DX9
+define	JF17_S2P_DX							CHAIN(DX30,D(ModDelay),DX8)
+define	JF17_S2P_DXI						DX8
+
+define	JF17_FlapsUp						L_CTL+R_CTL+USB_F
+define	JF17_FlapsDn						L_SHIFT+R_SHIFT+USB_F
+define	JF17_FlapsStop						L_ALT+R_ALT+USB_F
+define	JF17_PBrake_Park					R_CTL+R_SHIFT+USB_W
+define	JF17_PBrake_Norm					R_CTL+R_ALT+USB_W
+
+define	JF17_ConfigAA						R_SHIFT+R_CTL+USB_C
+define	JF17_ConfigAG						R_CTL+R_ALT+USB_C
+define	JF17_ConfigAG1						L_SHIFT+L_CTL+USB_C
+define	JF17_ConfigAG2						L_CTL+L_ALT+USB_C
+
+define	JF17_EJettCover_Open				R_SHIFT+USB_J
+define	JF17_EJettCover_Close				R_CTL+USB_J
+define	JF17_EJettButton					USB_J
+
+define	JF17_LdgLight_Land					L_SHIFT+R_SHIFT+USB_L
+define	JF17_LdgLight_Taxi					L_CTL+R_CTL+USB_L
+define	JF17_LdgLight_Off					L_ALT+R_ALT+USB_L
+
+define	JF17_ThrottleStop					R_CTL+USB_END
+define	JF17_ThrottleIdle					R_SHIFT+USB_END
+define	JF17_Airstart_On					R_SHIFT+USB_HOME
+define	JF17_Airstart_Off					R_CTL+USB_HOME
+define	JF17_Starter						USB_HOME
+
+define	JF17_CAS_RYAug						R_CTL+R_SHIFT+USB_Y
+define	JF17_CAS_Off						R_CTL+R_ALT+USB_Y
+define	JF17_EFCS_EFCS						R_CTL+R_SHIFT+USB_E		//Auto/EFCS swapped until fixed in-game
+define	JF17_EFCS_Auto						R_CTL+R_ALT+USB_E		//Auto/EFCS swapped until fixed in-game
+define	JF17_FCSDirect_On					R_CTL+R_SHIFT+USB_D
+define	JF17_FCSDirect_Off					R_CTL+R_ALT+USB_D
+
+define	JF17_UFCP_L1						L_SHIFT+USB_1
+define	JF17_UFCP_L2						L_SHIFT+USB_2
+define	JF17_UFCP_L3						L_SHIFT+USB_3
+define	JF17_UFCP_L4						L_SHIFT+USB_4
+define	JF17_UFCP_R1						R_SHIFT+USB_1
+define	JF17_UFCP_R2						R_SHIFT+USB_2
+define	JF17_UFCP_R3						R_SHIFT+USB_3
+define	JF17_UFCP_R4						R_SHIFT+USB_4
+define	JF17_UFCP_RTN						USB_DELETEFORWARD
+define	JF17_Dobber_Up						USB_PAGEUP		//used with S3	//JF17_T5P_DXI	//placeholder
+define	JF17_Dobber_Dn						USB_PAGEDOWN	//used with S3	//JF17_S2P_DXI
+
+define	JF17_CSYMU							R_SHIFT+L_SHIFT+USB_PAGEUP
+define	JF17_CSYMD							R_SHIFT+L_SHIFT+USB_PAGEDOWN
+define	JF17_CCONU							R_ALT+L_ALT+USB_PAGEUP
+define	JF17_CCOND							R_ALT+L_ALT+USB_PAGEDOWN
+define	JF17_CBRTU							R_CTL+L_CTL+USB_PAGEUP
+define	JF17_CBRTD							R_CTL+L_CTL+USB_PAGEDOWN
+
+define	JF17_LaserToggle					R_CTL+USB_O
+define	JF17_Airbrake_Hold					USB_U
+
+define	JF17_Clock_BRTD						R_CTL+R_SHIFT+USB_L
+define	JF17_Clock_BRTU						L_CTL+L_SHIFT+USB_L
+define	JF17_Clock_CHR						R_CTL+R_ALT+USB_L
+define	JF17_Clock_UTC						L_CTL+L_ALT+USB_L
+
+define	JF17_BU_Off							R_CTL+USB_1
+define	JF17_BU_Bomb						R_CTL+USB_2
+define	JF17_BU_IR							R_CTL+USB_3
+define	JF17_BU_Gun							R_CTL+USB_4
+
+define	JF17_ExtLts_NVG_DX					DX26
+define	JF17_ExtLts_Brt_DX					DX25
+define	JF17_AntiColl_Tow_DX				DX12	//DX14 AntiColl temporarily swapped until switch fixed in-game
+define	JF17_AntiColl_Brt_DX				DX14	//DX12 AntiColl temporarily swapped until switch fixed in-game
+define	JF17_NavLts_Dim_DX					DX13
+define	JF17_NavLts_Brt_DX					DX11
+define	JF17_NavLts_Flash_DX				DX1
+define	JF17_AARLts_DX						DX5
+define	JF17_AARInt_DX						DX6
+define	JF17_AARAll_DX						DX7
+
+
+define	JF17_RdrElev_Incr_DX				DX15
+define	JF17_RdrElev_Decr_DX				DX17
+define	JF17_Rng_CW_DX						DX16
+define	JF17_Rng_CCW_DX						DX18
+
+
+// ******************************************************
+//				  	  AH-64 Apache
+// ******************************************************
+
+define	AH64_Tailwheel_Lock_Csl				R_SHIFT+USB_W
+define	AH64_MasterArm						R_SHIFT+USB_A
+define	AH64_GndOride						R_CTL+R_SHIFT+USB_A
+define	AH64_RTip_Sel						R_CTL+R_SHIFT+USB_T
+define	AH64_LTip_Sel						L_CTL+L_SHIFT+USB_T
+define	AH64_Jett							R_CTL+R_SHIFT+USB_J
+define	AH64_Flare_Jett						R_ALT+R_SHIFT+USB_J
+define	AH64_Flare_Squibs_Arm				R_CTL+R_SHIFT+USB_F
+define	AH64_CMWS_Bypass					R_CTL+R_ALT+USB_C
+define	AH64_CMWS_CMWS						R_CTL+R_SHIFT+USB_C
+
+define	AH64_Emer_Jett_Cover				R_CTL+R_ALT+USB_J
+define	AH64_APU_Cover_Open					L_SHIFT+R_SHIFT+USB_A
+define	AH64_APU_Cover_Close				L_CTL+R_CTL+USB_A
+define	AH64_APU_Button						L_ALT+USB_A
+
+define	AH64_Fire_Eng1						L_CTL+R_CTL+USB_1
+define	AH64_Fire_Eng2						L_CTL+R_CTL+USB_2
+define	AH64_Fire_APU						L_CTL+R_CTL+USB_3
+define	AH64_Fire_ResExt					L_CTL+R_CTL+USB_F
+
+define	AH64_KU_A							L_CTL+L_ALT+USB_A
+define	AH64_KU_ENT							L_CTL+L_ALT+USB_RETURNORENTER
+define	AH64_LMPD_WPN						L_CTL+L_SHIFT+USB_PAGEDOWN
+define	AH64_LMPD_B6						L_CTL+L_SHIFT+USB_6		//key MPDs used for macros so as to not interrupt DX31/32 modifiers
+define	AH64_RMPD_WPN						R_CTL+R_SHIFT+USB_PAGEDOWN
+define	AH64_RMPD_B6						R_CTL+R_SHIFT+USB_6
+define	AH64_LMPD_Mono						L_CTL+L_SHIFT+USB_M
+define	AH64_RMPD_Mono						R_CTL+R_SHIFT+USB_M
+
+// ******************************************************
+//				   Christen Eagle II
+// ******************************************************
+//define	CE2_Accel_Reset						R_CTL+USB_R
+//define	CE2_FuelInd
+//define	CE2_AP_Level						USB_A
+//define	CE2_AP_Dis
+
+//define	CE2_AntiColl_On						R_CTL+R_SHIFT+USB_S
+//define	CE2_AntiColl_Off					R_CTL+R_ALT+USB_S
+//define	CE2_NavLts_On						R_CTL+R_SHIFT+USB_N
+//define	CE2_NavLts_Off						R_CTL+R_ALT+USB_N
+//define	CE2_LandLts_On						R_CTL+R_SHIFT+USB_L
+//define	CE2_LandLts_Off						R_CTL+R_ALT+USB_L
+//define	CE2_CptLts_On						R_CTL+R_SHIFT+USB_C
+//define	CE2_CptLts_Off						R_CTL+R_ALT+USB_C
+
+//define	CE2_Batt_On							L_CTL+L_SHIFT+USB_B
+//define	CE2_Batt_Off						L_CTL+L_ALT+USB_B
+//define	CE2_Altern_On						L_CTL+L_SHIFT+USB_A
+//define	CE2_Altern_Off						L_CTL+L_ALT+USB_A
+//define	CE2_Fuse_Toggle						L_CTL+L_SHIFT+USB_F
+
+//define	CE2_Magneto_Incr
+//define	CE2_Magneto_Decr
+//define	CE2_PropPitch_Incr					USB_PAGEUP
+//define	CE2_PropPitch_Decr					USB_PAGEDOWN
+//define	CE2_Mixture_Incr					USB_INSERT
+//define	CE2_Mixture_Decr					USB_DELETEFORWARD
+//define	CE2_FuelPump_Up						R_CTL+R_ALT+USB_HOME
+//define	CE2_FuelPump_Dn						R_CTL+R_ALT+USB_END
+//define	CE2_FuelValve_Open					R_ALT+R_SHIFT+USB_HOME
+//define	CE2_FuelValve_Close					R_ALT+R_SHIFT+USB_END
+//define	CE2_Smoke_On						R_SHIFT+USB_T
+//define	CE2_Smoke_Off						R_CTL+USB_T
+
+// ******************************************************
+//				   F4U-1D Corsair
+// ******************************************************
+define F4U_Gear_Down CHAIN(DX30, L_SHIFT+USB_G, EXEC("if (debugEnabled) printf(\"[DEBUG] S3+CHF: Gear Down\\xa\");"))
+define F4U_Gear_Up   CHAIN(DX30, USB_G, EXEC("if (debugEnabled) printf(\"[DEBUG] S3+CHB: Gear Up\\xa\");"))
+define F4U_Mixture_Rich CHAIN(USB_INSERT, EXEC("if (debugEnabled) printf(\"[DEBUG] CHF: Mixture Rich\\xa\");"))
+define F4U_Mixture_Lean CHAIN(USB_DELETEFORWARD, EXEC("if (debugEnabled) printf(\"[DEBUG] CHB: Mixture Lean\\xa\");"))
+define F4U_Flaps_Dn CHAIN(L_SHIFT+USB_F, EXEC("if (debugEnabled) printf(\"[DEBUG] FLAPD: Flaps Down\\xa\");"))
+define F4U_Flaps_Up CHAIN(L_CTL+USB_F, EXEC("if (debugEnabled) printf(\"[DEBUG] FLAPU: Flaps Up\\xa\");"))
+

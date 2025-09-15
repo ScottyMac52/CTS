@@ -1,0 +1,1882 @@
+//======================================================================
+//		DCS World Mi-8 Hip for HOTAS Cougar/Warthog and Cougar MFDs
+//					by Don "Home Fries" Heumphreus
+//						last updated: 18AUG2023
+//
+//	Change Log:
+//	1.01	Initial Integration (based on UH1)
+//	1.02	Moved Mi8_CommState_Off() to CommState_Off(8)
+//	1.03	Integrated UH1_Intercom_Cycle()
+//	1.04	Moved S3 mapping from DCS_Init to local
+//	1.11	Updated for new S3Release() params
+//			Moved Microstick and ManRng Analog and Digital Axis mapping to Aux_Axis_Init()
+//			Updated Copilot headlight DX mapping
+//	1.13	Replaced all TEMPO() and TEMPO(500) with TEMPO(DefTempo)
+//			Replaced DFM TEMPO(100) with TEMPO(KBPress*2)
+//	1.15	Added TEMPO to /I S2 (short for bomb release, long for ESBR Power toggle)
+//			Added Mi8_H3_Map() to allow for H3 doppler control at CP station (routine forced to pilot until iCommands added to module)
+//			Added Mi-8 Snapviews to H4L/R
+//	1.23	Added AnalogBrakePoll(0) to disable analog brake polling in this module
+//	1.25	Added delays to "simultaneous" profile start LED use to minimize profile crashes
+//	1.26	Moved major axis mapping to DCS_Axis_Init()
+//			Added T6WheelBrake = 0 and TriggerZoomEnabled = 0 to init
+//	1.27	Added UV-26 side selection routines
+//			Revised Revised Microstick routine and added H1 searchlight option
+//	1.28	Revised LED indications for profile swap
+//	1.29	Moved MFD mappings from DCS_Init
+//	1.31	Applied CenterPositRudder to Mi-8 specific configuration
+//			Added tempo/shift to AP buttons to allow for knob default change without AP cycle
+//			Corrected MIX polarity for searchlight
+//			Properly mapped 800 /624/622+800 to LOSB10
+//	1.33	Added Analog Braking constants
+//	1.35	Updated WheelBrakeFull argument for new DiffBraking() routine
+//	1.50	Added Warthog compatibility
+//	1.53	Adjusted for new 2.0 module selection
+//	1.56	Enabled WAV files for aircraft selection
+//	1.61	Added Warthog Lighting init
+//	1.66	Moved Mi-8 CommState_Off routines here
+//			Added MapKeyR for ROSB13-14 for compatibilty with Spitfire
+//	1.69	Updated CommState_Off() call
+//			Added Door Gunner ROE/Burst to LMFD
+//	1.71	Bug fixes and compatibility with latest lua control files (as of 1.5.7)
+//			Updated Throttle logic for discrete states
+//	2.02	Set FkeyPress=1 on init to prevent Commswitch activation on profile load
+//	2.10	Added VAICOM compatibility and removed VAC, TARS and Aries
+//			Updated UV26 Side Switch routine to discrete state
+//	2.21	Added NS430 compatibility
+//	2.29	Added MFDisplay module selection
+//			Replaced 4 MFD Led functions with Lights_Four()
+//	2.30	Added CurrentStation() to Init (force, no key)
+//	2.34a	Added HOTAS Module Selection to S3+SPDB/T9 Long
+//	2.43	Removed SnapViews for VR (poss sub function countermeasure side)
+//	2.44	Set Brake Cycle time (dummy value) to 1 to prevent poss DBZ
+//	2.46	Added SRS Overlay to ROSB20
+//	2.50b	Removed duplicate MapKeyR(0) mappings to free stack space.
+//	2.50c	Reverted H3 and LMFD mappings for pilot/copilot (already factored in H1 map)
+//	2.60	Added Mi-24
+//	2.61	Added SC/T1 Petrovich toggle option for Mi-24
+//	2.64	Added AH-64 George to Petrovich routine in Mi8_H3_Map()
+//	2.66	Mi-24: changed LBRT/LCON to TEMPO to accomodate discrete Ext lights
+//			Added Helo_Throttle_PS_Init() for alternate pinky switch configuration
+//			Replaced Mi8_WH_Throttle_Delay with RuH_WH_Throttle_Delay (bug fix)
+//			Ka-50: Fixed pinky switch not commanding non-discrete throttle
+//	2.71	Moved ESBR to APENG/S3+T1 (Global_S2_Init in SelMod)
+//			Fixed burst mode on WH RDRALT switch
+//
+//
+//=====================================================================
+
+
+//	*** Mi8_H3_Map() forced to (2) pilot until doppler commands added***
+
+
+int Mi8_Eng_Sel_Sw_Current;
+int	Mi8_Pylon_Sel_Cur;
+int	Mi8_GUV_Sel_Cur;
+int	Mi8_Salvo_Sel_Cur;
+
+//added in 1.27 for Aries Radio Integration.  Temporary workaround only.
+//int Mi8_Aries_Set;	
+//int Mi8_Aries_Set_DX;
+//int Aries_Active_Radio = 0;
+
+int Mi8_Thr_Lt_Cur;
+int Mi8_Thr_Rt_Cur;
+
+int	Petrovich_Cur;
+
+
+//int Mi8_Aries_Cycle(int dir)
+//{
+//Aries_Active_Radio = (Aries_Active_Radio+dir)%3;
+//if (TS3_DX) ActKey(KEYON+PULSE+X(Mi8_Aries_Set_DX,Aries_Active_Radio));
+//else		ActKey(KEYON+PULSE+X(Mi8_Aries_Set,Aries_Active_Radio));
+//}
+//End Aries Workaround
+
+
+int DCS_Mi8(int led, int sp)
+{
+printf("DCS Mi-8MTV2 Hip\xa");
+if (WarthogStick > 0)
+	{
+	MapKeyR(&Joystick, S2, EXEC("DCS_Mi8_Init(1008);"));
+	}
+else
+	{
+	MapKeyR(&HCougar, S2, EXEC("DCS_Mi8_Init(1008);"));
+	}
+if (sp > 0)	PlayWav("mi8mtv2.wav");
+if (led > 0)
+	{
+	//should see * 0 0 0 to indicate that Mi-8 has been selected.
+	Lights_Four(1,0,0,0,	ProfileSwapDelay+LED_Delay);
+	}
+}
+int DCS_Mi24(int led, int sp)
+{
+printf("DCS Mi-24P Hind\xa");
+if (WarthogStick > 0)
+	{
+	MapKeyR(&Joystick, S2, EXEC("DCS_Mi8_Init(1024);"));
+	}
+else
+	{
+	MapKeyR(&HCougar, S2, EXEC("DCS_Mi8_Init(1024);"));
+	}
+if (sp > 0)	PlayWav("mi24.wav");
+if (led > 0)
+	{
+	//should see * 0 * 0 to indicate that Mi-24 has been selected.
+	Lights_Four(1,0,1,0,	ProfileSwapDelay+LED_Delay);
+	}
+}
+
+int	SetMenu_Mi8()
+{
+Set_Acft_Array_Cur(1008);
+}
+int SetMenu_Mi24()
+{
+Set_Acft_Array_Cur(1024);
+}
+
+//Free DX  25, 26
+
+int	Mi8_UV26_Array;			//added in 2.10
+int UV26_Side_Current;
+int	Searchlight_Current;	//tracks state of H1 searchlight mapping
+
+int	Mi8_Switch_Posit_Init()
+{
+ICS_Current = Mi8_ICS_Start;
+UV26_Side_Current =	Mi8_UV26_Side_Start;
+Searchlight_Current	= 0;
+				
+Mi8_Eng_Sel_Sw_Current = 1;
+Mi8_Pylon_Sel_Cur = 1;
+Mi8_GUV_Sel_Cur = 3;
+Mi8_Salvo_Sel_Cur = 1;
+
+//if ((WarthogThrottle > 0) & {!Throttle[PSM]))
+//	{
+//	if (Throttle[PSF])
+//		{
+//		Mi8_Thr_Lt_Cur = 0;
+//		Mi8_Thr_Rt_Cur = 0;
+//		}
+//	else if (Throttle[PSB]
+//		{
+//		Mi8_Thr_Lt_Cur = 2;
+///		Mi8_Thr_Rt_Cur = 2;
+//		}
+//	}
+//else
+//	{
+	Mi8_Thr_Lt_Cur = 1;
+	Mi8_Thr_Rt_Cur = 1;
+//	}
+}
+
+int DCS_Mi8_Init(int prof = 1008)
+{
+char mivar;Dim(&mivar,6);	//added in 2.58
+
+
+Determine_Differential_Braking(0);
+
+if (prof == 1024)	//mi24
+	{
+	sprintf(&mivar,"24P");
+	Helo_Throttle_PS_Init(WH_LT_Throttle_Mi24);
+	NS430_Enabled		=	NS430_Installed*NS430_Enabled_Mi24;	
+	FixedGear			=	0;
+	CenterPositRudder	=	CenterPositRudder_Mi24;
+	HeloHatTrim			=	1;
+	CrewCount			=	2;	//separate gunner crew 3 due to trim function
+	}
+else 	//mi8
+	{
+	sprintf(&mivar,"8MTV2");
+	Helo_Throttle_PS_Init(0);
+	NS430_Enabled		=	NS430_Installed*NS430_Enabled_Mi8;	
+	FixedGear			=	1;
+	CenterPositRudder	=	CenterPositRudder_Mi8;
+	HeloHatTrim			=	0;
+	CrewCount			=	4;
+	}
+
+
+
+FkeyPress				=	1;	//added in 2.02 to prevent Commswitch key activation on profile load.
+GraceFlag				=	0;
+Eng_Start_x				=	0;
+Eng_Stop_x				=	0;
+Starter_Ind_x			=	0;
+MFD_Eng_Start			=	0;
+ProfID					=	prof;
+//FixedGear				=	1;
+//Helicopter				=	1;	//now a function for helos
+	HeloRotateMicrostick=	0;
+//	CenterPositRudder	=	CenterPositRudder_Mi8;
+//	HeloHatTrim			=	0;
+T6WheelBrake			=	0;
+TriggerZoomEnabled		=	0;
+BrakeOnCycleTime		=	1;	//min value to prevent DBZ
+BrakeOffCycleTime		=	1;
+FlapState				=	0;	//for future implementation
+TriggerZoom_state	  	= 	0;	//reset TriggerZoom
+Mi8_Eng_Sel_Sw_Current	=	Mi8_Eng_Sel_Sw_Start;
+ICS_Current				=	Mi8_ICS_Start;
+UV26_Side_Current		=	Mi8_UV26_Side_Start;
+Searchlight_Current		=	0;
+S4AnalogBrake			=	0;					//added in 1.33; not present in Mi-8
+AnalogParkingBrake		=	JoyYParkingBrake;	//added in 1.33
+S4asNWS					=	0;					//added in 1.33
+S3holdNWS 				= 	0;	//added in 2.05
+XYAxisTrim				=	0;	//added in 1.34
+DMS_SnapView			=	0;	//added in 1.34
+WheelBrakeFull			=	1;	//added in 1.35
+ToeBrakesAvailable		=	0;	//added in 1.40
+NVG_Capable				=	1;	//added in 1.40
+AB_Capable				=	0;	//added in 1.61
+Adjust_Backlighting		=	0;	//added in 1.62
+//NS430_Enabled			=	NS430_Installed*NS430_Enabled_Mi8;	//added in 2.21
+//CrewCount				=	4;
+StationChangeModifier	=	0;
+WH_Use_TQS				=	0;	//added in 2.43
+Analog_TDC				=	1;	//added in 2.43	//added in 2.43.  Mi-8 has special routine, so no factor
+EngineCount				=	Helicopter;	//doesn't matter for helo, so just match Helicopter value
+CommInitType			=	0;	//0 for none/custom, 1 for single channel (P-51), 2 for simple (dual channel), 3 for complex (3 channel).  added in 2.43
+StnCheckDisabled		=	0;	//added in 2.43.  Force enabled (0) for helicopter
+CurrentStation 			= 	1;	//changed to 1 in 2.50c.
+
+
+
+
+//Temporary workaround until Aries integrated with Mi-8.  Requires Common PTT.
+//Mi8_Aries_Set	 = SEQ(A10C_Mic_Sw_Fwd,A10C_Mic_Sw_Dn,A10C_Mic_Sw_Aft);
+//Mi8_Aries_Set_DX = SEQ(Rdo1_VHF_AM,Rdo2_UHF,Rdo3_VHF_FM);
+
+Mi8_UV26_Array = SEQ(Mi8_UV26_Side_Sw_LT,Mi8_UV26_Side_Sw_BOTH,Mi8_UV26_Side_Sw_RT);
+
+
+printf("Done\xa Execute DCS Mi-%s Config (Profile v%i.%i):\xa",&mivar,MajorVersion,MinorVersion);
+PlayWavSel(ProfID,abs(Init_Run - 1),DCSFP_Enabled,MFDisplayEnabled);	//added in 1.61, DCSFP added in 2.05, MFDisplay added in 2.29
+StationCheck(ProfID, CurrentStation,1,0);	//1 forces, 0 bypasses keystroke
+
+Pause_TrackIR(0);
+AnalogBrakePoll(0);	//added in 1.23
+MFD_Init(ProfID);
+	printf("   Map HOTAS Cougar for DCS Mi-%s Config:\xa",&mivar);
+		DCS_Axis_Init(ProfID,EngineCount,Analog_TDC);
+
+if (WarthogStick > 0)
+	{
+		printf("      Button Mapping:\xa");
+			
+			if (WarthogThrottle > 0)
+				{
+				printf("         Shift Commands: S3+FLAPD/U all momentary...");	
+				SetShiftButton(&Joystick, S3, &Throttle, FLAPU, FLAPD);
+				}
+			else{
+				SetShiftButton(&Joystick, S3, &HCougar, T7, T8);
+				printf("         Shift Commands: S3+T7/T8 all momentary...");
+				}
+				MapKey	(&Joystick, S3, CHAIN(DX30,TEMPO(DX3, 	EXEC("S3S4Shifted(ProfID,RudderPedals,GearState,Helicopter);"), ModTempo)));		//DX3 short, long(er) for modifier and eject check, moved here in 0.53, removed S4 and changed argument to "RudderPedals"
+				MapKeyR	(&Joystick, S3, 						EXEC("S3Release(ProfID,RudderPedals,GearState,RevANTRudder,Helicopter);"));		//added in 0.53 to release "RudderPedals" argument in S3Shifted
+			printf("...Done!\xa");	
+			printf("         Cougar Stick Buttons...");	
+				
+				UH1_CommState_Init();		//UH1_CommState_Init properly maps the trigger and only station 1 will be used in the Mi-8
+				//Map PVT to S1 (MFD done in DCS_Init)
+				if (TrackIR > 1)
+					{
+					if (ProfID == 1024)	//S1 Long to enable Petrovich, Short to disable.  Petrovich removed for VR (depend on SC/T1 instead)
+							//MapKeyIO(&Joystick, S1,		TEMPO(CHAIN(PULSE+PetrovichToggle,EXEC("Mi8_H3_Map(1,1024,0);")),CHAIN(PULSE+PetrovichToggle,EXEC("Mi8_H3_Map(1,1024,1);"),DefTempo)),	VR_Zoom	);
+							MapKeyIO(&Joystick, S1,		USB_DELETEORBACKSPACE,	VR_Zoom	);
+					else	MapKeyIO(&Joystick, S1, 	TEMPO(DX5,EXEC("UH1_Intercom_Cycle(-1,1,8);"),LongTempo),	VR_Zoom);
+					MapKeyRIO(&Joystick,S1,		0,		S1R_VR);
+					}
+				else
+					{
+					if (ProfID == 1024)
+							MapKeyIO(&Joystick, S1,		USB_DELETEORBACKSPACE,	TEMPO(CHAIN(PULSE+PetrovichToggle,EXEC("Mi8_H3_Map(1,1024,0);")),CHAIN(PULSE+PetrovichToggle,EXEC("Mi8_H3_Map(1,1024,1);"),DefTempo))	);
+					else	MapKey	(&Joystick, S1, 	TEMPO(DX5,EXEC("UH1_Intercom_Cycle(-1,1,8);"),LongTempo));
+					MapKeyR	(&Joystick,S1,		0);
+					}
+				//UH1_MapTrigger(1,1,1);		//sets trigger for pilot controls
+				
+				//MapKeyIO(&Joystick, S2, TEMPO(DX2, ESBR_Power_DX, LongTempo),	DX2);
+				//MapKeyR	(&Joystick,	S2, 0);
+				MapKeyIO(&Joystick, S4, EXEC("S3S4Shifted(ProfID);"), EXEC("DiffBraking(RudderPedals,0,GearState,0,S4AnalogBrake,S4asNWS,WheelBrakeFull,0);"));			//brakes = 0 because no diff braking on Mi-8
+				MapKeyRIO(&Joystick,S4, 0, EXEC("DiffBraking(RudderPedals,0,GearState,0,S4AnalogBrake,S4asNWS,WheelBrakeFull,1);"));
+			printf("...Done!\xa");		
+	}
+else
+	{
+		printf("      Button Mapping:\xa");
+			printf("         Shift Commands: S3+T7/T8 all momentary...");
+				SetShiftButton(&HCougar, S3, &HCougar, T7, T8);
+				MapKey	(&HCougar, S3, CHAIN(DX30,TEMPO(DX3, 	EXEC("S3S4Shifted(ProfID,RudderPedals,GearState,Helicopter);"), ModTempo)));		//DX3 short, long(er) for modifier and eject check, moved here in 0.53, removed S4 and changed argument to "RudderPedals"
+				MapKeyR	(&HCougar, S3, 							EXEC("S3Release(ProfID,RudderPedals,GearState,RevANTRudder,Helicopter);"));		//added in 0.53 to release "RudderPedals" argument in S3Shifted
+			printf("...Done!\xa");	
+			printf("         Cougar Stick Buttons...");	
+				
+				UH1_CommState_Init();		//UH1_CommState_Init properly maps the trigger and only station 1 will be used in the Mi-8
+				//Map PVT to S1 (MFD done in DCS_Init)
+				if (TrackIR > 1)
+					{
+					if (ProfID == 1024)
+							//MapKeyIO(&HCougar, S1,	CHAIN(PULSE+PetrovichToggle,TEMPO(EXEC("Mi8_H3_Map(0,1024);"),EXEC("Mi8_H3_Map(1,1024);"),DefTempo)),	VR_Zoom	);
+							MapKeyIO(&HCougar, S1,	USB_DELETEORBACKSPACE,	VR_Zoom	);
+					else	MapKeyIO(&HCougar, S1, 	TEMPO(DX5,EXEC("UH1_Intercom_Cycle(-1,1,8);"),LongTempo),	VR_Zoom);
+					MapKeyRIO(&HCougar,S1,	0,		S1R_VR);
+					}
+				else
+					{
+					if (ProfID == 1024)
+							MapKeyIO(&HCougar, S1,	USB_DELETEORBACKSPACE,	CHAIN(PULSE+PetrovichToggle,TEMPO(EXEC("Mi8_H3_Map(0,1024);"),EXEC("Mi8_H3_Map(1,1024);"),DefTempo))	);
+					else	MapKey	(&HCougar, S1, 	TEMPO(DX5,EXEC("UH1_Intercom_Cycle(-1,1,8);"),LongTempo));
+					MapKeyR	(&HCougar, S1,	0);
+					}
+				//UH1_MapTrigger(1,1,1);		//sets trigger for pilot controls
+				
+				//MapKeyIO(&HCougar, S2, TEMPO(DX2, ESBR_Power_DX, LongTempo),	DX2);
+				//MapKeyR	(&HCougar,	S2, 0);
+				MapKeyIO(&HCougar, S4, EXEC("S3S4Shifted(ProfID);"), EXEC("DiffBraking(RudderPedals,0,GearState,0,S4AnalogBrake,S4asNWS,WheelBrakeFull,0);"));			//brakes = 0 because no diff braking on Mi-8
+				MapKeyRIO(&HCougar, S4, 0, EXEC("DiffBraking(RudderPedals,0,GearState,0,S4AnalogBrake,S4asNWS,WheelBrakeFull,1);"));
+	}
+		printf("...Done!\xa");	
+			
+			H1_Init(TrackIR, PadlockEnabled, ProfID);	//moved to individual routines in 1.27 for trim reset removal on helos
+			CommState_Off(1,ProfID,CurrentStation,0,1);		//sets hats 2-4 to DX functions; '2' argument for pilot seat
+Global_S2_Init(ProfID,GearDn_Ind_Default);			
+UH1_MapTrigger(1,1,1);		//sets trigger for pilot controls
+UH1_CommSw_Init(ProfID);
+
+if (prof == 1024) 
+	{
+	if (SCT1_PetrovichToggle_Mi24 > 0)
+		{
+		T1i	=	CHAIN(PULSE+PetrovichToggle,EXEC("Mi8_H3_Map(1,1024,0);"));
+		T1o	=	CHAIN(PULSE+PetrovichToggle,EXEC("Mi8_H3_Map(1,1024,1);GraceFlag=1; DeferCall(ModTempo,&Grace_Flag,0);"));
+		}
+	else
+		{
+		T1i =	PetrovichToggle;
+		T1o	=	CHAIN(PULSE+PetrovichToggle,EXEC("Mi8_H3_Map(1,1024,1);"));	//GraceFlag=1; DeferCall(ModTempo,&Grace_Flag,0);"));
+		}
+	T1ro	=	EXEC("if ( ((SCT1_PetrovichToggle_Mi24 > 0) & (GraceFlag)) | (!SCT1_PetrovichToggle_Mi24) )	{ActKey(KEYON+PULSE+PetrovichToggle); Mi8_H3_Map(1,1024,0);}") ;
+	}
+else
+	{
+	T1i		=	0;
+	T1o		=	0;
+	T1ro	=	0;
+	}
+T1ri 	=	0;
+	
+if (WarthogThrottle > 0)	
+	{
+			printf("         Warthog Throttle Buttons...");	
+				Mi8_SetSCCSLTB(CurrentStation);	//maps to left seat; poss 4th argument PositionSwitchComms (currently default 1)
+				Mi8_SCXY(CurrentStation,1);	//sets mapping to left seat
+
+				MapKey	(&Throttle,	MSU,	CHAIN(PTT_Common,	EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"))	);
+				MapKey	(&Throttle,	MSD,	CHAIN(PTT_Common,	EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"))	);	
+				MapKeyR	(&Throttle,	MSU,	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);"));
+				MapKeyR	(&Throttle,	MSD,	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);"));
+			if ((VAC >0) &(VACChatter > 0))	// VAICOM with chatter pack
+				{
+				MapKeyIO(&Throttle, MSP, TEMPO(0,CHAIN(VAICOM_Chatter,EXEC("MSPCheck = 1;")),DefTempo),	EXEC("UH1_Intercom_Cycle(0,1,1008,0,1); MSPCheck = 1;"));	//forces intercom (use with SRS)
+				MapKeyRIO(&Throttle,MSP, 0,									EXEC("UH1_Intercom_Cycle(1,1,1008,0,1); DeferCall(500,&MSPCheck_Set,0);"));
+				}
+			else
+				{
+				MapKey	(&Throttle, MSP, EXEC("UH1_Intercom_Cycle(0,1,1008,0,1); MSPCheck = 1;"));	//forces intercom (use with SRS)
+				MapKeyR	(&Throttle,	MSP, EXEC("UH1_Intercom_Cycle(1,1,1008,0,1); DeferCall(500,&MSPCheck_Set,0);"));
+				}
+				//UH1_CommSw_Init(ProfID);	//added in 2.51
+
+				
+//				MapKeyIO(&HCougar, 	T6, TEMPO(DX24, EXEC("EjectCheckT6(ProfID);"), DefTempo),TEMPO(UH1_Autopilot,DX24, DefTempo));		//Will check for ejection parameters if T6+S3 held for 500ms.
+//				MapKeyR	(&HCougar,	T6, 0);
+
+				if ((TrackIR > 1) | (MFD_Count < 1))		//TIR/MFD added in 2.34a
+						MapKeyIO(&Throttle,	SPDB, 	TEMPO(DX27, EXEC("DCS_AcftSel(1);"),	SwapTempo),		DX27);
+				else	MapKey	(&Throttle,		SPDB,	DX27);
+				MapKeyR	(&Throttle,		SPDB,	0);
+				MapKeyIO(&Throttle,	 	SPDF,	PULSE+DX27,DX27);
+				MapKeyR	(&Throttle,		SPDF,	0);
+			
+//				Mi8_PS_Map(RuH_WH_Throttle_Discrete);
+
+				
+//				MapKeyIO(&Throttle,	CHF,	TEMPO(Emer_Cargo_Unhook_Cover,Emer_Cargo_Unhook,DefTempo),			DX26); 	//O Gov Nom	/I Emer Cargo Drop/Cover
+//				MapKeyIO(&Throttle,	CHB,	TEMPO(Tactical_Cargo_Unhook_Cover,Tactical_Cargo_Unhook,DefTempo),	DX28);	//O Gov Low	/I Tactical Cargo Drop/Cover	//check PULSE for DX26/28
+				MapKeyR	(&Throttle,	CHF,	0);	//Added for F-86 in 1.69
+				MapKeyR	(&Throttle,	CHB,	0);	//Added for F-86 in 1.69
+
+//				MapKeyR	(&Throttle,	LTB,	0);	
+
+				if (prof == 1024) 
+					{
+//					MapKeyIO(&Throttle,	SC,	PetrovichToggle,	CHAIN(PULSE+PetrovichToggle,EXEC("Mi8_H3_Map(1,1024,1);"))	);
+//					MapKeyRIO(&Throttle,SC,	0,					CHAIN(PULSE+PetrovichToggle,EXEC("Mi8_H3_Map(1,1024,0);"))	);
+				
+					
+					MapKey	(&Throttle,	LTB,DX24);			
+
+					MapKeyIO(&Throttle,	CHF,	TEMPO(DX26, Gear_Dn,GearDnTempo),		DX26);
+					MapKeyIO(&Throttle,	CHB,	TEMPO(DX28, Gear_Up,GearUpTempo),		DX28);
+
+					MapKeyIO(&Throttle,	EACON,	0,PULSE+Mi24_Observe_On);	//sight man/sync for Pilot
+					MapKeyIO(&Throttle,	EACOFF,	0,PULSE+Mi24_Observe_Off);
+				
+					MapKeyIO(&Throttle,	RDRNRM,	0,PULSE+Mi24_GunHigh_WH_DX);	//IO for toggle, can remove if discrete switch state added
+					MapKeyIO(&Throttle,	RDRDIS,	0,PULSE+Mi24_GunLow_WH_DX);		
+
+					MapKeyIO(&Throttle,	APENG,	DX_ROSB05,DX_ROSB02);	//gun reload /I Rocket
+					Mi24_LDGH_Set(0);
+					//Mi24_LDGH_Set(Throttle[APUON]);
+					
+					MapKeyIO(&Throttle,	EOLIGN,		Mi8_Lt_Fuel_Cut,	TEMPO(Mi24_CB_Left,	Mi8_Lt_Fuel_Cut,DefTempo));	
+					MapKeyIO(&Throttle,	EOLNORM,	0,	PULSE+Mi24_CPGControlSwCover_Up);
+					MapKeyIO(&Throttle,	EOLMOTOR,	0,	PULSE+Mi24_CPGControlSwCover_Dn);
+					
+					MapKeyIO(&Throttle,	EORIGN,		0,	CHAIN(EXEC("Grace_Flag(1);"),TEMPO(Mi24_CPGBombSw_Dn,Mi24_CPGBombSw_Up,DefTempo))	);	//includes fuel cut and right CBs						
+					MapKeyRIO(&Throttle,EORIGN,		0,	EXEC("DeferCall(500,&Grace_Flag,0);")	);	//grace flag prevents cover triggering on NORM
+					MapKeyIO(&Throttle,	EORNORM,	0,	EXEC("if (!GraceFlag) ActKey(KEYON+PULSE+DX_ROSB11);")	);	//PULSE+CHAIN(DX30,DX32,D(ModDelay),DX11));	//if discrete switch ever added
+					MapKeyIO(&Throttle,	EORMOTOR,	0,	CHAIN(EXEC("Grace_Flag(0);"),PULSE+DX_ROSB11));
+
+					MapKeyIO(&Throttle,	EFLNORM,	0,							PULSE+Mi24_TaxiLts_On);
+					MapKeyIO(&Throttle,	EFLOVER,	0,							PULSE+Mi24_TaxiLts_Off);
+					MapKeyIO(&Throttle,	EFRNORM,	0,							PULSE+Mi24_StrobeLts_On);	//doubles for periscope backlighting
+					MapKeyIO(&Throttle,	EFROVER,	0,							PULSE+Mi24_StrobeLts_Off);
+					
+					UH1_Throttle_Set(HeloThrottle, prof);
+					
+					}						
+				else	//mi8
+					{
+					MapKeyIO(&Throttle,	LTB,	CHAIN(DX24,					EXEC("Mi8_Autopilot_Mapping(0, 0, 1, 0); Mi8_Autopilot_Mapping(1, 0, 1, 0);")),	
+												CHAIN(PULSE+UH1_Autopilot,	EXEC("Mi8_Autopilot_Mapping(0, 0, Mi8_AP_MFD_Context, 0); Mi8_Autopilot_Mapping(1, 0, Mi8_AP_MFD_Context, 0); AP_PitchRoll_Flash(Mi8_AP_MFD_LED);"))	);			//removed from Mi8_SetSCCSLTB() in 1.71 (obsolete)
+
+					MapKeyIO(&Throttle,	CHF,	TEMPO(Emer_Cargo_Unhook_Cover,Emer_Cargo_Unhook,DefTempo),			DX26); 	//O Gov Nom	/I Emer Cargo Drop/Cover
+					MapKeyIO(&Throttle,	CHB,	TEMPO(Tactical_Cargo_Unhook_Cover,Tactical_Cargo_Unhook,DefTempo),	DX28);	//O Gov Low	/I Tactical Cargo Drop/Cover	//check PULSE for DX26/28
+
+					MapKey	(&Throttle,	EACON,	PULSE+Mi8_Wpn_Guns_WH_DX);
+					MapKey	(&Throttle,	EACOFF,	PULSE+Mi8_Wpn_Rockets_WH_DX);
+				
+					MapKey	(&Throttle,	RDRNRM,	CHAIN(DX30,DX32,D(ModDelay),DX9)	);
+					MapKey	(&Throttle,	RDRDIS,	DX_LOSB09);
+
+					MapKeyIO(&Throttle,	APENG,	Mi8_PUSArming_DX,	TEMPO(CHAIN(DX32,D(ModDelay),DX16),	CHAIN(DX30,DX32,D(ModDelay),DX16),	LongTempo)	);	//unshifted ESBR
+					MapKeyIO(&Throttle,	LDGH,	TEMPO(StartupInterrupt,EXEC("EjectCheckLDGH(ProfID);"),DefTempo),	DX24);	//starter
+
+					MapKey	(&Throttle,	EOLIGN,		TEMPO(0,Mi8_Lt_Fuel_Cut,DefTempo));		//tempo long only					
+					MapKey	(&Throttle,	EORIGN,		TEMPO(0,Mi8_Rt_Fuel_Cut,DefTempo));		//tempo long only					
+					MapKeyR	(&Throttle,	EORIGN,		0);
+					MapKey	(&Throttle,	EORNORM,	0);
+					MapKey	(&Throttle,	EORMOTOR,	0);
+
+					MapKeyIO(&Throttle,	EFLNORM,	0,							PULSE+Mi8_Weapon_Safe_Sw_On_DX);
+					MapKeyIO(&Throttle,	EFLOVER,	0,							PULSE+Mi8_Weapon_Safe_Sw_Off_DX);
+					MapKeyIO(&Throttle,	EFRNORM,	0,							PULSE+Mi8_Armament_Sw_On_DX);
+					MapKeyIO(&Throttle,	EFROVER,	0,							PULSE+Mi8_Armament_Sw_DX);
+				
+					Mi8_PS_Map(RuH_WH_Throttle_Discrete);
+
+					}
+				MapKeyIO(&Throttle,	SC,	T1i,	T1o	);	
+				MapKeyRIO(&Throttle,SC,	T1ri,	T1ro);			
+			
+			printf("...Done!\xa");
+			printf("         Base Switches...");	
+
+			
+//				MapKeyIO(&Throttle,	EFLNORM,	0,							PULSE+Mi8_Weapon_Safe_Sw_On_DX);
+////				MapKeyR	(&Throttle,	EFLNORM,	0);
+//				MapKeyIO(&Throttle,	EFLOVER,	0,							PULSE+Mi8_Weapon_Safe_Sw_Off_DX);
+//				MapKeyIO(&Throttle,	EFRNORM,	0,							PULSE+Mi8_Armament_Sw_On_DX);
+////				MapKeyR	(&Throttle,	EFRNORM,	0);
+//				MapKeyIO(&Throttle,	EFROVER,	0,							PULSE+Mi8_Armament_Sw_DX);
+				
+//				MapKey	(&Throttle,	EOLIGN,		TEMPO(0,Mi8_Lt_Fuel_Cut,DefTempo));		//tempo long only					
+//				MapKey	(&Throttle,	EOLNORM,	0);
+//				MapKey	(&Throttle,	EOLMOTOR,	0);
+//				MapKey	(&Throttle,	EORIGN,		TEMPO(0,Mi8_Rt_Fuel_Cut,DefTempo));		//tempo long only					
+//				MapKey	(&Throttle,	EORNORM,	0);
+//				MapKey	(&Throttle,	EORMOTOR,	0);
+//				MapKeyR	(&Throttle,	EOLIGN,		0);
+//				MapKeyR	(&Throttle,	EORIGN,		0);
+				
+				MapKeyIO(&Throttle,	APUON,		EXEC("Mi24_LDGH_Set(1);"),	CHAIN(PULSE+APUStart,EXEC("Mi24_LDGH_Set(1);"))	);
+				MapKeyIO(&Throttle,	APUOFF,		EXEC("Mi24_LDGH_Set(0);"),	CHAIN(PULSE+APUStop, EXEC("Mi24_LDGH_Set(0);"))	);
+	
+				
+////				MapKeyIO(&Throttle,	EACON,	EXEC("Mi8_Pylon_Set(2, 0);"),	EXEC("Mi8_Pylon_Set(2, Switch_Delay);"));	//array obsolete with discrete and rotational buttons
+////				MapKeyIO(&Throttle,	EACOFF,	EXEC("Mi8_Pylon_Set(0, 0);"),	EXEC("Mi8_Pylon_Set(0, Switch_Delay);"));
+//				MapKey	(&Throttle,	EACON,	PULSE+Mi8_Wpn_Guns_WH_DX);
+//				MapKey	(&Throttle,	EACOFF,	PULSE+Mi8_Wpn_Rockets_WH_DX);
+				
+				
+//				MapKey	(&Throttle,	RDRNRM,	PULSE+Mi8_Cut_Sw_On_DX);	//0,	CHAIN(PULSE+DX31,D(ModDelay),PULSE+DX9));	//Cut of Burst
+//				MapKey	(&Throttle,	RDRDIS,	PULSE+Mi8_Cut_Sw_DX);		//0,	CHAIN(PULSE+DX31,D(ModDelay),PULSE+DX9));
+			
+				MapKey	(&Throttle,	IDLERON,	0);
+				MapKey	(&Throttle,	IDLEROFF,	0);
+				MapKey	(&Throttle,	IDLELON,	0);
+				MapKey	(&Throttle,	IDLELOFF,	0);
+				
+//				MapKeyIO(&Throttle,	FLAPD,	EXEC("Mi8_Engine_Selector(0,0);"),	EXEC("Mi8_Engine_Selector(0,2*KBDelay+ModDelay);"));		// /I will toggle twice (effect of -1) without cycling variable (resync)
+//				MapKeyIO(&Throttle,	FLAPM,	TEMPO(0,	EXEC("Mi8_Engine_Selector(1,2*KBDelay+ModDelay);"), DoubleTap),	
+//											TEMPO(0,	EXEC("Mi8_Engine_Selector(1,2*KBDelay+ModDelay);"), DoubleTap));	
+//				MapKeyIO(&Throttle,	FLAPU,	EXEC("Mi8_Engine_Selector(2,0);"),	EXEC("Mi8_Engine_Selector(2,2*KBDelay+ModDelay);"));		// /I will toggle once w/o cycling variable (resync)
+				MapKeyIO(&Throttle,	FLAPD,	0,	PULSE+Mi8_Eng_Sel_Sw_Right);	//Mi24 doubles for nav lts
+				MapKeyIO(&Throttle,	FLAPM,	0,	TEMPO(0,PULSE+Mi8_Eng_Sel_Sw_Off, DoubleTap));
+				MapKeyIO(&Throttle,	FLAPU,	0,	PULSE+Mi8_Eng_Sel_Sw_Left);
+
+//				MapKeyR	(&Throttle,	FLAPU,	0);
+//				MapKeyR	(&Throttle,	FLAPD,	0);
+				
+				MapKeyIO(&Throttle,	APPAT,	EXEC("Mi8_GUV_Sel(2, 0);"),	EXEC("Mi8_GUV_Sel(2, Switch_Delay);"));	//0 is full switch, 3 is off (reversed because "down" is increase)
+				MapKeyIO(&Throttle,	APAH,	TEMPO(0,EXEC("Mi8_GUV_Sel(3, Switch_Delay);"),DoubleTap),
+											TEMPO(0,EXEC("Mi8_GUV_Sel(1, Switch_Delay);"),DoubleTap));
+				MapKeyIO(&Throttle,	APALT,	EXEC("Mi8_GUV_Sel(0, 0);"),	EXEC("Mi8_GUV_Sel(0, Switch_Delay);"));
+				
+//				MapKey	(&Throttle,	APENG,	Mi8_PUSArming_DX);
+//				MapKeyIO(&Throttle,	LDGH,	TEMPO(StartupInterrupt,EXEC("EjectCheckLDGH(ProfID);"),DefTempo),	DX24);	//starter
+		
+	}
+else	
+	{
+			printf("         TQS Buttons...");	
+				if (prof == 1024) 
+					{
+					MapKeyIO(&HCougar,	T1,	T1i,	T1o);
+					MapKeyRIO(&HCougar,	T1,	T1ri,	T1ro);
+					
+					MapKeyIO(&HCougar, 	T6, TEMPO(DX24, EXEC("EjectCheckT6(ProfID);"), DefTempo),	DX24);		//Will check for ejection parameters if T6+S3 held for 500ms.
+					MapKeyR	(&HCougar,	T6, 0);
+					}
+				else Mi8_SetT1T6(RangeKnob, CurrentStation, TrackIR);	//maps to left seat; poss 4th argument PositionSwitchComms (currently default 1)
+				Mi8_Microstick(CurrentStation,1);	//sets mapping to left seat
+				//MapKey	(&HCougar, 	T1, DX19); //mapped in MI8_Microstick()
+//				MapKeyR	(&HCougar, 	T1, 0);
+				
+
+				
+//				MapKeyIO(&HCougar, 	T6, TEMPO(DX24, EXEC("EjectCheckT6(ProfID);"), DefTempo),TEMPO(UH1_Autopilot,DX24, DefTempo));		//Will check for ejection parameters if T6+S3 held for 500ms.
+//				MapKeyR	(&HCougar,	T6, 0);
+
+				if ((TrackIR > 1) | (MFD_Count < 1))		//TIR/MFD added in 2.34a
+						MapKeyIO(&HCougar,	T9, 	TEMPO(DX27, EXEC("DCS_AcftSel(1);"),	SwapTempo),		DX27);
+				else	MapKey	(&HCougar, 	T9, 	DX27);
+//				MapKeyR	(&HCougar,	T9, 0);
+				MapKeyIO(&HCougar, T10,	PULSE+DX27,DX27);
+//				MapKeyR	(&HCougar, T10,	0);
+			printf("...Done!\xa");
+	}
+	
+	printf("   HOTAS Mapping Complete.\xa");		
+//Mi8_MFD_Init();
+
+
+ActKey(DX1);				//just in case DX1 lingers from trigger activation
+//Lights_ALL(0);				//Says Init Complete
+
+DeferCall(LED_Delay,&Backlight_Max_Init,0);
+if (RudderPedals < 2)	DeferCall(5*LED_Delay,&Lights_LLED1,0);
+if (WarthogThrottle > 0) DeferCall(6*LED_Delay,&WHT_Lights_Dn_D,0);
+if (Init_Run == 0) Gear_Ind_Init(GearDn_Ind_Default,FixedGear,Helicopter,AirBrkFlash);	
+
+Mi8_Switch_Posit_Init();	//added in 1.40
+UH1_MapTrigger(1,1,1);		//Uses UH-1 for trigger, pilot position for all comms
+
+//SetUH1SnapView(CurrentStation,0,1);	//obsolete
+
+Map_Cougar_ToeBrakes(0);	//added in 1.40
+Mi8_DF_Init(WarthogThrottle);
+printf(" Mi-%s Config Complete!\xa",&mivar);	
+Set_Acft_Array_Cur(ProfID);
+}
+
+int Mi8_HCS_Init(int stn, int prof = 1008)
+{
+		if (Script_Debug) printf("         Hat2 (Armament)...");	
+			MapKeyIO(&HCougar, 	H2U,	TEMPO(DX7,CHAIN(DX32,D(ModDelay),DX7),DefTempo),	DX7);	//Tempo Long for Gunpods
+			MapKeyIO(&HCougar, 	H2D,	TEMPO(DX9,CHAIN(DX32,D(ModDelay),DX9),DefTempo),	DX9);	//Tempo Long for Rockets
+			MapKey	(&HCougar,	H2R,	DX8);											
+			MapKey	(&HCougar,	H2L,	DX10);										
+		if (Script_Debug) printf("Done!\xa");	
+		Mi8_H3_Map(stn,prof,Petrovich_Cur);						//maps H3 to autopilot (P/FE) or doppler (CP)
+		if (Script_Debug) printf("         Hat4 (Trim/CM)...");	
+			H4UD_CPTM(prof);							
+			if (TrackIR < 2)
+				{
+				MapKeyIO(&HCougar,	H4R,	Std_SnapView7,Std_SnapView8);
+				MapKeyIO(&HCougar,	H4L,	Std_SnapView3,Std_SnapView2);	
+				}
+			else	//VR no Snapview, function TBD (poss flare side select)
+				{
+				MapKey	(&HCougar,	H4R,	0);
+				MapKey	(&HCougar,	H4L,	0);
+				}			
+		if (Script_Debug) printf("Done!\xa");
+}
+int Mi8_WHS_Init(int stn, int prof = 1008)
+{
+		if (Script_Debug) printf("         Hat2 (Armament)...");	
+			if (prof == 1008)
+			{
+			MapKeyIO(&Joystick,	H2U,	TEMPO(DX7,CHAIN(DX32,D(ModDelay),DX7),DefTempo),	DX7);	//Tempo Long for Gunpods	
+			MapKeyIO(&Joystick,	H2D,	TEMPO(DX9,CHAIN(DX32,D(ModDelay),DX9),DefTempo),	DX9);	//Tempo Long for Rockets	
+			}
+			else
+			{
+			MapKeyIO(&Joystick,	H2U,	TEMPO(Mi24_Observe_On,DX7,DefTempo),	DX7);	//Tempo Long for Gunpods	
+			MapKeyIO(&Joystick,	H2D,	TEMPO(Mi24_Observe_Off,DX9,DefTempo),	DX9);	//Tempo Long for Rockets	
+			}
+			MapKey	(&Joystick,	H2R,	DX8);											
+			MapKey	(&Joystick,	H2L,	DX10);										
+		if (Script_Debug) printf("Done!\xa");	
+		Mi8_H3_Map(stn,prof,Petrovich_Cur);						//maps H3 to autopilot (P/FE) or doppler (CP)
+		if (Script_Debug) printf("         Hat4 (Trim/CM)...");	
+			H4UD_CPTM(prof);							
+			if (TrackIR < 2)
+				{
+				MapKeyIO(&Joystick,	H4R,	Std_SnapView7,Std_SnapView8);
+				MapKeyIO(&Joystick,	H4L,	Std_SnapView3,Std_SnapView2);	
+				}
+			else
+				{
+				MapKeyIO(&Joystick,	H4R,	0);
+				MapKeyIO(&Joystick,	H4L,	0);	
+				}
+		if (Script_Debug) printf("Done!\xa");
+}
+
+int	Mi8_DF_Init(int wh,int stn = 1)
+{
+if (Script_Debug) printf("Mi8_DF_Init(%i,%i)\xa",wh,stn);
+if (wh > 0)
+	{
+	printf("BS to ");
+//	MapKeyIO(&Throttle,	BSB,	EXEC("Mi8_Salvo_Set(0, 0);"),	EXEC("Mi8_Salvo_Set(0, Switch_Delay);"));
+//	MapKeyR	(&Throttle,	BSB,	0);
+//	MapKey	(&Throttle,	BSF,	EXEC("Mi8_Salvo_Set(2, 0);"),	EXEC("Mi8_Salvo_Set(2, Switch_Delay);"));
+//	MapKeyR	(&Throttle,	BSF,	0);
+//	MapKey	(&Throttle,	BSM,	EXEC("Mi8_Salvo_Set(1, 0);"),	TEMPO(0,EXEC("Mi8_Salvo_Set(1, Switch_Delay);"),	DoubleTap));	
+	if ((stn == 2) & (ProfID == 1008))
+		{
+		printf("CP\xa");
+		MapKeyIO(&Throttle,	BSB,	Mi8_Corrector_Decr,	PULSE+Mi8_HeadlightR_Retr);
+		MapKeyR	(&Throttle,	BSB,	0);
+		MapKeyIO(&Throttle,	BSF,	Mi8_Corrector_Incr,	PULSE+Mi8_HeadlightR_On);
+		MapKeyR	(&Throttle,	BSF,	0);
+		MapKeyIO(&Throttle,	BSM,	0,	TEMPO(0,PULSE+Mi8_HeadlightR_Off,	DoubleTap));
+		}
+	else
+		{
+		printf("Pilot/FE\xa");
+		MapKeyIO(&Throttle,	BSB,	Mi8_Corrector_Decr,	PULSE+Mi8_HeadlightL_Retr);
+		MapKeyR	(&Throttle,	BSB,	0);
+		MapKeyIO(&Throttle,	BSF,	Mi8_Corrector_Incr,	PULSE+Mi8_HeadlightL_On);
+		MapKeyR	(&Throttle,	BSF,	0);
+		MapKeyIO(&Throttle,	BSM,	0,	TEMPO(0,PULSE+Mi8_HeadlightL_Off,	DoubleTap));
+		}	
+	}
+else
+	{
+	if (ProfID == 1024)
+		{
+		MapKeyIO(&HCougar, 	T8, 0,	PULSE+Mi8_HeadlightL_On);
+		MapKeyR	(&HCougar,	T8, 0);
+		MapKeyIO(&HCougar, 	DFM,0,	TEMPO(0,PULSE+Mi8_HeadlightL_Off,	DoubleTap));	
+		MapKeyIO(&HCougar, 	T7, 0,	PULSE+Mi8_HeadlightL_Retr);
+		MapKeyR	(&HCougar,	T7, 0);	
+		}	
+	else
+		{
+		MapKeyIO(&HCougar, 	T8, 0,	PULSE+Mi8_Eng_Sel_Sw_Right);
+		MapKeyR	(&HCougar,	T8, 0);
+		MapKeyIO(&HCougar, 	DFM,0,	TEMPO(0,PULSE+Mi8_Eng_Sel_Sw_Off, DoubleTap));	
+		MapKeyIO(&HCougar, 	T7, 0,	PULSE+Mi8_Eng_Sel_Sw_Left);
+		MapKeyR	(&HCougar,	T7, 0);	
+		}
+	}
+}
+int Mi8_PS_Map(int disc, int led = 1, int prof = 1008)	//disc = RuH_WH_Throttle_Discrete
+{
+	if (disc > 0)
+		{
+		if (prof == 1050)
+			{
+			MapKeyIOUMD(&Throttle,	PSF,	EXEC("Mi8_Thr_Lt_Set(0,0,4);"),	EXEC("Mi8_Thr_Lt_Set(0, Switch_Delay, 4);"),
+											EXEC("Mi8_Throttle_Set(0,0,4);"),	EXEC("Mi8_Throttle_Set(0, Switch_Delay, 1050, 4);"),
+											EXEC("Mi8_Thr_Rt_Set(0,0,4);"),	EXEC("Mi8_Thr_Rt_Set(0, Switch_Delay, 4);")	);
+			MapKeyIOUMD(&Throttle, 	PSM,	TEMPO(0,EXEC("Mi8_Thr_Lt_Set(2,0,4);"),DoubleTap),	TEMPO(0,EXEC("Mi8_Thr_Lt_Set(2, Switch_Delay, 4);"),DoubleTap),
+											TEMPO(0,EXEC("Mi8_Throttle_Set(2,0,4);"),DoubleTap),	TEMPO(0,EXEC("Mi8_Throttle_Set(2, Switch_Delay, 1050, 4);"),DoubleTap),
+											TEMPO(0,EXEC("Mi8_Thr_Rt_Set(2,0,4);"),DoubleTap),	TEMPO(0,EXEC("Mi8_Thr_Rt_Set(2, Switch_Delay, 4);"),DoubleTap)	);
+			MapKeyIOUMD(&Throttle,	PSB, 	EXEC("Mi8_Thr_Lt_Set(3,0,4);"),	EXEC("Mi8_Thr_Lt_Set(3, Switch_Delay, 4);"),
+											EXEC("Mi8_Throttle_Set(3,0,4);"),	EXEC("Mi8_Throttle_Set(3, Switch_Delay, 1050, 4);"),
+											EXEC("Mi8_Thr_Rt_Set(3,0,4);"),	EXEC("Mi8_Thr_Rt_Set(3, Switch_Delay, 4);")	);	
+			}
+		else
+			{
+			MapKeyIOUMD(&Throttle,	PSF,	EXEC("Mi8_Thr_Lt_Set(0,0);"),	EXEC("Mi8_Thr_Lt_Set(0, Switch_Delay);"),
+											EXEC("Mi8_Throttle_Set(0,0);"),	EXEC("Mi8_Throttle_Set(0, Switch_Delay, ProfID);"),
+											EXEC("Mi8_Thr_Rt_Set(0,0);"),	EXEC("Mi8_Thr_Rt_Set(0, Switch_Delay);")	);
+			MapKeyIOUMD(&Throttle, 	PSM,	TEMPO(0,EXEC("Mi8_Thr_Lt_Set(1,0);"),DoubleTap),	TEMPO(0,EXEC("Mi8_Thr_Lt_Set(1, Switch_Delay);"),DoubleTap),
+											TEMPO(0,EXEC("Mi8_Throttle_Set(1,0);"),DoubleTap),	TEMPO(0,EXEC("Mi8_Throttle_Set(1, Switch_Delay, ProfID);"),DoubleTap),
+											TEMPO(0,EXEC("Mi8_Thr_Rt_Set(1,0);"),DoubleTap),	TEMPO(0,EXEC("Mi8_Thr_Rt_Set(1, Switch_Delay);"),DoubleTap)	);
+			MapKeyIOUMD(&Throttle,	PSB, 	EXEC("Mi8_Thr_Lt_Set(2,0);"),	EXEC("Mi8_Thr_Lt_Set(2, Switch_Delay);"),
+											EXEC("Mi8_Throttle_Set(2,0);"),	EXEC("Mi8_Throttle_Set(2, Switch_Delay, ProfID);"),
+											EXEC("Mi8_Thr_Rt_Set(2,0);"),	EXEC("Mi8_Thr_Rt_Set(2, Switch_Delay);")	);	
+			}
+		}
+	else if ((disc < 0) & (prof != 1050))	//No throttle, just Ext Lts.  Not for Ka50 since ext lights are 4 stage cycle not discrete.
+		{
+		MapKey	(&Throttle,		PSF,	PULSE+UH1_NavLights_Steady);
+		MapKey	(&Throttle,		PSB,	PULSE+UH1_NavLights_Flash);
+		MapKey	(&Throttle, 	PSM,	TEMPO(0,PULSE+UH1_NavLights_Off,DoubleTap));	
+		}	
+	else if (led > 0)
+		{				
+		MapKeyUMD(&Throttle,	PSF,	CHAIN(EXEC("flashLLED2(1,RuH_WH_Throttle_Delay/2);"),	REXEC(8,RuH_WH_Throttle_Delay, "ActKey(KEYON+PULSE+Lt_Throttle_Dn);")),
+										CHAIN(EXEC("flashLLED2(1,RuH_WH_Throttle_Delay/2);"),	REXEC(8,RuH_WH_Throttle_Delay, "ActKey(KEYON+PULSE+Mi8_Throttle_Dn);")),
+										CHAIN(EXEC("flashLLED2(1,RuH_WH_Throttle_Delay/2);"),	REXEC(8,RuH_WH_Throttle_Delay, "ActKey(KEYON+PULSE+Rt_Throttle_Dn);"))	);	//timing changed from 2*switch_delay to RuH_WH_Throttle_Delay	
+		MapKey	(&Throttle, 	PSM,	EXEC("StopAutoRepeat(8); flashLLED2(0);"));
+		MapKeyUMD(&Throttle,	PSB, 	CHAIN(EXEC("flashLLED2(1,RuH_WH_Throttle_Delay/2);"),	REXEC(8,RuH_WH_Throttle_Delay, "ActKey(KEYON+PULSE+Lt_Throttle_Up);")),
+										CHAIN(EXEC("flashLLED2(1,RuH_WH_Throttle_Delay/2);"),	REXEC(8,RuH_WH_Throttle_Delay, "ActKey(KEYON+PULSE+Mi8_Throttle_Up);")),
+										CHAIN(EXEC("flashLLED2(1,RuH_WH_Throttle_Delay/2);"),	REXEC(8,RuH_WH_Throttle_Delay, "ActKey(KEYON+PULSE+Rt_Throttle_Up);"))	);	
+		}
+	else	//no LED for helos with gear (Ka-50)
+		{
+		if (prof == 1050)	//not UMD since KA-50 uses DF/Boat for Autopilot modes
+			{				
+			MapKey	(&Throttle,		PSF,	REXEC(8,RuH_WH_Throttle_Delay, "ActKey(KEYON+PULSE+BS2_Throttle_Dn);"));	
+			MapKey	(&Throttle, 	PSM,	EXEC("StopAutoRepeat(8);"));
+			MapKey	(&Throttle,		PSB, 	REXEC(8,RuH_WH_Throttle_Delay, "ActKey(KEYON+PULSE+BS2_Throttle_Up);"));	
+			}		
+		else
+			{				
+			MapKeyUMD(&Throttle,	PSF,	REXEC(8,RuH_WH_Throttle_Delay, "ActKey(KEYON+PULSE+Lt_Throttle_Dn);"),
+											REXEC(8,RuH_WH_Throttle_Delay, "ActKey(KEYON+PULSE+Mi8_Throttle_Dn);"),
+											REXEC(8,RuH_WH_Throttle_Delay, "ActKey(KEYON+PULSE+Rt_Throttle_Dn);")	);	
+			MapKey	(&Throttle, 	PSM,	EXEC("StopAutoRepeat(8);"));
+			MapKeyUMD(&Throttle,	PSB, 	REXEC(8,RuH_WH_Throttle_Delay, "ActKey(KEYON+PULSE+Lt_Throttle_Up);"),
+											REXEC(8,RuH_WH_Throttle_Delay, "ActKey(KEYON+PULSE+Mi8_Throttle_Up);"),
+											REXEC(8,RuH_WH_Throttle_Delay, "ActKey(KEYON+PULSE+Rt_Throttle_Up);")	);	
+			}
+		}
+}
+
+
+int Mi8_MFD_Init(int prof = 1008)
+{
+//===================================
+//		Standard MFD Buttons
+//===================================
+
+	printf("   Map Cougar Left  MFD (DX31)...");	
+//LOSB 1 in Init
+				MapKeyIO(&LMFD, OSB02,	CHAIN(DX31,D(ModDelay),DX2),	TEMPO(CHAIN(DX31,D(ModDelay),DX2),CHAIN(DX30,DX31,D(ModDelay),DX2),LongTempo)	); 
+				MapKeyIO(&LMFD, OSB03,	CHAIN(DX31,D(ModDelay),DX3),	TEMPO(CHAIN(DX31,D(ModDelay),DX3),CHAIN(DX30,DX31,D(ModDelay),DX3),LongTempo)	);
+				MapKey	(&LMFD,	OSB04,	CHAIN(DX31,D(ModDelay),DX4));
+//				MapKeyR	(&LMFD,	OSB04,	0);	//for A-10C and F-5E				
+				MapKeyIO(&LMFD, OSB05,	CHAIN(DX31,D(ModDelay),DX5),	TEMPO(CHAIN(DX31,D(ModDelay),DX5),CHAIN(DX30,DX31,D(ModDelay),DX5),DefTempo)	);
+//				MapKeyR	(&LMFD,	OSB05,	0);	//For F-5E
+//LOSB 6-10
+				MapKeyIO(&LMFD,	OSB06,	CHAIN(DX31,D(ModDelay),DX6),	TEMPO(CHAIN(DX31,D(ModDelay),DX6),CHAIN(DX30,DX31,D(ModDelay),DX6), DefTempo));			//Control indicator/Cargo Camera
+				MapKeyIO(&LMFD,	OSB07,	CHAIN(DX31,D(ModDelay),DX7),	TEMPO(CHAIN(DX31,D(ModDelay),DX7),CHAIN(DX30,DX31,D(ModDelay),DX7), DefTempo));		//reset to DX in 1.71	//Mi8_Left_Gunner_Burst,			TEMPO(Mi8_Left_Gunner_ROE,Mi8_Left_Gunner_Burst, DefTempo));
+//				MapKeyR	(&LMFD,	OSB07,	0);	//for Bf109
+				MapKeyIO(&LMFD,	OSB08,	CHAIN(DX31,D(ModDelay),DX8),	TEMPO(CHAIN(DX31,D(ModDelay),DX8),CHAIN(DX30,DX31,D(ModDelay),DX8), DefTempo));		//reset to DX in 1.71	//Mi8_Rear_Gunner_Burst,			TEMPO(Mi8_Rear_Gunner_ROE,Mi8_Rear_Gunner_Burst, DefTempo));
+				MapKeyIO(&LMFD,	OSB09,	CHAIN(DX31,D(ModDelay),DX9),	TEMPO(CHAIN(DX31,D(ModDelay),DX9),CHAIN(DX30,DX31,D(ModDelay),DX9),DefTempo)	);	//Burst Cut
+				MapKeyIO(&LMFD,	OSB10,	CHAIN(DX31,D(ModDelay),DX10),	TEMPO(CHAIN(DX31,D(ModDelay),DX10),CHAIN(DX30,DX31,D(ModDelay),DX10),LongTempo));		//DX30 for UH1 Ripple Fire or Mi-8 800_624/622/800 switch
+
+//LOSB 11-15, 16
+//				MapKeyIO(&LMFD, OSB11,	CHAIN(DX31,D(ModDelay),DX11),	TEMPO(CHAIN(DX31,D(ModDelay),DX11),CHAIN(DX30,DX31,D(ModDelay),DX11),LongTempo));	//Pyro charges CCW /I CW
+//				MapKeyIO(&LMFD,	OSB12,	CHAIN(DX31,D(ModDelay),DX12),	TEMPO(CHAIN(DX31,D(ModDelay),DX12),CHAIN(DX30,DX31,D(ModDelay),DX12),LongTempo));
+//				MapKeyIO(&LMFD,	OSB13,	EXEC("UH1_Intercom_Cycle(0,1,1008);"), TEMPO(EXEC("UH1_Intercom_Cycle(1,1,1008);"), EXEC("UH1_Intercom_Cycle(0,1,1008);"),LongTempo));
+
+//Assign Tempo to /I 14 for Door Select
+//				MapKeyIO(&LMFD,	OSB14,	TEMPO(Cockpit_Door,PULSE+Cargo_Door,DefTempo),	CHAIN(DX31,D(ModDelay),DX14));
+//				Mi8_LMFD_Map(CurrentStation);	//added in 1.71 (bug fix)
+				//MapKeyIO(&LMFD,	OSB15,	CHAIN(DX31,D(ModDelay),DX15),	TEMPO(CHAIN(DX31,D(ModDelay),DX15),CHAIN(DX30,DX31,D(ModDelay),DX15), DefTempo)); //Now covered with Mi8_LMFD_Map()
+
+//LOSB 16-19
+//				MapKeyIO(&LMFD,	OSB16,	Mi8_Salvo_Sel_Sw_Dn_DX,	EXEC("Mi8_Salvo_Set(-1,Switch_Delay);"));
+//				MapKeyIO(&LMFD,	OSB17,	Mi8_Salvo_Sel_Sw_Up_DX,	EXEC("Mi8_Salvo_Set(3, Switch_Delay);"));
+//				MapKey	(&LMFD,	OSB18,	CHAIN(DX31,D(ModDelay),DX18));	//Rocket Stn Sel
+//				MapKey	(&LMFD,	OSB19,	CHAIN(DX31,D(ModDelay),DX19));	//Rocket Stn Sel
+		
+//LMFD 20 in Init
+
+//Left Rocker Switches
+//SYM
+				MapKey	(&LMFD,	SYMU,	KB_LSYMU);	//Sight Elevation/Intensity
+				MapKey	(&LMFD,	SYMD,	KB_LSYMD);	//Sight Elevation/Intensity
+
+//CON
+//				MapKeyIO(&LMFD,	CONU,	Mi8_GUV_Sel_Sw_Up,	EXEC("Mi8_GUV_Sel(4, Switch_Delay);"));
+				MapKeyIO(&LMFD,	COND,	Mi8_GUV_Sel_Sw_Dn,	EXEC("Mi8_GUV_Sel(-1,Switch_Delay);"));
+		
+//BRT
+////				MapKeyIO(&LMFD,	BRTU,	Mi8_Pylon_Sel_Sw_Up_DX, EXEC("Mi8_Pylon_Set(3, Switch_Delay);")	);	//array obsolete with discrete and rotational buttons
+////				MapKeyIO(&LMFD,	BRTD,	Mi8_Pylon_Sel_Sw_Dn_DX, EXEC("Mi8_Pylon_Set(-1,Switch_Delay);") );
+//				MapKeyIO(&LMFD,	BRTU,	Mi8_Pylon_Sel_Sw_Up,	TEMPO(Mi8_Pylon_Sel_Sw_Up,CHAIN(DX30,D(ModDelay),Mi8_Pylon_Sel_Sw_Up), DefTempo)	);
+//				MapKeyIO(&LMFD,	BRTD,	Mi8_Pylon_Sel_Sw_Dn,	TEMPO(Mi8_Pylon_Sel_Sw_Dn,CHAIN(DX30,D(ModDelay),Mi8_Pylon_Sel_Sw_Dn), DefTempo)	);
+
+//GAIN in Init
+	printf("Done!\xa");
+
+	printf("   Map Cougar Right MFD (DX32)...");
+
+//ROSB 1-10 in Init
+//		MapKeyIO(&RMFD, OSB01,	Mi8_CB_Panels_4_9,	TEMPO(Mi8_CB_Panels_1_3, Mi8_CB_Panels_4_9, LongTempo));
+//		MapKeyIO(&RMFD,	OSB02,	DX_ROSB02,	DX_ROSB02T);
+//		MapKeyIO(&RMFD,	OSB03,	DX_ROSB03,	DX_ROSB03T);						//unshifted tempo added for P-51D Gun Heat and Ka-50 Hdg/Trk switch
+//		MapKeyIO(&RMFD,	OSB04,	DX_ROSB04,	DX_ROSB04T);
+//		MapKeyIO(&RMFD,	OSB05,	DX_ROSB05,	DX_ROSB05T);
+//		MapKeyR	(&RMFD,	OSB05,	0);
+		MapKey	(&RMFD,	OSB06,	DX_ROSB06);
+		MapKey	(&RMFD,	OSB07,	DX_ROSB07);
+//		MapKeyR	(&RMFD,	OSB07,	0);
+		MapKey	(&RMFD,	OSB08,	DX_ROSB08);
+//		MapKey	(&RMFD,	OSB09,	DX_ROSB09);
+//		MapKey	(&RMFD,	OSB10,	Mi8_Hints);	//added in 1.71 because no DX counterpart
+//		MapKeyIO(&RMFD,	OSB10,	CHAIN(DX32,D(ModDelay),DX10),	
+//								TEMPO(CHAIN(DX32,D(ModDelay),DX10),	CHAIN(DX30,DX32,D(ModDelay),DX10),	DefTempo));	
+							
+//ROSB 11-15
+//context sensitive autopilot for Mi-8
+//		MapKey	(&RMFD,	OSB11,	CHAIN(DX32,D(ModDelay),DX11, EXEC("Mi8_Autopilot_Mapping(1, 0, Mi8_AP_MFD_Context, Mi8_AP_MFD_LED);"))	);	
+//		MapKey	(&RMFD,	OSB12,	CHAIN(DX32,D(ModDelay),DX12, EXEC("Mi8_Autopilot_Mapping(1, 1, Mi8_AP_MFD_Context, Mi8_AP_MFD_LED);"))	);	
+		
+//		MapKey	(&RMFD,	OSB13,	CHAIN(DX32,D(ModDelay),DX13, EXEC("Mi8_Autopilot_Mapping(0, 0, Mi8_AP_MFD_Context, 0); Mi8_Autopilot_Mapping(1, 0, Mi8_AP_MFD_Context, 0); AP_PitchRoll_Flash(Mi8_AP_MFD_LED);"))	);	//updated in 1.31: pressing AP cycles rockers to pitch/roll							//Updated in 1.31: cycling master AP now defaults AP default knobs to pitch/roll
+
+//		MapKey	(&RMFD,	OSB14,	CHAIN(DX32,D(ModDelay),DX14, EXEC("Mi8_Autopilot_Mapping(0, 1, Mi8_AP_MFD_Context, Mi8_AP_MFD_LED);"))	);	
+//		MapKey	(&RMFD,	OSB15,	CHAIN(DX32,D(ModDelay),DX15, EXEC("Mi8_Autopilot_Mapping(0, 0, Mi8_AP_MFD_Context, Mi8_AP_MFD_LED);"))	);	
+//		MapKeyR	(&RMFD,	OSB13,	0);	//for Spitfire Engine Start	
+//		MapKeyR	(&RMFD,	OSB14,	0);	//for Spitfire Engine Start	
+
+
+//ROSB 16-20
+//		MapKeyIO(&RMFD,	OSB16,	DX_ROSB16,	TEMPO(CHAIN(DX32,D(ModDelay),DX16),CHAIN(DX30,DX32,D(ModDelay),DX16),LongTempo));
+//		MapKey	(&RMFD,	OSB17,	DX_ROSB17);
+//		MapKey	(&RMFD,	OSB18,	DX_ROSB18);
+//		MapKey	(&RMFD,	OSB19,	DX_ROSB19);
+
+
+if (prof == 1024)
+	{
+		MapKey	(&LMFD,	OSB11,	DX_LOSB11);
+		MapKeyIO(&LMFD,	OSB12,	DX_LOSB12,	DX_LOSB12T);
+		MapKeyIO(&LMFD,	OSB13,	DX_LOSB13,	DX_LOSB13T);
+		MapKeyIO(&LMFD,	OSB14,	DX_LOSB14,	DX_LOSB14T);
+		MapKeyIO(&LMFD,	OSB15,	DX_LOSB15,	DX_LOSB15T);
+		MapKeyIO(&LMFD,	OSB16,	DX_LOSB16,	DX_LOSB16T);
+		MapKeyIO(&LMFD,	OSB17,	DX_LOSB17,	DX_LOSB17T);
+		MapKeyIO(&LMFD,	OSB18,	DX_LOSB18,	DX_LOSB18T);
+		MapKeyIO(&LMFD,	OSB19,	DX_LOSB19,	DX_LOSB19T);
+//CON
+		MapKeyIO(&LMFD,	CONU,	KB_LCONU,KB_LCONUT);	//TEMPO added in 2.66
+		MapKeyIO(&LMFD,	COND,	KB_LCOND,KB_LCONDT);
+//BRT
+		MapKeyIO(&LMFD,	BRTU,	KB_LBRTU,KB_LBRTUT);	//TEMPO added in 2.66
+		MapKeyIO(&LMFD,	BRTD,	KB_LBRTD,KB_LBRTDT);	
+	
+	
+		MapKey	(&RMFD, OSB01,	DX_ROSB01);
+		MapKey	(&RMFD,	OSB02,	DX_ROSB02);
+		MapKey	(&RMFD,	OSB03,	DX_ROSB03);						//unshifted tempo added for P-51D Gun Heat and Ka-50 Hdg/Trk switch
+		MapKey	(&RMFD,	OSB04,	DX_ROSB04);
+		MapKey	(&RMFD,	OSB05,	DX_ROSB05);	
+	
+		MapKeyIO(&RMFD,	OSB09,	DX_ROSB09,	DX_ROSB09T);
+		MapKeyIO(&RMFD,	OSB10,	DX_ROSB10,	DX_ROSB10T);
+		
+		MapKeyIO(&RMFD,	OSB11,	DX_ROSB11,	DX_ROSB11T);
+		MapKeyIO(&RMFD,	OSB12,	DX_ROSB12,	DX_ROSB12T);
+		MapKeyIO(&RMFD,	OSB13,	DX_ROSB13,	DX_ROSB13T);						
+		MapKeyIO(&RMFD,	OSB14,	DX_ROSB14,	DX_ROSB14T);
+		MapKeyIO(&RMFD,	OSB15,	DX_ROSB15,	DX_ROSB15T);
+		MapKeyIO(&RMFD,	OSB16,	DX_ROSB16,	DX_ROSB16T);
+		MapKeyIO(&RMFD,	OSB17,	DX_ROSB17,	DX_ROSB17T);
+		MapKeyIO(&RMFD,	OSB18,	DX_ROSB18,	DX_ROSB18T);
+		MapKeyIO(&RMFD,	OSB19,	DX_ROSB19,	DX_ROSB19T);
+
+		if ((TARS > 0) & (Overlay_Enable_SRS > 0))
+				MapKeyIO(&RMFD,	OSB20,	TEMPO(DX_ROSB20,Rdo_Ovly,DefTempo),	DX_ROSB20);
+		else	MapKey	(&RMFD,	OSB20,	DX_ROSB20);
+
+
+
+//Right Rocker Switches
+//SYM
+		MapKey	(&RMFD,	SYMU,	KB_RSYMU);
+		MapKey	(&RMFD,	SYMD,	KB_RSYMD);
+//		MapKeyR	(&RMFD,	SYMU,	0);	//added in 1.61 to account for context sensitive R in M2000C
+//		MapKeyR	(&RMFD,	SYMD,	0);
+
+//CON
+//		MapKeyIO(&RMFD,	CONU,	Mi24_CPGBombSw_Up,	TEMPO(KB_RCONU,Mi24_CPGBombSw_Up,DefTempo)	);
+//		MapKeyIO(&RMFD,	COND,	Mi24_CPGBombSw_Dn,	TEMPO(KB_RCOND,Mi24_CPGBombSw_Dn,DefTempo)	);			
+		MapKey	(&RMFD,	CONU,	KB_RCONU);
+		MapKey	(&RMFD,	COND,	KB_RCOND);
+//		MapKeyR	(&RMFD,	CONU,	0);	//added in 1.24 to account for context sensitive R in UH-1
+//		MapKeyR	(&RMFD,	COND,	0);
+
+//BRT
+		MapKeyIO(&RMFD,	BRTU,	KB_RBRTU,KB_RBRTUT);
+		MapKeyIO(&RMFD,	BRTD,	KB_RBRTD,KB_RBRTDT);
+
+
+
+
+//GAIN
+	MapKeyIO(&RMFD,	GAINU,	Mi8_GUV_Sel_Sw_Up,	EXEC("Mi8_GUV_Sel(4, Switch_Delay);"));
+	MapKeyIO(&RMFD,	GAIND,	Mi8_GUV_Sel_Sw_Dn,	EXEC("Mi8_GUV_Sel(-1,Switch_Delay);"));
+	}
+else
+	{
+		MapKeyIO(&LMFD, OSB11,	CHAIN(DX31,D(ModDelay),DX11),	TEMPO(CHAIN(DX31,D(ModDelay),DX11),CHAIN(DX30,DX31,D(ModDelay),DX11),LongTempo));	//Pyro charges CCW /I CW
+		MapKeyIO(&LMFD,	OSB12,	CHAIN(DX31,D(ModDelay),DX12),	TEMPO(CHAIN(DX31,D(ModDelay),DX12),CHAIN(DX30,DX31,D(ModDelay),DX12),LongTempo));
+		MapKeyIO(&LMFD,	OSB13,	EXEC("UH1_Intercom_Cycle(0,1,1008);"), TEMPO(EXEC("UH1_Intercom_Cycle(1,1,1008);"), EXEC("UH1_Intercom_Cycle(0,1,1008);"),LongTempo));
+		MapKeyIO(&LMFD,	OSB14,	TEMPO(Cockpit_Door,PULSE+Cargo_Door,DefTempo),	CHAIN(DX31,D(ModDelay),DX14));
+		Mi8_LMFD_Map(CurrentStation);	//added in 1.71 (bug fix)
+		
+		MapKeyIO(&LMFD,	OSB16,	Mi8_Salvo_Sel_Sw_Dn_DX,	EXEC("Mi8_Salvo_Set(-1,Switch_Delay);"));
+		MapKeyIO(&LMFD,	OSB17,	Mi8_Salvo_Sel_Sw_Up_DX,	EXEC("Mi8_Salvo_Set(3, Switch_Delay);"));
+		MapKey	(&LMFD,	OSB18,	DX_LOSB18);	//Rocket Stn Sel
+		MapKey	(&LMFD,	OSB19,	DX_LOSB19);	//Rocket Stn Sel		
+
+//CON
+		MapKeyIO(&LMFD,	CONU,	Mi8_GUV_Sel_Sw_Up,	EXEC("Mi8_GUV_Sel(4, Switch_Delay);"));
+		MapKeyIO(&LMFD,	COND,	Mi8_GUV_Sel_Sw_Dn,	EXEC("Mi8_GUV_Sel(-1,Switch_Delay);"));
+		
+//BRT
+		MapKeyIO(&LMFD,	BRTU,	Mi8_Pylon_Sel_Sw_Up,	TEMPO(Mi8_Pylon_Sel_Sw_Up,CHAIN(DX30,D(ModDelay),Mi8_Pylon_Sel_Sw_Up), DefTempo)	);
+		MapKeyIO(&LMFD,	BRTD,	Mi8_Pylon_Sel_Sw_Dn,	TEMPO(Mi8_Pylon_Sel_Sw_Dn,CHAIN(DX30,D(ModDelay),Mi8_Pylon_Sel_Sw_Dn), DefTempo)	);
+
+	
+	
+		MapKeyIO(&RMFD, OSB01,	Mi8_CB_Panels_4_9,	TEMPO(Mi8_CB_Panels_1_3, Mi8_CB_Panels_4_9, LongTempo));
+		MapKeyIO(&RMFD,	OSB02,	DX_ROSB02,	DX_ROSB02T);
+		MapKeyIO(&RMFD,	OSB03,	DX_ROSB03,	DX_ROSB03T);						//unshifted tempo added for P-51D Gun Heat and Ka-50 Hdg/Trk switch
+		MapKeyIO(&RMFD,	OSB04,	DX_ROSB04,	DX_ROSB04T);
+		MapKeyIO(&RMFD,	OSB05,	DX_ROSB05,	DX_ROSB05T);
+		
+		MapKey	(&RMFD,	OSB09,	DX_ROSB09);
+		MapKey	(&RMFD,	OSB10,	Mi8_Hints);	//added in 1.71 because no DX counterpart
+
+		MapKey	(&RMFD,	OSB11,	CHAIN(DX32,D(ModDelay),DX11, EXEC("Mi8_Autopilot_Mapping(1, 0, Mi8_AP_MFD_Context, Mi8_AP_MFD_LED);"))	);	
+		MapKey	(&RMFD,	OSB12,	CHAIN(DX32,D(ModDelay),DX12, EXEC("Mi8_Autopilot_Mapping(1, 1, Mi8_AP_MFD_Context, Mi8_AP_MFD_LED);"))	);	
+		
+		MapKey	(&RMFD,	OSB13,	CHAIN(DX32,D(ModDelay),DX13, EXEC("Mi8_Autopilot_Mapping(0, 0, Mi8_AP_MFD_Context, 0); Mi8_Autopilot_Mapping(1, 0, Mi8_AP_MFD_Context, 0); AP_PitchRoll_Flash(Mi8_AP_MFD_LED);"))	);	//updated in 1.31: pressing AP cycles rockers to pitch/roll							//Updated in 1.31: cycling master AP now defaults AP default knobs to pitch/roll
+
+		MapKey	(&RMFD,	OSB14,	CHAIN(DX32,D(ModDelay),DX14, EXEC("Mi8_Autopilot_Mapping(0, 1, Mi8_AP_MFD_Context, Mi8_AP_MFD_LED);"))	);	
+		MapKey	(&RMFD,	OSB15,	CHAIN(DX32,D(ModDelay),DX15, EXEC("Mi8_Autopilot_Mapping(0, 0, Mi8_AP_MFD_Context, Mi8_AP_MFD_LED);"))	);	
+
+		MapKeyIO(&RMFD,	OSB16,	DX_ROSB16,	TEMPO(CHAIN(DX32,D(ModDelay),DX16),CHAIN(DX30,DX32,D(ModDelay),DX16),LongTempo));
+		MapKey	(&RMFD,	OSB17,	DX_ROSB17);
+		MapKey	(&RMFD,	OSB18,	DX_ROSB18);
+		MapKey	(&RMFD,	OSB19,	DX_ROSB19);
+
+		if ((TARS > 0) & (Overlay_Enable_SRS > 0))
+				MapKeyIO(&RMFD,	OSB20,	TEMPO(EXEC("UV26_Side_Sel(1, Switch_Delay, UV26_LED_Duration);"),Rdo_Ovly,DefTempo),	
+										EXEC("UV26_Side_Sel(1, Switch_Delay, UV26_LED_Duration);"));
+		else	MapKey	(&RMFD,	OSB20,	EXEC("UV26_Side_Sel(1, Switch_Delay, UV26_LED_Duration);"));
+
+
+
+//Right Rocker Switches
+//SYM
+		MapKey	(&RMFD,	SYMU,	Mi8_Pylon_Setup_Sw_CW);
+		MapKey	(&RMFD,	SYMD,	Mi8_Pylon_Setup_Sw_CCW);
+//		MapKeyR	(&RMFD,	SYMU,	0);	//added in 1.61 to account for context sensitive R in M2000C
+//		MapKeyR	(&RMFD,	SYMD,	0);
+		
+//CON
+		MapKeyIO(&RMFD,	CONU,	Mi8_AP_Alt_Up,	Mi8_AP_Pitch_Lt);
+		MapKeyIO(&RMFD,	COND,	Mi8_AP_Alt_Dn,	Mi8_AP_Pitch_Rt);
+//		MapKeyR	(&RMFD,	CONU,	0);	//added in 1.24 to account for context sensitive R in UH-1
+//		MapKeyR	(&RMFD,	COND,	0);
+
+//BRT
+		MapKeyIO(&RMFD,	BRTU,	Mi8_AP_Hdg_Lt,	Mi8_AP_Roll_Lt);
+		MapKeyIO(&RMFD,	BRTD,	Mi8_AP_Hdg_Rt,	Mi8_AP_Roll_Rt);
+
+//GAIN
+	MapKey	(&RMFD,	GAINU,	TEMPO(EXEC("UV26_Side_Sel(0, Switch_Delay);"),EXEC("UV26_Side_Sel(1, Switch_Delay);"),DefTempo)	);	
+	MapKey	(&RMFD,	GAIND,	TEMPO(EXEC("UV26_Side_Sel(2, Switch_Delay);"),EXEC("UV26_Side_Sel(1, Switch_Delay);"),DefTempo)	);	
+	}
+	
+	
+	printf("Done!\xa");	
+}
+
+
+int Mi8_Microstick(int stn = 1, int state = 1, int positswap = 1)
+{
+if (WarthogThrottle > 0) Mi8_SCXY(stn, state, positswap);
+else
+	{
+	if (stn < 1) stn = 1;
+	if (stn > 3) stn = 3;
+	
+	if (positswap == 0) stn = 1;		//positswap allows change of trigger commands during station change (0 keeps everything same, which should be the pilot (2) at initialization)
+	
+	if(state)	//makes sure to map (0 to prevent inadvertent use while holding if not TIR)
+		{
+		if (stn == 2)	//CP
+			{
+	//		MapKey	(&HCougar, 	T1, CHAIN(DX30,DX32,DX19));
+			KeyAxis(&HCougar, IN_POSITION_AXIS_SLIDER2, 0, AXMAP2 (		//poss add DX30+DX32 for right station (no shifted DX21/22 commands on MFD)
+															3,
+															Mi8_HeadlightR_Lt,		//delay to keep consistency with other axes  DX1 because DX23/24 shifted for autopilot on RMFD
+															0,
+															Mi8_HeadlightR_Rt));
+			KeyAxis(&HCougar, RDR_Y,				    0, AXMAP2 (
+															3,
+															Mi8_HeadlightR_Up,
+															0,
+															Mi8_HeadlightR_Dn));
+			}
+		else	//pilot/FE
+			{
+	//		MapKey	(&HCougar, 	T1, CHAIN(DX30,DX31,DX19));
+			KeyAxis(&HCougar, IN_POSITION_AXIS_SLIDER2, 0, AXMAP2 (		//add DX30+DX31 for Left station (no shifted commands on MFD)
+															3,
+															Mi8_HeadlightL_Lt,
+															0,
+															Mi8_HeadlightL_Rt));
+			KeyAxis(&HCougar, RDR_Y,				    0, AXMAP2 (
+															3,
+															Mi8_HeadlightL_Up,
+															0,
+															Mi8_HeadlightL_Dn));
+			}
+		}
+	else
+		{
+		KeyAxis(&HCougar, IN_POSITION_AXIS_SLIDER2, 0, AXMAP2 (0));	//prevents inadvertent slew while holding T1 (without TrackIR)
+		KeyAxis(&HCougar, RDR_Y,				    0, AXMAP2 (0));	//
+		}
+	}
+}
+
+int Mi8_SCXY(int stn = 1, int state=1, int positswap = 1)
+{
+if (stn < 1) stn = 1;
+if (stn > 3) stn = 3;
+
+if (positswap == 0) stn = 1;		//positswap allows change of trigger commands during station change (0 keeps everything same, which should be the pilot (2) at initialization)
+
+if(state)	//makes sure to map (0 to prevent inadvertent use while holding if not TIR)
+	{
+	if (stn == 2)	//CP
+		{
+		KeyAxis(&Throttle, SCX, 0, AXMAP2 (		
+									3,
+									Mi8_HeadlightR_Lt,		
+									0,
+									Mi8_HeadlightR_Rt));
+		KeyAxis(&Throttle, SCY,	0, AXMAP2 (
+									3,
+									Mi8_HeadlightR_Up,
+									0,
+									Mi8_HeadlightR_Dn));
+		}
+	else	//pilot/FE
+		{
+		KeyAxis(&Throttle, SCX, 0, AXMAP2 (		
+									3,
+									Mi8_HeadlightL_Lt,
+									0,
+									Mi8_HeadlightL_Rt));
+		KeyAxis(&Throttle, SCY,	0, AXMAP2 (
+									3,
+									Mi8_HeadlightL_Up,
+									0,
+									Mi8_HeadlightL_Dn));
+		}
+	printf("SCXY Mapped to Station %i\xa",stn);	//for test purposes
+	}
+else	//SC pressed, so no slew
+	{
+	KeyAxis(&Throttle, SCX, 0, AXMAP2 (0));	//prevents inadvertent slew while holding SC (without TrackIR)
+	KeyAxis(&Throttle, SCY, 0, AXMAP2 (0));	//
+	}
+}
+
+int Mi8_SetT1T6(int posit, int stn, int tir, int stnswap = 1)	//posit = range knob position, stn is pilot/copilot, stnswap is whether stn is even enabled
+//at low throttle (RNG) set T6 to start and /I to stop, T1 to idle stop button
+//at high throttle set T6 to autopilot and /I to TIR Pause, T6 long to toggle landing light when throttle is up
+{
+if (WarthogThrottle > 0) Mi8_SetSCCSLTB(stn,stnswap);
+//T6
+if (!posit)	//startup/shutdown sequence
+	{
+//	MapKey	(&HCougar, 	T1,	0);	//T1 zeroed out while throttle minimum
+//	MapKeyR	(&HCougar,	T1, 0);	
+
+	MapKeyIO(&HCougar, 	T6, TEMPO(CHAIN(DX24,					EXEC("Mi8_Autopilot_Mapping(0, 0, 1, 0); Mi8_Autopilot_Mapping(1, 0, 1, 0);")), EXEC("EjectCheckT6(ProfID);"), DefTempo),
+							TEMPO(CHAIN(PULSE+UH1_Autopilot,	EXEC("Mi8_Autopilot_Mapping(0, 0, Mi8_AP_MFD_Context, 0); Mi8_Autopilot_Mapping(1, 0, Mi8_AP_MFD_Context, 0); AP_PitchRoll_Flash(Mi8_AP_MFD_LED);")),	DX24, DefTempo));		//Will check for ejection parameters if T6+S3 held for 500ms.  UH1_Autopilot command carried over to Mi-8 for Pitch/Roll Damper
+	MapKeyR	(&HCougar,	T6, UP+StartupInterrupt);
+	}
+else									//operational use
+	{
+	//if (tir > 0)
+	///	{
+		//MapKey(&HCougar, 	T1,	0);	 //null to prevent bad DX31/32 commands
+		//MapKeyR	(&HCougar,	T1, 0);	
+		
+		//if (stn > 1)	MapKeyIO(&HCougar, 	T6, TEMPO(DX24, EXEC("EjectCheckT6(ProfID);"), DefTempo),	TEMPO(PULSE+UH1_Autopilot, CHAIN(DX31,D(ModTempo),DX19), DefTempo));		//TEMPO long for pilot headlight toggle
+		//else			MapKeyIO(&HCougar, 	T6, TEMPO(DX24, EXEC("EjectCheckT6(ProfID);"), DefTempo),	TEMPO(PULSE+UH1_Autopilot, CHAIN(DX32,D(ModTempo),DX19), DefTempo));		//TEMPO long for copilot headlight toggle
+		//}
+	//else
+	//	{
+		//MapKey	(&HCougar, 	T6, CHAIN(DX30,DX31,D(ModTempo),DX19));
+		//MapKeyIO(&HCougar, 	T1,	0, CHAIN(DX31,DX32));	//DX31/32 for H1 searchlight, /I null to prevent bad H1 commands
+		//MapKeyR	(&HCougar,	T1, 0);	
+		//MapKeyIO(&HCougar, 	T6, TEMPO(PULSE+LandingLight_OnOff, CHAIN(DX24, EXEC("EjectCheckT6(ProfID);")),ModTempo),	TEMPO(PULSE+UH1_Autopilot, PULSE+LandingLight_OnOff, DefTempo));		//Will check for ejection parameters if T6+S3 held for 500ms.
+		//MapKeyIO(&HCougar, 	T6, TEMPO(DX24, EXEC("EjectCheckT6(ProfID);"), DefTempo),TEMPO(UH1_Autopilot,DX24, DefTempo));		//Will check for ejection parameters if T6+S3 held for 500ms.
+	if ((stn == 2) & (stnswap))
+		{
+		MapKeyIO(&HCougar, 	T6, TEMPO(CHAIN(DX24,					EXEC("Mi8_Autopilot_Mapping(0, 0, 1, 0); Mi8_Autopilot_Mapping(1, 0, 1, 0);")), EXEC("EjectCheckT6(ProfID);"), DefTempo),	
+								TEMPO(CHAIN(PULSE+UH1_Autopilot,	EXEC("Mi8_Autopilot_Mapping(0, 0, Mi8_AP_MFD_Context, 0); Mi8_Autopilot_Mapping(1, 0, Mi8_AP_MFD_Context, 0); AP_PitchRoll_Flash(Mi8_AP_MFD_LED);")),	Mi8_HeadlightR_Pwr, DefTempo));		//TEMPO long for copilot headlight toggle;  Uses DX30 to deconflict with RMFD
+		MapKeyR(&HCougar,	T6,	UP+Mi8_HeadlightR_Sw_Dn);
+		}
+	else
+		{
+		MapKeyIO(&HCougar, 	T6, TEMPO(CHAIN(DX24,					EXEC("Mi8_Autopilot_Mapping(0, 0, 1, 0); Mi8_Autopilot_Mapping(1, 0, 1, 0);")), EXEC("EjectCheckT6(ProfID);"), DefTempo),	
+								TEMPO(CHAIN(PULSE+UH1_Autopilot,	EXEC("Mi8_Autopilot_Mapping(0, 0, Mi8_AP_MFD_Context, 0); Mi8_Autopilot_Mapping(1, 0, Mi8_AP_MFD_Context, 0); AP_PitchRoll_Flash(Mi8_AP_MFD_LED);")),	Mi8_HeadlightL_Pwr, DefTempo));		//TEMPO long for pilot headlight toggle;  Uses DX30 to deconflict with LMFD
+		MapKeyR(&HCougar,	T6,	UP+Mi8_HeadlightL_Sw_Dn);
+		}
+	}
+
+//T1
+if (tir > 0)
+	{
+	if ((stn == 2) & (stnswap))	
+			MapKeyIO(&HCougar,	T1,	ESBR_Rotate,	CHAIN(DX31,DX32, 	EXEC("Mi8_Microstick(2,0);"))	);		// modifier for copilot headlight
+	else	MapKey	(&HCougar,	T1,	ESBR_Rotate,	CHAIN(DX31,			EXEC("Mi8_Microstick(2,0);"))	);		// modifier for pilot headlight (dbl check in lua mapping)  
+	}
+else
+	{
+	if ((stn == 2) & (stnswap))
+			MapKeyIO(&HCougar,	T1,	ESBR_Rotate,	CHAIN(DX31,DX32, 	EXEC("Mi8_Microstick(2,0); Mi8_H1_Toggle(-1, TrackIR, PadlockEnabled, CurrentStation);"))	);		// modifier for copilot headlight
+	else	MapKey	(&HCougar,	T1,	ESBR_Rotate,	CHAIN(DX31,			EXEC("Mi8_Microstick(2,0); Mi8_H1_Toggle(-1, TrackIR, PadlockEnabled, CurrentStation);"))	);		// modifier for pilot headlight (dbl check in lua mapping)  
+	}
+MapKeyRIO(&HCougar,	T1,	0,	EXEC("Mi8_Microstick(CurrentStation);")	);
+}
+int Mi8_S3T6(int posit)
+{
+if 		(!posit) ActKey(KEYON+StartupInterrupt);
+else	Mi8_Searchlight_Sw_Dn(CurrentStation);
+}
+int	Mi8_Searchlight_Sw_Dn(int stn = 2, int stnswap = 1)	//used to drop searchlight switch on cougar with S3+T6 (i.e. failed ejectcheck)
+{
+	if ((stn == 2) & (stnswap))	ActKey(KEYON+PULSE+Mi8_HeadlightR_Sw_Dn);
+	else						ActKey(KEYON+PULSE+Mi8_HeadlightL_Sw_Dn);
+//	SearchlightRetractState = 1;
+}
+
+int Mi8_SetSCCSLTB(int stn, int stnswap = 1)
+{
+if (Script_Debug) printf("Mi8_SetSCCSLTB(%i,%i)\xa",stn,stnswap);
+	if ((stn == 2) & (stnswap))
+		{
+		printf(" CS to CP\xa");
+//		MapKeyIO(&Throttle, LTB,	CHAIN(DX24,					EXEC("Mi8_Autopilot_Mapping(0, 0, 1, 0); Mi8_Autopilot_Mapping(1, 0, 1, 0);")),	
+//									CHAIN(PULSE+UH1_Autopilot,	EXEC("Mi8_Autopilot_Mapping(0, 0, Mi8_AP_MFD_Context, 0); Mi8_Autopilot_Mapping(1, 0, Mi8_AP_MFD_Context, 0); AP_PitchRoll_Flash(Mi8_AP_MFD_LED);"))	);	
+		MapKey	(&Throttle,	CSU,	Mi8_HeadlightR_Up);
+		MapKey	(&Throttle,	CSD,	Mi8_HeadlightR_Dn);
+		MapKey	(&Throttle,	CSL,	Mi8_HeadlightR_Lt);
+		MapKey	(&Throttle,	CSR,	Mi8_HeadlightR_Rt);	
+		
+//		MapKey	(&Throttle,	SC,		CHAIN(Mi8_HeadlightR_Pwr, EXEC("Mi8_SCXY(1,0);"))	);	//removed in 1.71 (obsolete)
+		}
+	else
+		{
+		printf(" CS to Pilot/FE\xa");
+//		MapKeyIO(&Throttle,	LTB,	CHAIN(DX24,					EXEC("Mi8_Autopilot_Mapping(0, 0, 1, 0); Mi8_Autopilot_Mapping(1, 0, 1, 0);")),	
+//									CHAIN(PULSE+UH1_Autopilot,	EXEC("Mi8_Autopilot_Mapping(0, 0, Mi8_AP_MFD_Context, 0); Mi8_Autopilot_Mapping(1, 0, Mi8_AP_MFD_Context, 0); AP_PitchRoll_Flash(Mi8_AP_MFD_LED);"))	);		
+		MapKeyIO(&Throttle,	CSU,	Mi8_Sight_Elev_Incr,	Mi8_HeadlightL_Up);
+		MapKeyIO(&Throttle,	CSD,	Mi8_Sight_Elev_Decr,	Mi8_HeadlightL_Dn);
+		MapKeyIO(&Throttle,	CSL,	Mi8_Sight_Int_Decr,		Mi8_HeadlightL_Lt);
+		MapKeyIO(&Throttle,	CSR,	Mi8_Sight_Int_Incr,		Mi8_HeadlightL_Rt);
+		
+//		MapKey	(&Throttle,	SC,		CHAIN(Mi8_HeadlightL_Pwr, EXEC("Mi8_SCXY(2,0);"))	);	//removed in 1.71 (obsolete)		
+		}
+	if (stnswap) Mi8_DF_Init(1,stn);	//added in 1.71
+
+}
+
+int Mi8_H1_Toggle(int state, int tir, int padlock, int stn, int stnswap=1)
+{
+if ((state < 0) | (state > 1)) state = (Searchlight_Current+1)%2;	//toggles on value out of bounds
+if (state)	Mi8_H1_Searchlight(tir, padlock, stn, stnswap);
+else		H1_Init(tir, padlock, ProfID);	//ProfID added to arguments in 1.31 for completeness (though unnecessary)
+//printf(" Mi8_H1_Toggle: %i \xa Original State: %i \xa Station: %i \xa",state,Searchlight_Current,stn);	//for test purposes
+Searchlight_Current = state;
+flashLLED2(state,500);
+}
+
+
+
+int Mi8_H1_Searchlight(int tir, int padlock, int stn = 1, int stnswap=1)	//no need for TIR=0 option because combo covered by T1
+{
+if (tir)
+	{
+	if (	(stn == 2) & (stnswap)	)	//CP and Station Swap enabled
+		{
+		printf("         Hat1 (C/P Searchlight");	//DX32 removed;DX31 only
+			MapKeyIO(&HCougar, H1R,		TEMPO(	CHAIN(DXHATRIGHT,	EXEC("StationCheck(ProfID,1);")), 							//DX30 already covered with S3
+												CHAIN(DX32,D(ModDelay),	DXHATRIGHT,	EXEC("StationCheck(ProfID,3);")),
+												ModTempo),
+										Mi8_HeadlightR_Rt);	//DX31+32+Hat for searchlight added in 1.27 (must be 31+32 to deconflict with 32 only for shifted state)
+			MapKeyIO(&HCougar, H1L,		TEMPO(	CHAIN(DXHATLEFT,	EXEC("StationCheck(ProfID,2);")),
+												CHAIN(DX32,D(ModDelay),	DXHATLEFT,	EXEC("StationCheck(ProfID,4);")),
+												ModTempo),	
+										Mi8_HeadlightR_Lt);	
+			MapKeyIO(&HCougar, H1U,		TEMPO(	EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_missile_Threat);"), EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+UnlockView);"), ModTempo),
+										Mi8_HeadlightR_Up);	//if short shift, Cycle Padlockview, long shift Unlock view 
+
+			if(padlock) //TrackIR with Padlock option enabled
+				{
+				printf(" with Padlock)...");
+				MapKeyIO(&HCougar, H1D,	EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_terrain_view);"),
+										Mi8_HeadlightR_Dn);
+				}
+			else 			//TrackIR with Padlock option disabled
+				{
+				printf(")...");
+				MapKey	(&HCougar, H1D,	Mi8_HeadlightR_Dn);
+				}
+		}
+	else	//will default to pilot light if pilot/fe or station swap disabled
+		{
+		printf("         Hat1 (Pilot Searchlight");
+			MapKeyIO(&HCougar, H1R,		TEMPO(	CHAIN(DXHATRIGHT,	EXEC("StationCheck(ProfID,1);")), 							//DX30 already covered with S3
+												CHAIN(DX32,D(ModDelay),	DXHATRIGHT,	EXEC("StationCheck(ProfID,3);")),
+												ModTempo),
+										Mi8_HeadlightL_Rt);	//DX31+Hat for searchlight added in 1.27
+			MapKeyIO(&HCougar, H1L,		TEMPO(	CHAIN(DXHATLEFT,	EXEC("StationCheck(ProfID,2);")),
+												CHAIN(DX32,D(ModDelay),	DXHATLEFT,	EXEC("StationCheck(ProfID,4);")),
+												ModTempo),	
+										Mi8_HeadlightL_Lt);	
+			MapKeyIO(&HCougar, H1U,		TEMPO(	EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_missile_Threat);"), EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+UnlockView);"), ModTempo),
+										Mi8_HeadlightL_Up);	//if short shift, Cycle Padlockview, long shift Unlock view 
+
+			if(padlock) //TrackIR with Padlock option enabled
+				{
+				printf(" with Padlock)...");
+				MapKeyIO(&HCougar, H1D,	EXEC("if (SnapViewState == 0) ActKey(KEYON+PULSE+Padlock_terrain_view);"),
+										Mi8_HeadlightL_Dn);
+				}
+			else 			//TrackIR with Padlock option disabled
+				{
+				printf(")...");
+				MapKey	(&HCougar, H1D,	Mi8_HeadlightL_Dn);
+				}
+		}
+	
+	printf("Done!\xa");
+	}
+}
+
+
+//Routine possibly obsolete with multiple station SnapViews
+//int SetMI8SnapView(int stn, int tir, int led = 0, int change = 0)					//change added to prevent light commands when they dont need to be cycled (i.e. CommState), tir allows no force (0) when releasing commstate
+//{
+//if 		(stn == 1)
+//		{
+//		printf("         Mapping Pilot/CoPilot SnapViews...");
+//		MapKey	(&HCougar,	H4R,	TEMPO(EXEC("SnapViewModRelease(KBPress, ProfID);"),EXEC("SetSnapViewT(8);"), DefTempo));	//Overhead Snapview(Pilot)
+//		MapKey	(&HCougar,	H4L,	TEMPO(EXEC("SnapViewModRelease(KBPress, ProfID);"),EXEC("SetSnapViewT(2);"), DefTempo));	//Center Console SnapView(Pilot)
+//		printf("Done!\xa");
+//		Pause_TrackIR(0,tir);
+//		if ((change > 0) & (led > 0))
+//			{
+//			Lights_LLED2(1);
+//			Lights_LLED1(0);
+//			}
+//		}
+//else if (stn == 2)
+//		{
+//		printf("         Mapping Co-Pilot SnapViews...");
+//		MapKey	(&HCougar,	H4R,	TEMPO(EXEC("SnapViewModRelease(KBPress, ProfID);"),EXEC("SetSnapViewT(9);"), DefTempo));	//Overhead Snapview(CP)
+//		MapKey	(&HCougar,	H4L,	TEMPO(EXEC("SnapViewModRelease(KBPress, ProfID);"),EXEC("SetSnapViewT(3);"), DefTempo));	//Center Console SnapView(CP)
+//		printf("Done!\xa");
+//		Pause_TrackIR(0,tir);
+//		if ((change > 0) & (led > 0))
+//			{
+//			Lights_LLED1(1);
+//			Lights_LLED2(0);
+//			}
+//		}
+//else	
+//		{
+//		printf("         Mapping FE SnapViews...");
+//		MapKey	(&HCougar,	H4R,	EXEC("SnapViewModRelease(KBPress, ProfID);"));									//release snapview (for door gunners with no good Snapview)
+//		MapKey	(&HCougar,	H4L,	EXEC("SnapViewModRelease(KBPress, ProfID);"));									//release snapview (for door gunners with no good Snapview)
+//		printf("Done!\xa");
+//		Pause_TrackIR(1,tir);
+//		if ((change > 0) & (led > 0)) Lights_LMFD(0);
+//		}
+//}
+
+
+
+
+int Mi8_Autopilot_Mapping(int axis, int state, int map = 1, int led=0)	//axis is which axis (i.e. MFD rocker) is remapped (0 for heading, 1 for altitude),
+															//state is whether the autopilot axis is on or off, and map is whether remapping is authorized
+{
+if ((map > 0) & (ProfID == 1008))
+	{
+	if (state > 0) 
+		{
+		if (axis > 0)
+			{
+			MapKeyIO(&RMFD,	CONU,	Mi8_AP_Pitch_Lt,	Mi8_AP_Alt_Up);	
+			MapKeyIO(&RMFD,	COND,	Mi8_AP_Pitch_Rt,	Mi8_AP_Alt_Dn);
+			if (led > 0)	//if enabled, goes solid for on for timeframe
+				{
+				Lights_RLED2(1);
+				DeferCall(Mi8_AP_MFD_LED,&Lights_RLED2,0);
+				}
+			}
+		else
+			{
+			MapKeyIO(&RMFD,	BRTU,	Mi8_AP_Roll_Lt,		Mi8_AP_Hdg_Lt);
+			MapKeyIO(&RMFD,	BRTD,	Mi8_AP_Roll_Rt,		Mi8_AP_Hdg_Rt);
+			if (led > 0)
+				{
+				Lights_RLED1(1);
+				DeferCall(Mi8_AP_MFD_LED,&Lights_RLED1,0);
+				}
+			}
+		}
+	else
+		{
+		if (axis > 0)
+			{
+			MapKeyIO(&RMFD,	CONU,	Mi8_AP_Alt_Up,		Mi8_AP_Pitch_Lt);
+			MapKeyIO(&RMFD,	COND,	Mi8_AP_Alt_Dn,		Mi8_AP_Pitch_Rt);
+			if (led > 0)	//if enabled, flashes off for timeframe
+				{
+				flashRLED2(1,250);
+				DeferCall(Mi8_AP_MFD_LED,&flashRLED2,0);
+				}
+			}
+		else
+			{
+			MapKeyIO(&RMFD,	BRTU,	Mi8_AP_Hdg_Lt,		Mi8_AP_Roll_Lt);
+			MapKeyIO(&RMFD,	BRTD,	Mi8_AP_Hdg_Rt,		Mi8_AP_Roll_Rt);
+			if (led > 0)
+				{
+				flashRLED1(1,250);
+				DeferCall(Mi8_AP_MFD_LED,&flashRLED1,0);
+				}
+			}
+		}
+	}
+}
+int	AP_PitchRoll_Flash(int time)
+{
+if (time)
+	{
+	AP_Roll_Flash(500);
+	DeferCall(250+LED_Delay,&AP_Pitch_Flash,500);
+	}
+}
+int	AP_Pitch_Flash(int time)
+{
+if (time)
+	{
+	flashRLED2(1,250);
+	DeferCall(time,&flashRLED2,0);
+	}
+}
+int	AP_Roll_Flash(int time)
+{
+if (time)
+	{
+	flashRLED1(1,250);
+	DeferCall(time,&flashRLED1,0);
+	}
+}
+
+
+int Mi8_Engine_Selector(int posit, int delay = 200, int time = 0)	//posit is switch position value (0 for left, 1 for mid, 2 for right), delay is time between switches, time should always start at 0
+{
+
+if (posit > 2) posit = (Mi8_Eng_Sel_Current+1)%3;					//out of bounds up toggles one step
+else if (posit < 0) posit = (Mi8_Eng_Sel_Current+2)%3;				//out of bounds down toggles two steps (comes to -1)
+
+while (Mi8_Eng_Sel_Sw_Current != posit)
+	{
+	if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+Mi8_Eng_Sel_Sw);	//condition added in 1.40; if delay = 0, no ActKey (useful for sync)
+	Mi8_Eng_Sel_Sw_Current = (Mi8_Eng_Sel_Sw_Current+1)%3;
+	time = time + delay;
+	}
+}
+
+int Mi8_H3_Map(int stn, int prof = 1008, int petr = 0)
+{
+		if ( ((prof == 1024) | (prof == 1564)) & (petr > 0))	//for Mi-24, petr is Boolean for Petrovich/George, no station
+			{
+			printf("         Hat3 (AI)...");	
+			if (WarthogStick > 0)
+				{
+				MapKey	(&Joystick, H3U,	USB_W);		//WASD for context sensitive Petrovich
+				MapKey	(&Joystick, H3R,	USB_D);
+				MapKey	(&Joystick,	H3D,	USB_S);
+				MapKey	(&Joystick, H3L,	USB_A);
+				}
+			else
+				{
+				MapKey	(&HCougar, 	H3U,	USB_W);	
+				MapKey	(&HCougar, 	H3R,	USB_D);
+				MapKey	(&HCougar,	H3D,	USB_S);
+				MapKey	(&HCougar, 	H3L,	USB_A);
+				}	
+			}
+		
+
+//stn = 2;				//temporarily disabling routine until doppler iCommands added
+		else if ((prof == 1008) & (stn == 2))	//CP
+			{
+			printf("         Hat3 (Doppler)...");	
+			if (WarthogStick > 0)
+				{
+				MapKey	(&Joystick, H3U,	CHAIN(DX31,DX32,D(ModDelay), DX11));		//DX31,32 allows for doppler DX mapping
+				MapKey	(&Joystick, H3R,	CHAIN(DX31,DX32,D(ModDelay), DX12));
+				MapKey	(&Joystick,	H3D,	CHAIN(DX31,DX32,D(ModDelay), DX13));
+				MapKey	(&Joystick, H3L,	CHAIN(DX31,DX32,D(ModDelay), DX14));
+				}
+			else
+				{
+				MapKey	(&HCougar, 	H3U,	CHAIN(DX31,DX32,D(ModDelay), DX11));		//DX31,32 allows for doppler DX mapping
+				MapKey	(&HCougar, 	H3R,	CHAIN(DX31,DX32,D(ModDelay), DX12));
+				MapKey	(&HCougar,	H3D,	CHAIN(DX31,DX32,D(ModDelay), DX13));
+				MapKey	(&HCougar, 	H3L,	CHAIN(DX31,DX32,D(ModDelay), DX14));
+				}	
+			}
+		else			//pilot/FE
+			{
+			printf("         Hat3 (Default)...");		
+			if (WarthogStick > 0)
+				{
+				if (prof == 1564)
+					{
+					MapKeyIO(&Joystick,	H3U,	DX11, TEMPO(DX11,CHAIN(DX30,D(ModDelay),DX11),DefTempo));
+					MapKeyIO(&Joystick,	H3D,	DX13, TEMPO(DX13,CHAIN(DX30,D(ModDelay),DX13),DefTempo));			
+					MapKey	(&Joystick,	H3L,	DX12);
+					}
+				else
+					{
+					MapKey	(&Joystick,	H3U,	DX11);
+					MapKey	(&Joystick,	H3D,	DX13);
+					MapKey	(&Joystick,	H3L,	DX14);
+					}
+				MapKey	(&Joystick,	H3R,	DX12);
+				}
+			else
+				{
+				if (prof == 1564)
+					{
+					MapKeyIO(&HCougar,	H3U,	DX11, TEMPO(DX11,CHAIN(DX30,D(ModDelay),DX11),DefTempo));
+					MapKeyIO(&HCougar,	H3D,	DX13, TEMPO(DX13,CHAIN(DX30,D(ModDelay),DX13),DefTempo));
+					}				
+				else
+					{
+					MapKey	(&HCougar, 	H3U,	DX11);
+					MapKey	(&HCougar,	H3D,	DX13);
+					}
+				MapKey	(&HCougar, 	H3R,	DX12);
+				MapKey	(&HCougar, 	H3L,	DX14);
+				}	
+			}
+		if ((prof == 1024) | (prof == 1564)) Lights_LLED2(petr);	//indicates petrovich off
+		Petrovich_Cur = petr;
+		printf("Done!\xa");	
+		
+}
+
+
+int Mi8_LMFD_Map(int stn)	//added in 1.40
+{
+		if (stn > 2)		//FE/gunner
+			{
+			printf("         LSOB15 (Cockpit Door)...");		
+			MapKeyIO(&LMFD,	OSB15,	TEMPO(Cockpit_Door,PULSE+Left_Door,DefTempo),	CHAIN(DX31,D(ModDelay),DX15));	
+			}
+		else if (stn == 2)	//CP
+			{
+			printf("         LSOB15 (Right Blister)...");		
+			MapKeyIO(&LMFD,	OSB15,	TEMPO(Blister_Rt,PULSE+Left_Door,DefTempo),		CHAIN(DX31,D(ModDelay),DX15));	
+			}
+
+		else				//Pilot
+			{
+			printf("         LSOB15 (Left Blister)...");		
+			MapKeyIO(&LMFD,	OSB15,	TEMPO(Blister_Lt,PULSE+Left_Door,DefTempo),		CHAIN(DX31,D(ModDelay),DX15));	
+			}
+		printf("Done!\xa");	
+}
+
+
+int UV26_Side_Sel(int posit, int delay = 200, int dur = 1000, int index = 3, int time = 0)	//posit is switch position value (0 for left, 1 for mid, 2 for right), delay is time between switches, dur is duration of LED (entering argument for UV26_LED function). time should always start at 0
+{
+if (Script_Debug) printf("UV26_Side_Sel(%i)\xa UV26_Side_Current = %i\xa",posit,UV26_Side_Current);
+if (	(posit > index-1) | (posit < 0)	)					// 4 is the basic cycle state up without flipping to 0 (i.e. discrete up keypress)
+	{
+	if (posit > index-1) 
+		{
+		posit = (UV26_Side_Current+1);					//no out of bounds
+		if (posit > index-1) posit = index-1;
+		//ActKey(KEYON+PULSE+Mi8_UV26_Side_Sw_Rt_DX);
+		}
+	else if (posit < 0)
+		{
+		posit = (UV26_Side_Current-1);				//no out of bounds
+		if (posit < 0) posit = 0;
+		//ActKey(KEYON+PULSE+Mi8_UV26_Side_Sw_Lt_DX);
+		}
+	}
+UV26_Side_Current = posit;						//sets equality for LED and next press
+UV26_LED(time,delay);	
+
+//else												//cycle with flip or discrete selection
+//	{
+//	if (posit == 3)
+//		{
+//		posit = (UV26_Side_Current+1)%3;	//cycle with flip
+//		dur = delay;						//shortens LED for follow-up on toggle, otherwise dur left at default
+//		}
+//	while (UV26_Side_Current != posit)					//do loop with if/then based on </>
+//		{
+//		if (UV26_Side_Current > posit)					
+//			{
+//			DeferCall(time, &ActKey, KEYON+PULSE+Mi8_UV26_Side_Sw_Lt_DX);	
+//			UV26_Side_Current = (UV26_Side_Current-1);
+//			if (UV26_Side_Current < 0) UV26_Side_Current = 0;
+//			}
+//		else if (UV26_Side_Current < posit)
+//			{
+//			DeferCall(time, &ActKey, KEYON+PULSE+Mi8_UV26_Side_Sw_Rt_DX);	
+//			UV26_Side_Current = (UV26_Side_Current+1);
+//			if (UV26_Side_Current > 2) UV26_Side_Current = 2;
+//			}
+//		if (UV26_Side_Current == posit) UV26_LED(time,dur);
+//		time = time + delay;
+//		}
+//	}
+
+ActKey(KEYON+PULSE+X(Mi8_UV26_Array,UV26_Side_Current));
+if (Script_Debug) printf(" UV26_Side_Current = %i\xa",UV26_Side_Current);
+
+}
+
+int UV26_LED(int time, int dur)
+{
+if(dur)			//determine lights after the UV-26 is selected settles (as long as duration > 0)
+	{
+	if 		(UV26_Side_Current > 1)							
+		{
+		DeferCall(time, 			&Lights_RLED1, 0);
+		DeferCall(time+LED_Delay,	&Lights_RLED2, 1);
+		}
+	else if (UV26_Side_Current == 1)
+		{
+		DeferCall(time, 			&Lights_RLED1, 1);
+		DeferCall(time+LED_Delay,	&Lights_RLED2, 1);
+		}
+	else
+		{
+		DeferCall(time,				&Lights_RLED2, 0);
+		DeferCall(time+LED_Delay,	&Lights_RLED1, 1);
+		}
+	DeferCall(time+dur,				&Lights_RLED1, 0);	
+	DeferCall(time+LED_Delay+dur,	&Lights_RLED2, 0);	
+	}
+}
+
+int	Mi8_Pylon_Set(int posit, int delay = 200, int index=3, int time=0)	//array obsolete with discrete and rotational buttons
+{
+if (	(posit > index-1) | (posit < 0)	)
+	{
+	if (posit > index-1) 
+		{
+		posit = (Mi8_Pylon_Sel_Cur+1);					//no out of bounds
+		if (posit > index-1) posit = index-1;
+		//ActKey(KEYON+PULSE+Mi8_Pylon_Sel_Sw_Up_DX);
+		}
+	else if (posit < 0)
+		{
+		posit = (Mi8_Pylon_Sel_Cur-1);				//no out of bounds
+		if (posit < 0) posit = 0;
+		//ActKey(KEYON+PULSE+Mi8_Pylon_Sel_Sw_Dn_DX);
+		}
+	//Mi8_Pylon_Sel_Cur = posit;						//sets equality for LED and next press
+	}
+
+while (Mi8_Pylon_Sel_Cur != posit)					//do loop with if/then based on </>
+	{
+	if (Mi8_Pylon_Sel_Cur > posit)					
+		{
+		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+Mi8_Pylon_Sel_Sw_Dn);	
+		Mi8_Pylon_Sel_Cur = (Mi8_Pylon_Sel_Cur-1);
+		if (Mi8_Pylon_Sel_Cur < 0) Mi8_Pylon_Sel_Cur = 0;
+		}
+	else if (Mi8_Pylon_Sel_Cur < posit)
+		{
+		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+Mi8_Pylon_Sel_Sw_Up);	
+		Mi8_Pylon_Sel_Cur = (Mi8_Pylon_Sel_Cur+1);
+		if (Mi8_Pylon_Sel_Cur > index-1) Mi8_Pylon_Sel_Cur = index-1;
+		}
+	time = time + delay;
+	}
+}
+
+int	Mi8_GUV_Sel(int posit, int delay = 200, int index=4, int time=0)
+{
+if (Script_Debug) printf("GUV_Sel Cur: %i  posit: %i  \xa",Mi8_GUV_Sel_Cur,posit);
+if (	(posit > index-1) | (posit < 0)	)
+	{
+	if (posit > index-1) 
+		{
+		posit = (Mi8_GUV_Sel_Cur+1);					//no out of bounds
+		if (posit > index-1) posit = index-1;
+		//ActKey(KEYON+PULSE+Mi8_GUV_Sel_Sw_Up_DX);
+		}
+	else if (posit < 0)
+		{
+		posit = (Mi8_GUV_Sel_Cur-1);				//no out of bounds
+		if (posit < 0) posit = 0;
+		//ActKey(KEYON+PULSE+Mi8_GUV_Sel_Sw_Dn_DX);
+		}
+	//Mi8_GUV_Sel_Cur = posit;						//sets equality for LED and next press
+	}
+
+while (Mi8_GUV_Sel_Cur != posit)					//do loop with if/then based on </>
+	{
+	if (Mi8_GUV_Sel_Cur > posit)					
+		{
+		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+Mi8_GUV_Sel_Sw_Dn);	
+		Mi8_GUV_Sel_Cur = (Mi8_GUV_Sel_Cur-1);
+		if (Mi8_GUV_Sel_Cur < 0) Mi8_GUV_Sel_Cur = 0;
+		}
+	else if (Mi8_GUV_Sel_Cur < posit)
+		{
+		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+Mi8_GUV_Sel_Sw_Up);	
+		Mi8_GUV_Sel_Cur = (Mi8_GUV_Sel_Cur+1);
+		if (Mi8_GUV_Sel_Cur > index-1) Mi8_GUV_Sel_Cur = index-1;
+		}
+	if (Script_Debug) printf("GUV_Sel Cur: %i  posit: %i  delay: %i  time: %i \xa",Mi8_GUV_Sel_Cur,posit,delay,time);
+	time = time + delay;
+	}
+}
+
+int	Mi8_Salvo_Set(int posit, int delay = 200, int index=3, int time=0)
+{
+if (	(posit > index-1) | (posit < 0)	)
+	{
+	if (posit > index-1) 
+		{
+		posit = (Mi8_Salvo_Sel_Cur+1);					//no out of bounds
+		if (posit > index-1) posit = index-1;
+		//ActKey(KEYON+PULSE+Mi8_Salvo_Sel_Sw_Up_DX);
+		}
+	else if (posit < 0)
+		{
+		posit = (Mi8_Salvo_Sel_Cur-1);				//no out of bounds
+		if (posit < 0) posit = 0;
+		//ActKey(KEYON+PULSE+Mi8_Salvo_Sel_Sw_Dn_DX);
+		}
+	//Mi8_Salvo_Sel_Cur = posit;						//sets equality for LED and next press
+	}
+
+while (Mi8_Salvo_Sel_Cur != posit)					//do loop with if/then based on </>
+	{
+	if (Mi8_Salvo_Sel_Cur > posit)					
+		{
+		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+Mi8_Salvo_Sel_Sw_Dn_DX);	
+		Mi8_Salvo_Sel_Cur = (Mi8_Salvo_Sel_Cur-1);
+		if (Mi8_Salvo_Sel_Cur < 0) Mi8_Salvo_Sel_Cur = 0;
+		}
+	else if (Mi8_Salvo_Sel_Cur < posit)
+		{
+		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+Mi8_Salvo_Sel_Sw_Up_DX);	
+		Mi8_Salvo_Sel_Cur = (Mi8_Salvo_Sel_Cur+1);
+		if (Mi8_Salvo_Sel_Cur > index-1) Mi8_Salvo_Sel_Cur = index-1;
+		}
+	time = time + delay;
+	}
+}
+
+int Mi8_Thr_Lt_Set(int posit, int delay = 200, int index = 3, int time = 0)
+{
+if (Script_Debug) printf("Left Throttle to %i \xa  Lt_Cur: %i \xa",posit, Mi8_Thr_Lt_Cur);
+if (	(posit > index-1) | (posit < 0)	)
+	{
+	if (posit > index-1) 
+		{
+		posit = (Mi8_Thr_Lt_Cur+1);					//no out of bounds
+		if (posit > index-1) posit = index-1;
+		}
+	else if (posit < 0)
+		{
+		posit = (Mi8_Thr_Lt_Cur-1);				//no out of bounds
+		if (posit < 0) posit = 0;
+		}
+	}
+while (Mi8_Thr_Lt_Cur != posit)					//do loop with if/then based on </>
+	{
+	if (Mi8_Thr_Lt_Cur > posit)					
+		{
+		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+Lt_Throttle_Dn);	
+		Mi8_Thr_Lt_Cur = (Mi8_Thr_Lt_Cur-1);
+		if (Mi8_Thr_Lt_Cur < 0) Mi8_Thr_Lt_Cur = 0;
+		}
+	else if (Mi8_Thr_Lt_Cur < posit)
+		{
+		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+Lt_Throttle_Up);	
+		Mi8_Thr_Lt_Cur = (Mi8_Thr_Lt_Cur+1);
+		if (Mi8_Thr_Lt_Cur > index-1) Mi8_Thr_Lt_Cur = index-1;
+		}
+	time = time + delay;
+	if (Script_Debug) printf("  Lt_Cur: %i\xa",Mi8_Thr_Lt_Cur);
+	}
+}
+
+int Mi8_Thr_Rt_Set(int posit, int delay = 200, int index = 3, int time = 0)
+{
+if (Script_Debug) printf("Right Throttle to %i \xa  Rt_Cur: %i \xa",posit, Mi8_Thr_Rt_Cur);
+if (	(posit > index-1) | (posit < 0)	)
+	{
+	if (posit > index-1) 
+		{
+		posit = (Mi8_Thr_Rt_Cur+1);					//no out of bounds
+		if (posit > index-1) posit = index-1;
+		}
+	else if (posit < 0)
+		{
+		posit = (Mi8_Thr_Rt_Cur-1);				//no out of bounds
+		if (posit < 0) posit = 0;
+		}
+	}
+while (Mi8_Thr_Rt_Cur != posit)					//do loop with if/then based on </>
+	{
+	if (Mi8_Thr_Rt_Cur > posit)					
+		{
+		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+Rt_Throttle_Dn);	
+		Mi8_Thr_Rt_Cur = (Mi8_Thr_Rt_Cur-1);
+		if (Mi8_Thr_Rt_Cur < 0) Mi8_Thr_Rt_Cur = 0;
+		}
+	else if (Mi8_Thr_Rt_Cur < posit)
+		{
+		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+Rt_Throttle_Up);	
+		Mi8_Thr_Rt_Cur = (Mi8_Thr_Rt_Cur+1);
+		if (Mi8_Thr_Rt_Cur > index-1) Mi8_Thr_Rt_Cur = index-1;
+		}
+	time = time + delay;
+	if (Script_Debug) printf("  Rt_Cur: %i\xa",Mi8_Thr_Rt_Cur);
+	}
+}
+
+
+int	Mi8_Throttle_Set(int posit, int delay = 200, int prof = 1008, int index=3, int time=0, int thrb=1)
+{
+if (Script_Debug) printf("Both Throttles to %i \xa  Lt_Cur: %i \xa  Rt_Cur: %i \xa",posit, Mi8_Thr_Lt_Cur,Mi8_Thr_Rt_Cur);
+if (	(posit > index-1) | (posit < 0)	)
+	{
+	if (posit > index-1) 
+		{
+		posit = (Mi8_Thr_Rt_Cur+1);					//no out of bounds
+		if (posit > index-1) posit = index-1;
+		}
+	else if (posit < 0)
+		{
+		posit = (Mi8_Thr_Rt_Cur-1);				//no out of bounds
+		if (posit < 0) posit = 0;
+		}
+	}
+//syncing individual throttles
+if (Mi8_Thr_Lt_Cur != Mi8_Thr_Rt_Cur)
+	{
+	if (	((Mi8_Thr_Lt_Cur == posit) | (Mi8_Thr_Rt_Cur == posit)) & (!delay)	)	//logical resync only if throttles not matched (if delay = 0)
+		{
+		if (Script_Debug) printf("Resyncing opposite throttle: ");
+		if ((Script_Debug) & (Mi8_Thr_Lt_Cur == posit)) printf("Left\xa");
+		if ((Script_Debug) & (Mi8_Thr_Rt_Cur == posit)) printf("Right\xa");
+		}		
+	else	//adjusting individual throttles to match sync
+		{
+		if (Script_Debug) printf("Adjusting Throttles Individually.\xa");
+		if (delay > 0)
+			{
+			DeferCall(time, &Mi8_Thr_Lt_Set, posit);
+			DeferCall(time+KBDelay+2*ModDelay, &Mi8_Thr_Rt_Set, posit);	//BDelay+2*ModDelay allows enough time to clear the modifier before the next keypress
+			}	
+		else
+			{
+			Mi8_Thr_Lt_Set(posit,0);
+			Mi8_Thr_Rt_Set(posit,0);
+			}
+		}
+	}
+
+
+//moving both throttles	
+else
+	{
+	thrb = Mi8_Thr_Lt_Cur;
+	while ((Mi8_Thr_Lt_Cur == Mi8_Thr_Rt_Cur) & (thrb != posit))					//do loop with if/then based on </>
+		{
+		if (Script_Debug) printf("Moving Both Throttles\xa");
+		
+		if (Mi8_Thr_Lt_Cur > posit)					
+			{
+			if (delay > 0)
+				{
+				if (prof == 1050)	DeferCall(time, &ActKey, KEYON+PULSE+BS2_Throttle_Dn);		//Ka-50
+				else				DeferCall(time, &ActKey, KEYON+PULSE+Mi8_Throttle_Dn);		//Mi-8
+				}
+			thrb = (thrb-1);
+			if (thrb < 0) thrb = 0;
+			}
+		else if (Mi8_Thr_Lt_Cur < posit)
+			{
+			if (delay > 0)
+				{
+				if (prof == 1050)	DeferCall(time, &ActKey, KEYON+PULSE+BS2_Throttle_Up);		//Ka-50
+				else 				DeferCall(time, &ActKey, KEYON+PULSE+Mi8_Throttle_Up);		//Mi-8
+				}
+			thrb = (thrb+1);
+			if (thrb > index-1) thrb = index-1;
+			}
+		if (Script_Debug) printf("  Lt_Cur: %i \xa  Rt_Cur: %i \xa  thrb: %i\xa",Mi8_Thr_Lt_Cur,Mi8_Thr_Rt_Cur,thrb);
+		time = time + delay;
+		}
+	Mi8_Thr_Lt_Cur = thrb;
+	Mi8_Thr_Rt_Cur = thrb;
+	}	
+}
+
+int Mi24_LDGH_Set(int state)
+{
+if (ProfID == 1024)
+	{
+	if (state)	MapKeyIO(&Throttle,	LDGH,	TEMPO(Spit_Starter,	EXEC("EjectCheckLDGH(ProfID);"),DefTempo),	Spit_Starter);	//HOME
+	else		MapKeyIO(&Throttle,	LDGH,	TEMPO(DX5,			EXEC("EjectCheckLDGH(ProfID);"),DefTempo),	DX5);	//Fire Missile
+	}
+
+}

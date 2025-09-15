@@ -1,0 +1,1314 @@
+//==============================================================================
+//	 DCS World Ka-50 Black Shark 2/3 for HOTAS Cougar/Warthog and Cougar MFDs
+//					by Don "Home Fries" Heumphreus
+//						last updated: 01JAN2023
+//
+//	Change Log:
+//	0.40	Initial integration
+//	0.41	Added CommState Toggle to S2 (short)
+//			Moved BS2_CommState_Off from CommState to here
+//			Added EjectCheckT6() to T6
+//			Moved GearDn_Ind_Default() to DCS World.tmc
+//	0.50	MapAxis added to init for P-51D error trap
+//	0.51	Added MapKeyR to T1 for compatibility with P-51D CommState
+//	0.55	Moved S3 to DCS_Init, adjusted S3S4Shifted args for S4
+//	0.58	Added MapKeyR 0 to T2-5
+//	0.59	Added Helo_Throttle_Rev option
+//	0.68	Added Helicopter Variable
+//	0.71	Added KBPress variable to DeferCall and D() commands
+//			Added KBPress to SnapView calls
+//	0.72	Added TriggerZoom_toggle(0) to init
+//	0.74	Added MapKeyR null for T6 to clear UH1 MapKeyR
+//	1.00	Initial Release/Rebaseline
+//	1.02	Coverted BS2_CommState_Off() to global CommState_Off(2)
+//	1.04	Moved S3 mapping from DCS_Init to local
+//	1.11	Updated for new S3Release() params
+//			Moved Microstick and ManRng Analog and Digital Axis mapping to Aux_Axis_Init()
+//	1.13	Replaced all TEMPO() and TEMPO(500) with TEMPO(DefTempo)
+//	1.23	Added AnalogBrakePoll(0) to disable analog brake polling in this module
+//	1.25	Added delays to "simultaneous" profile start LED use to minimize profile crashes
+//	1.26	Moved major axis mapping to DCS_Axis_Init()
+//			Adjusted Shkval center (shift T1) from LongTempo to DefTempo
+//			Added ADF controls to Comm Sw (T2-T5)
+//			Added engine start routines
+//	1.27	Adjusted engine start routines to add throttle and rotor brake.  Moved shut-off valves to T4/T5 long.
+//			Added Standby Attitude Indicator controls to RMFD (ROSB5 and SYM)
+//	1.28	Revised LED indications for profile swap
+//	1.29	Moved MFD mappings from DCS_Init
+//	1.31	Applied CenterPositRudder to Ka-50 specific configuration
+//	1.33	Analog braking option added
+//	1.34	BS2_ReleaseRudderTrim() obsolete as of DCSW 1.2.16u2 (no changes to code)
+//	1.35	Updated WheelBrakeFull argument for new DiffBraking() routine
+//	1.36	Added GearState to S3 mapping in BS2_Map_S3(), switched H4L from CommSw to SPU9_PTT, Remapped RSYM.
+//	1.40	Added Warthog Compatibility
+//	1.50	Added BS2_Map_Thr() to allow individual analog throttle control with WH.
+//	1.53	Adjusted for new 2.0 module selection
+//	1.56	Enabled WAV files for aircraft selection
+//	1.61	Added Warthog Lighting init
+//	1.66	Moved Ka-50 CommState_Off routines here
+//			Added MapKeyR for ROSB13-14 for compatibilty with Spitfire
+//	1.69	Updated CommState_Off() call
+//	1.71	Updated Throttle to match Mi-8 configuration (Warthog Only).  Moved Searchlight to Boat Switch
+//	1.73	Updated Fuel Switch routine for Warthog Throttle Users.
+//	2.02	Set FkeyPress=1 on init to prevent Commswitch activation on profile load
+//	2.10	Added VAICOM support
+//	2.21	Added NS430 as 0
+//	2.25	Added VR conditions to THR_FC digital throttle mapping
+//	2.28	Added DCS Scratchpad to ROSB10
+//	2.29	Added MFDisplay module selection
+//			Replaced 4 MFD Led functions with Lights_Four()
+//	2.34a	Added HOTAS Module Selection to S3+SPDB/T9 Long
+//	2.43	SnapViews removed for VR, replaced with autopilot cnx
+//	2.44	Added VR and Spyglass Zoom to VR
+//			Set Brake Cycle time (dummy value) to 1 to prevent poss DBZ
+//	2.45	Added TEMPO function to RGAIN and LSYM
+//			Fixed S2 for use with SRS/VAICOM
+//	2.46	Added SRS Overlay to ROSB20
+//	2.50b	Removed duplicate MapKeyR(0) mappings to free stack space.
+//	2.51	Removed Script_Debug print commands to free stack space.
+//	2.64b	Changed landing gear from toggle to discrete.
+//			Added flashlight.
+//	2.65	Replaced toggles with discrete switches for DCS 2.8.1/BS3
+//	2.66	Added Helo_Throttle_PS_Init() for compatibility
+//	
+//==============================================================================
+
+//free: DX16
+
+int DCS_Ka50(int led, int sp)
+{
+printf("DCS Ka-50 Black Shark\xa");
+
+if (WarthogStick > 0)
+	{
+	MapKeyR(&Joystick, S2,	EXEC("DCS_Ka50_Init();"));
+	}
+else
+	{
+	MapKeyR(&HCougar, S2,	EXEC("DCS_Ka50_Init();"));
+	}
+if (sp > 0)	PlayWav("ka50.wav");
+if (led > 0)
+	{
+	//should see 0 0 * 0 to indicate that Ka-50 has been selected.
+	//Lights_LMFD(1);
+	//Lights_RMFD(0);
+	Lights_Four(0,1,0,1,	ProfileSwapDelay+LED_Delay);
+//	DeferCall(ProfileSwapDelay+LED_Delay,&Lights_LLED1,0);	//Changed to Binary 2 in 1.28
+//	DeferCall(ProfileSwapDelay+4*LED_Delay,&Lights_LLED2,0);
+//	DeferCall(ProfileSwapDelay+2*LED_Delay,&Lights_RLED1,1);
+//	DeferCall(ProfileSwapDelay+3*LED_Delay,&Lights_RLED2,0);
+	}
+}
+
+int	SetMenu_Ka50()
+{
+Set_Acft_Array_Cur(1050);
+}
+
+
+
+int BS2_APMode;			//added in 1.26; will introduce delay if dogfight changed directly between T7/T8
+int	RotorBrake_State;	//added in 1.27
+int	Eng_Sel_Sw_Current;	//added in 1.27
+int	Eng_Sel_Sw_Move;	//added in 1.27
+//int T6_Gearcheck;		//added in 1.27; if T6_Gearcheck != GearState indicates gear was changed, will remap T6
+int	BS2_Starter;		//added in 1.27; if 1, DFM will return to rotor brake 
+int	DF_Posit;			//added in 1.27; tracks dogfight switch position for function argument
+
+
+int S2_PO;				//added in 1.27 for revised Commstate mapping
+int	S2_PI;
+int	S2_RO;
+int	S2_RI;
+
+int	BS2_Searchlight_Cur;
+int S3_CommState_Delay;	//added in 1.40 to allow prevention of H4D_CPTM execution while CommState selected.
+int	BS2_Fuel_Sw_Lt_Cur;
+int	BS2_Fuel_Sw_Rt_Cur;
+int	BS2_Fuel_Sw_APU_Cur;
+int BS2_Fuel_Sw_Lt_Cover_Cur;
+int BS2_Fuel_Sw_Rt_Cover_Cur;
+int BS2_Fuel_Sw_APU_Cover_Cur;
+int BS2_Salvo_Cur;
+int	BS2_ThrottleBothMods;
+int	BS2_Throttlemove;
+
+int S3_CommDly(int flag)
+{
+S3_CommState_Delay = flag;
+//printf("S3_CommState_Delay = %i\xa",S3_CommState_Delay);
+}
+int Eng_Sel_Sw_Move_Set(int flag)		//basic function similar to Grace_Flag but dedicated for engine start selector sw/dogfight check.  added in 1.27
+{
+Eng_Sel_Sw_Move = flag;
+}
+
+
+
+//program startup
+
+int DCS_Ka50_Init()
+{
+Helo_Throttle_PS_Init(0);
+Determine_Differential_Braking(0);
+
+FkeyPress				=	1;	//added in 2.02 to prevent Commswitch key activation on profile load.
+GraceFlag				=	0;
+Eng_Start_x				=	0;
+Eng_Stop_x				=	0;
+Starter_Ind_x			=	Starter_Ind_BS2;
+MFD_Eng_Start			=	0;
+ProfID					=	1050;
+FixedGear				=	0;
+//Helicopter				=	1;	//now a function for helos
+	HeloRotateMicrostick=	1;
+	CenterPositRudder	=	CenterPositRudder_BS2;
+	HeloHatTrim			=	1;	//not trim, but single crew used for SHKVAL
+T6WheelBrake			=	0;
+GearCycleTimeDn			=	Gear_Deploy_BS2;
+GearCycleTimeUp			=	Gear_Retract_BS2;
+BrakeOnCycleTime		=	1;	//min value to prevent DBZ
+BrakeOffCycleTime		=	1;
+TriggerZoomEnabled		=	0;
+//BrakeOnCycleTime		=	Airbrake_Out_DX;
+//BrakeOffCycleTime		=	Airbrake_In_DX;
+UV26_Side_Current		=	BS2_UV26_Side_Start;	//added in 1.27, not currently implemented.
+Searchlight_Current		=	0; //dedicated hat switch; not implemented for Ka-50
+Eng_Sel_Sw_Current		=	BS2_Eng_Sel_Sw_Start;
+RangeKnob 				=	abs(BS2_RotorBrake_Default-1);	//sets opposite of rotorbrake default so that if cold start then rangeknob is 0 and vice versa
+S4AnalogBrake			=	AnalogBrake_Helo;					//added in 1.33
+AnalogParkingBrake		=	JoyYParkingBrake;	//added in 1.33
+S4asNWS					=	0;					//added in 1.33
+S3holdNWS 				= 	0;	//added in 2.05
+XYAxisTrim				=	0;	//added in 1.34
+DMS_SnapView			=	0;	//added in 1.34 
+WheelBrakeFull			=	1;	//added in 1.35
+ToeBrakesAvailable		=	0;	//added in 1.40
+NVG_Capable				=	1;	//added in 1.40, set to 1 even though controls; extra command used for HUD
+AB_Capable				=	0;	//added in 1.61
+Adjust_Backlighting		=	0;	//added in 1.62
+NS430_Enabled			=	0;	//added in 2.21, not applicable to Ka50
+CrewCount				=	1;
+StationChangeModifier	=	0;
+WH_Use_TQS				=	0;	//added in 2.43
+Analog_TDC				=	1;	//added in 2.43
+EngineCount				=	Helicopter;	//doesn't matter for helo, so just match Helicopter value
+CommInitType			=	0;	//0 for none/custom, 1 for single channel (P-51), 2 for simple (dual channel), 3 for complex (3 channel).  added in 2.43
+StnCheckDisabled		=	2;	//added in 2.43.  Forced for single seat
+CurrentStation 			=	1;	//moved here in 2.43
+
+
+BS2_ThrottleBothMods = CHAIN(DX31,DX32);
+
+if (WarthogThrottle != 1)
+	{
+	if		(HCougar[T7])	DF_Posit = 7;	//Dogfight switch check added in 1.27 (useful with ManRng mapping of comm switch)
+	else if (HCougar[T8])	DF_Posit = 8;
+	else					DF_Posit = 0;
+	}
+else	DF_Posit = 0;
+
+if (WarthogThrottle > 0)
+	{
+	if 		(Throttle[PSF])	BS2_Searchlight_Cur = 2;		//one away from 0
+	else if (Throttle[PSM])	BS2_Searchlight_Cur = 1;		//2 away from 0
+	else BS2_Searchlight_Cur = 0;	
+
+	if 		(Throttle[APPAT])	BS2_Salvo_Cur = 2;			//one away from 0
+	else if (Throttle[APAH])	BS2_Salvo_Cur = 1;			//2 away from 0
+	else BS2_Salvo_Cur = 0;	
+	BS2_Map_Thr(0);	//defaults to both throttles
+	BS2_Throttlemove = 0;
+	}
+
+
+printf("DCS Ka-50 Black Shark Config (Profile v%i.%i):\xa",MajorVersion,MinorVersion);
+PlayWavSel(ProfID,abs(Init_Run - 1),DCSFP_Enabled,MFDisplayEnabled);	//added in 1.61, DCSFP added in 2.05, MFDisplay added in 2.29
+Pause_TrackIR(0);
+AnalogBrakePoll(0);	//added in 1.23
+TriggerZoom_toggle(0,TriggerZoom_state);		//no triggerzoom for Ka-50; will bypass LED check if state is off
+MFD_Init(ProfID);
+	printf("   Map HOTAS Cougar for DCS Ka-50 Black Shark Config:\xa");
+	DCS_Axis_Init(ProfID,EngineCount,Analog_TDC);
+
+		printf("      Button Mapping:\xa");
+			printf("         Shift Commands: S3  momentary...");
+				if (WarthogStick > 0)
+					{
+					if (WarthogThrottle > 0) 	SetShiftButton(&Joystick, S3,  &Throttle, FLAPU, FLAPD);
+					else						SetShiftButton(&Joystick, S3, &HCougar,  0, 0);
+					}					
+				else SetShiftButton(&HCougar, S3, &HCougar, 0, 0);
+				printf("Done!\xa");
+				BS2_CommState_Toggle(0,SPU9_BS2);
+				BS2_Map_S3(BS2_ForceCommStateOff,GearDn_Ind_Default);	//Gearstate added in 1.36; this needs to stay put because it's the only reference to GearState in init (not counting initial run)
+			printf("...Done!\xa");	
+			
+			if (WarthogStick > 0)
+				{
+				printf("         Warthog Stick Buttons...");	
+				MapKeyIO(&Joystick,	TG1, PULSE+DX1,DX1);	//pulse with DX30 will deselect cannon
+//				MapKeyRIO(&Joystick,TG1, 0, 0);
+				MapKeyIO(&Joystick,	TG2, PULSE+DX6, DX6);	//pulse with DX30 will select cannon
+//				MapKeyIO(&Joystick,	TG2, CHAIN(D(300),DX6), DX6);	//shifted D() allows for weapon/cannon toggle prior to firing. (obsolete in 2.65)
+//				MapKeyRIO(&Joystick,TG2, CHAIN(D(KBDelay),PULSE+DX1),0);	//releasing TG2 shifted will revert back to regular weapon (obsolete in 2.65)
+				MapKeyIO(&Joystick,	S1,	 BS2_Cyclic_Gauge_Illum, DX5); //added discrete function in 1.26 rather than shifted DX5 so DX5 can be held while hat is used (hat automatically shifted for Shkval)
+				MapKeyIO(&Joystick, S4, EXEC("S3S4Shifted(ProfID);"), EXEC("DiffBraking(RudderPedals,0,GearState,0,S4AnalogBrake,S4asNWS,WheelBrakeFull,0);"));			//brakes = 0 because no diff braking on Ka-50
+				MapKeyRIO(&Joystick,S4, 0, EXEC("DiffBraking(RudderPedals,0,GearState,0,S4AnalogBrake,S4asNWS,WheelBrakeFull,1);"));
+				}
+			else
+				{
+				printf("         Cougar Stick Buttons...");	
+				MapKeyIO(&HCougar,	TG1, PULSE+DX1,DX1);	//pulse with DX30 will toggle cannon
+//				MapKeyRIO(&HCougar,	TG1, 0, 0);
+				MapKeyIO(&HCougar,	TG2, CHAIN(D(300),DX6), DX6);	//shifted D() allows for weapon/cannon toggle prior to firing.
+				MapKeyRIO(&HCougar,	TG2, CHAIN(D(KBDelay),PULSE+DX1),0);	//releasing TG2 shifted will revert back to regular weapon
+				MapKeyIO(&HCougar,	S1,	 BS2_Cyclic_Gauge_Illum, DX5); //added discrete function in 1.26 rather than shifted DX5 so DX5 can be held while hat is used (hat automatically shifted for Shkval)
+				MapKeyIO(&HCougar,	S4, EXEC("S3S4Shifted(ProfID);"), EXEC("DiffBraking(RudderPedals,0,GearState,0,S4AnalogBrake,S4asNWS,WheelBrakeFull,0);"));			//brakes = 0 because no diff braking on Ka-50
+				MapKeyRIO(&HCougar, S4, 0, EXEC("DiffBraking(RudderPedals,0,GearState,0,S4AnalogBrake,S4asNWS,WheelBrakeFull,1);"));
+				}
+				
+				H1_Init(TrackIR, PadlockEnabled, ProfID);	//moved to individual routines in 1.27 for trim reset removal on helos
+				BS2_CommState_Init();		//programs S2 for comms
+				
+
+			printf("...Done!\xa");	
+			
+			CommState_Off(1,ProfID,1,0,1);	//sets hats 2-4 to DX functions	(gear toggle)
+			BS2_Throttle_Init();
+			
+
+	
+
+//BS2_MFD_Init();
+
+
+FlapState=0;				//for future implementation
+TriggerZoom_state  = 0;		//reset TriggerZoom
+BS2_Searchlight_Cur = 0;
+ActKey(DX1);				//just in case DX1 lingers from trigger activation
+//Lights_ALL(0);				//Says Init Complete
+RotorBrake_Toggle(BS2_RotorBrake_Default, 0, 50);	
+BS2_Fuel_Sw_Lt_Cur 		=	(GearDn_Ind_Default+1)%2;	//added in 1.40 for WH ENG switches
+BS2_Fuel_Sw_Rt_Cur		=	(GearDn_Ind_Default+1)%2;
+BS2_Fuel_Sw_APU_Cur		=	0;
+BS2_Fuel_Sw_Lt_Cover_Cur=	0;
+BS2_Fuel_Sw_Rt_Cover_Cur=	0;
+BS2_Fuel_Sw_APU_Cover_Cur=	0;
+if (Init_Run == 0) Gear_Ind_Init(GearDn_Ind_Default,FixedGear,Helicopter,AirBrkFlash);	
+
+Map_Cougar_ToeBrakes(0);	//added in 1.40
+
+printf(" DCS Ka-50 Black Shark Init Complete!\xa");	
+DeferCall(2*LED_Delay,&Lights_RLED1,0);
+DeferCall(3*LED_Delay,&Backlight_Max_Init,0);
+
+if (WarthogThrottle > 0) DeferCall(6*LED_Delay,&WHT_Lights_Dn_D,0);
+
+Set_Acft_Array_Cur(ProfID);
+}
+
+int BS2_Throttle_Init()
+{
+if (WarthogThrottle > 0)
+	{
+	printf("         Throttle Buttons...");	
+				MapKey	(&Throttle,	SC,	DX19);	//TEMPO(0,DX19,DefTempo),DX19);, removed delay
+//				MapKeyR	(&Throttle, SC, 0);							//Added in 0.51 to prevent P-51D CommState Release.
+
+				MapKeyIO(&Throttle,	LTB,	PULSE+BS2_Shkval_BW, DX5);
+//				MapKeyR	(&Throttle,	LTB,	0);
+				MapKeyIO(&Throttle,	APENG,	TEMPO(CHAIN(BS2_Engine_Stop, EXEC("GraceFlag = 1; BS2_StarterTimer(0);")),CHAIN(BS2_APU_Stop, EXEC("GraceFlag = 1; BS2_StarterTimer(0);")),DefTempo),	//short engine stop, long apu stop
+											TEMPO(CHAIN(DX31,D(ModDelay),DX11),CHAIN(DX24,EXEC("GraceFlag = 1; BS2_StarterTimer(Starter_Ind_BS2);")),DefTempo)	);	//reset short, Starter long
+
+				MapKey	(&Throttle,	CSU,	CHAIN(DX30,D(ModDelay),	DXHATUP));	//slower (linear) Shkval Slew
+				MapKey	(&Throttle,	CSD,	CHAIN(DX30,D(ModDelay),	DXHATDOWN));
+				MapKey	(&Throttle,	CSL,	CHAIN(DX30,D(ModDelay),	DXHATLEFT));
+				MapKey	(&Throttle,	CSR,	CHAIN(DX30,D(ModDelay),	DXHATRIGHT));
+				
+				if ((TrackIR > 1) | (MFD_Count < 1))		//TIR/MFD added in 2.34a
+						MapKeyIO(&Throttle, SPDB, 	TEMPO(DX27, EXEC("DCS_AcftSel(1);"),	SwapTempo),		DX27);
+				else	MapKey	(&Throttle, SPDB,	DX27);
+//				MapKeyR	(&Throttle, SPDB,	0);
+				MapKey	(&Throttle, SPDF,	DX27);
+//				MapKeyR	(&Throttle,	SPDF,	0);
+				
+			//printf("comm init...");
+				MapKeyIO(&Throttle,	MSU,	TEMPO(BS2_ADF_Bcn_Up, PULSE+BS2_AA_Weps_Sel,DefTempo),	PULSE+BS2_AA_Weps_Sel);
+				MapKeyIO(&Throttle,	MSD,	TEMPO(BS2_ADF_Bcn_Dn, BS2_Weps_All, 		DefTempo),	BS2_Weps_All);
+				MapKey	(&Throttle,	MSL,	BS2_Weps_Outbd);
+				MapKey	(&Throttle,	MSR,	BS2_Weps_Inbd);
+				
+								
+				MapKeyR	(&Throttle,	MSU,	0);
+				MapKeyR	(&Throttle,	MSD,	0);
+				MapKeyR	(&Throttle,	MSL,	0);
+				MapKeyR	(&Throttle,	MSR,	0);
+				if  (VACChatter > 0)	// VAICOM with chatter pack
+					{
+					//if ((VAC >0) & (TARS > 0) & (!Force_VAC_S2_BS2))	//MSP forced to DX in 2.45 with SRS on 
+					//		MapKeyIO(&Throttle,	MSP,	TEMPO(0,CHAIN(VAICOM_Chatter,	EXEC("MSPCheck = 1;")),DefTempo),	CHAIN(TS3PTT_DX, 	EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"))	);
+					//else
+					MapKeyIO(&Throttle,	MSP,	TEMPO(0,CHAIN(VAICOM_Chatter,	EXEC("MSPCheck = 1;")),DefTempo),	CHAIN(PTT_Common, 	EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"))	);
+					MapKeyRIO(&Throttle,MSP,	0,										EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);"));
+					}
+				else
+					{
+					//if ((VAC >0) & (TARS > 0) & (!Force_VAC_S2_BS2))	//MSP forced to DX in 2.45 with SRS on 
+					//		MapKey	(&Throttle,	MSP,	CHAIN(TS3PTT_DX,	EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"))	);
+					//else	
+					MapKey	(&Throttle,	MSP,	CHAIN(PTT_Common, 	EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"))	);
+					MapKeyR	(&Throttle,	MSP,								EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);"));
+					}
+			//printf("continued...");
+				MapKeyIO(&Throttle,	CHF,	TEMPO(0,Gear_Dn,GearDnTempo),	PULSE+BS2_RPM_Nom); 
+				MapKeyIO(&Throttle,	CHB,	TEMPO(0,Gear_Up,GearUpTempo),	PULSE+BS2_RPM_Low);
+//				MapKeyR	(&Throttle,	CHF,	0);	//Added for F-86 in 1.69
+//				MapKeyR	(&Throttle,	CHB,	0);	//Added for F-86 in 1.69				
+				
+//				MapKeyIO(&Throttle,	PSF,	EXEC("BS2_Searchlight_Set(2,0);"),	EXEC("BS2_Searchlight_Set(2,Switch_Delay);"));
+//				MapKeyIO(&Throttle,	PSM,	TEMPO(0,EXEC("BS2_Searchlight_Set(1,0);"),DoubleTap),
+//											TEMPO(0,EXEC("BS2_Searchlight_Set(1,Switch_Delay);"),DoubleTap));
+//				MapKeyIO(&Throttle,	PSB,	EXEC("BS2_Searchlight_Set(0,0);"),	EXEC("BS2_Searchlight_Set(0);"));
+				
+				Mi8_PS_Map(RuH_WH_Throttle_Discrete,0,1050); //0 for no LED flash
+
+//				MapKey	(&Throttle,	IDLERON,	0);
+//				MapKey	(&Throttle,	IDLEROFF,	0);
+//				MapKey	(&Throttle,	IDLELON,	0);
+//				MapKey	(&Throttle,	IDLELOFF,	0);
+
+				MapKeyIO(&Throttle,	LDGH,	TEMPO(0,EXEC("EjectCheckLDGH(ProfID);"), DefTempo), TEMPO(CHAIN(DX31,D(ModDelay),DX5),BS2_Rotor_RPM_Warn,DefTempo));	//DX Master Caution and Rotor RPM Warn (Long)
+
+			printf("Base Switches...");
+				MapKeyIO(&Throttle,	EFLNORM,	0,							PULSE+BS2_Cannon_Ammo_HE);
+//				MapKeyR	(&Throttle,	EFLNORM,	0);
+				MapKeyIO(&Throttle,	EFLOVER,	0,							PULSE+BS2_Cannon_Ammo_AP);
+				MapKeyIO(&Throttle,	EFRNORM,	0,							PULSE+BS2_Cannon_ROF_Low);
+//				MapKeyR	(&Throttle,	EFRNORM,	0);
+				MapKeyIO(&Throttle,	EFROVER,	0,							PULSE+BS2_Cannon_ROF_High);
+				
+				MapKeyIO(&Throttle,	EOLIGN,		TEMPO(	EXEC("GraceFlag = 1; BS2_Fuel_Sw_Lt_Cover_Cycle(-1,0);"),			//toggles switch cover state, Graceflag prevents EOLNORM activation
+														EXEC("GraceFlag = 1; BS2_Fuel_Sw_Lt_Cycle(-1,3,0);"),	DefTempo),	//toggles switch state
+												TEMPO(	EXEC("GraceFlag = 1; BS2_Fuel_Sw_Lt_Cover_Cycle(-1);"),			//toggles switch cover
+														CHAIN(PULSE+BS2_Fuel_Cutoff_Lt,EXEC("GraceFlag = 1;")),	DefTempo));
+												
+				MapKeyIO(&Throttle,	EOLNORM,	EXEC("if (!GraceFlag) BS2_Fuel_Sw_Lt_Cover_Cycle(1);"),
+												EXEC("if (!GraceFlag) BS2_Fuel_Sw_Lt_Cycle(1,1);"));
+				
+				MapKeyIO(&Throttle,	EOLMOTOR,	EXEC("BS2_Fuel_Sw_Lt_Cover_Cycle(0);"),	//toggles switch cover
+												EXEC("BS2_Fuel_Sw_Lt_Cycle(0,2);"));
+				//MapKeyRIO(&Throttle,EOLMOTOR,	0,										EXEC("BS2_Fuel_Sw_Lt_Cycle(1);"));
+				MapKeyIO(&Throttle,	EORIGN,		TEMPO(	EXEC("GraceFlag = 1; BS2_Fuel_Sw_Rt_Cover_Cycle(-1,0);"),			//toggles switch cover state
+														EXEC("GraceFlag = 1; BS2_Fuel_Sw_Rt_Cycle(-1,3,0);"),	DefTempo),	//toggles switch state
+												TEMPO(	EXEC("GraceFlag = 1; BS2_Fuel_Sw_Rt_Cover_Cycle(-1);"),			//toggles switch cover
+														CHAIN(PULSE+BS2_Fuel_Cutoff_Rt,EXEC("GraceFlag = 1;")),	DefTempo));
+												
+				MapKeyIO(&Throttle,	EORNORM,	EXEC("if (!GraceFlag) BS2_Fuel_Sw_Rt_Cover_Cycle(1);"),
+												EXEC("if (!GraceFlag) BS2_Fuel_Sw_Rt_Cycle(1,1);"));
+				
+				MapKeyIO(&Throttle,	EORMOTOR,	EXEC("BS2_Fuel_Sw_Rt_Cover_Cycle(0);"),	//toggles switch cover
+												EXEC("BS2_Fuel_Sw_Rt_Cycle(0,2);"));
+				//MapKeyRIO(&Throttle,EORMOTOR,	0,										EXEC("BS2_Fuel_Sw_Rt_Cycle(1);"));
+
+				MapKeyR	(&Throttle,	EOLIGN,		EXEC("DeferCall(KBDelay,&Grace_Flag,0);"));	//clears GraceFlag after short delay
+				MapKeyR	(&Throttle,	EORIGN,		EXEC("DeferCall(KBDelay,&Grace_Flag,0);"));
+				
+				MapKeyIO(&Throttle,	APUON,		PULSE+BS2_Fuel_Sw_APU_Cover,		//toggles switch cover
+												EXEC("BS2_Fuel_Sw_APU_Cycle(1);"));
+				MapKeyIO(&Throttle,	APUOFF,		0,	
+												EXEC("BS2_Fuel_Sw_APU_Cycle(0);"));
+				
+				MapKeyIO(&Throttle,	APPAT,	0,	PULSE+BS2_Salvo_Long);	
+				MapKeyIO(&Throttle,	APAH,	0,	TEMPO(0,PULSE+BS2_Salvo_Med,DoubleTap));	
+				MapKeyIO(&Throttle,	APALT,	0,	PULSE+BS2_Salvo_Short);	
+
+//				MapKeyIO(&Throttle,	APPAT,	CHAIN(PULSE+BS2_Searchlight_Cycle,D(),PULSE+BS2_Searchlight_Cycle),	EXEC("BS2_Searchlight_Set(2);"));	// /I was EXEC("BS2_Searchlight_Set(-1);")
+//				MapKeyIO(&Throttle,	APAH,	0,	TEMPO(0,EXEC("BS2_Searchlight_Set(1);"),DoubleTap));	// /I was EXEC("BS2_Searchlight_Cur = 0;")
+//				MapKeyIO(&Throttle,	APALT,	PULSE+BS2_Searchlight_Cycle,	EXEC("BS2_Searchlight_Set(0);"));	// /I was EXEC("BS2_Searchlight_Set(3);")
+				
+			
+				
+				MapKeyIO(&Throttle,	RDRNRM,	0,	PULSE+BS2_Cannon_AT);	//Gun Tracking
+				MapKeyIO(&Throttle,	RDRDIS,	0,	PULSE+BS2_Cannon_RET);
+				
+				MapKeyIO(&Throttle,	EACON,	0,	PULSE+BS2_HMD_On);	
+				MapKeyIO(&Throttle,	EACOFF,	0,	PULSE+BS2_HMD_Off);
+			
+//				MapKeyIO(&Throttle,	FLAPD, 	EXEC("if (GearState) RotorBrake_Toggle(0);"),	EXEC("if(Eng_Sel_Sw_Move) DeferCall(3*Switch_Delay,&BS2_Engine_Selector,3); else BS2_Engine_Selector(3, Switch_Delay);"));	//2*delay because it takes 2 cycles from T8 to get switch back to APU	
+//				MapKeyRIO(&Throttle,FLAPD, 	0,	EXEC("DeferCall(Switch_Delay,&BS2_DFCheck,0); DeferCall(4*Switch_Delay,&Eng_Sel_Sw_Move_Set,0);"));	// to put eng sel switch at APU if in DFM so it won't step on opposite (T8) function; defer 4* for 1 of original defer and 3 to cycle switch from T7
+//				MapKeyIO(&Throttle,	FLAPU, 	EXEC("if (GearState) RotorBrake_Toggle(1);"),	EXEC("if(Eng_Sel_Sw_Move) DeferCall(2*Switch_Delay,&BS2_Engine_Selector,2); else BS2_Engine_Selector(2, Switch_Delay);"));	//3*delay because it takes 3 cycles from T7 to get switch back to APU
+//				MapKeyRIO(&Throttle,FLAPU, 	0,	EXEC("DeferCall(Switch_Delay,&BS2_DFCheck,0); DeferCall(3*Switch_Delay,&Eng_Sel_Sw_Move_Set,0);"));	// to put eng sel switch at APU if in DFM so it won't step on opposite (T7) function; defer 3* for 1 of original defer and 2 to cycle switch from T8
+//				MapKey	(&Throttle,	FLAPM,	0);//EXEC("DeferCall(Switch_Delay,&BS2_DFCheck,0);"));//0);
+
+				MapKeyIO(&Throttle,	FLAPD, 	EXEC("if (GearState) RotorBrake_Toggle(0);"),	CHAIN(PULSE+BS2_Eng_Sel_Lt, EXEC("BS2_Map_Thr(3);"))	);	//posit is switch position value (0 for turbo gear, 1 for APU, 2 for right, 3 for left)
+				MapKeyRIO(&Throttle,FLAPD, 	0,	EXEC("DeferCall(Switch_Delay,&BS2_DFCheck,0);"));	// to put eng sel switch at APU if in DFM so it won't step on opposite (T8) function
+				MapKeyIO(&Throttle,	FLAPU, 	EXEC("if (GearState) RotorBrake_Toggle(1);"),	CHAIN(PULSE+BS2_Eng_Sel_Rt, EXEC("BS2_Map_Thr(2);"))	);	
+				MapKeyRIO(&Throttle,FLAPU, 	0,	EXEC("DeferCall(Switch_Delay,&BS2_DFCheck,0);"));	// to put eng sel switch at APU if in DFM so it won't step on opposite (T7) function
+				MapKey	(&Throttle,	FLAPM,	0);//EXEC("DeferCall(Switch_Delay,&BS2_DFCheck,0);"));//0);
+
+
+				BS2_Fuel_Sw_Array_Set(GearDn_Ind_Default, 1);	//sets engine switches to default based on GearState, added in 1.73
+			printf("...Done!\xa");
+	printf("   HOTAS Warthog Throttle Mapping Complete.\xa\xa");			
+	}
+else
+	{
+			printf("         TQS Buttons...");	
+				MapKeyIO(&HCougar, T1, TEMPO(0,DX19,DefTempo),DX19);		//TEMPOs 0 shifted short to prevent inadvertent center.  also works with H1D double tap
+//				MapKeyR	(&HCougar, T1, 0);							//Added in 0.51 to prevent P-51D CommState Release.
+				
+				// T2-T5 taken care of in BS2_MapCommSw(0);
+				MapKeyR	(&HCougar, T2, 0);
+				MapKeyR	(&HCougar, T3, 0);
+				MapKeyR	(&HCougar, T4, 0);
+				MapKeyR	(&HCougar, T5, 0);
+				
+				BS2_MapDFT6(GearDn_Ind_Default, 0, abs(BS2_RotorBrake_Default-1)	);	//added in 1.26 for engine start ability
+				BS2_MapCommSw(0);			//added in 1.26; 0 is default setting
+				MapKeyR	(&HCougar, T6, EXEC("BS2_MapDFT6(GearState,BS2_Starter,RangeKnob); DeferCall(KBDelay,&Grace_Flag,0);"));	//added in 1.27; leave on T6 /R instead of BS2_StarterTimer() to prevent T6 remap while down
+
+				if ((TrackIR > 1) | (MFD_Count < 1))		//TIR/MFD added in 2.34a
+						MapKeyIO(&HCougar, T9, 	TEMPO(DX27, EXEC("DCS_AcftSel(1);"),	SwapTempo),		DX27);
+				else	MapKey	(&HCougar, T9, DX27);
+//				MapKeyR	(&HCougar,T9, 0);
+				MapKeyIO(&HCougar, T10,PULSE+DX28,DX28);
+				MapKeyRIO(&HCougar,T10,DX2, 0);
+			printf("...Done!\xa");
+		printf("   HOTAS Cougar Mapping Complete.\xa\xa");		
+	}
+BS2_DF_Init(WarthogThrottle);
+}
+
+int BS2_HCS_Init(int prof = 1050)
+{
+//		if (Script_Debug) printf("         Hat2 (TMS)...");	
+			if (TrackIR < 2)
+				{
+				MapKeyIO(&HCougar,	H2U,	BS2_SnapView2,		DX7);		//Snapview6 or DX7);
+				MapKeyIO(&HCougar,	H2D,	BS2_SnapView4,		DX9);		//Snapview3 with DE or DX9, possible commstate added in 1.36
+				MapKeyIO(&HCougar,	H2R,	BS2_SnapView3,		DX8);		//Snapview2 or DX8
+				MapKeyIO(&HCougar,	H2L,	BS2_SnapView1,		DX10);		//Snapview1 or DX10
+				}
+			else	//VR no SnapView, shifted functions need to be mapped in-game
+				{
+				MapKeyIO(&HCougar, 	H2U,	VR_Zoom_kb,		DX7);		//Autoturn or DX7);
+				MapKeyIO(&HCougar, 	H2D,	VR_Spyglass,	DX9);		//Mov Gnd Tgt or DX9
+				MapKey	(&HCougar,	H2R,	DX8);		//AA HO or DX8
+				MapKey	(&HCougar,	H2L,	DX10);		//AA  or DX10
+				}
+//		if (Script_Debug) printf("...Done!\xa");	
+//		if (Script_Debug) printf("         Hat3 (DMS)...");		
+			MapKeyIO(&HCougar, 	H3U,	Gear_Flaps_Up, DX11);
+			MapKeyIO(&HCougar, 	H3R,	TEMPO(DX12, DX16, DefTempo),	DX12);
+			MapKeyIO(&HCougar,	H3D,	Gear_Flaps_Dn, DX13);
+			MapKeyIO(&HCougar, 	H3L,	TEMPO(DX14, DX16, DefTempo),	DX14);
+//		if (Script_Debug) printf("...Done!\xa");	
+//		if (Script_Debug) printf("         Hat4 (CMS)...");
+			H4UD_CPTM(prof);			
+			if (TrackIR < 2)
+				{
+				MapKeyIO(&HCougar,	H4R,	BS2_SnapView9,		TEMPO(BS2_SPU9_Mode_Next,	DX18, DefTempo));		//Snapview9 or DX16 (short, cycle radio) or DX18 (long, autopilot cnx)
+				MapKeyIO(&HCougar,	H4L,	BS2_SnapView6,		TEMPO(BS2_SPU9_Mode_Prev,	DX18, DefTempo));
+//		if (SPU9_BS2 > 0)
+//						MapKeyIO(&HCougar,	H4L,	BS2_SnapView6,		TEMPO(PULSE+SPU9_PTT,	DX18, DefTempo));		//Snapview4 or DX18, added SPU-9 CommMenu for short in 1.36
+//				else	MapKeyIO(&HCougar,	H4L,	BS2_SnapView6,		TEMPO(PULSE+CommMenu,	DX18, DefTempo));		//Snapview4 or DX18, added CommMenu for short in 1.27b6
+				}
+			else	
+				{
+				MapKeyIO(&HCougar,	H4R,	DX18,				TEMPO(BS2_SPU9_Mode_Next,				DX18, DefTempo));				
+				MapKeyIO(&HCougar,	H4L,	DX18,				TEMPO(BS2_SPU9_Mode_Prev,				DX18, DefTempo));
+//				if (SPU9_BS2 > 0)
+//						MapKeyIO(&HCougar,	H4L,	DX18,		TEMPO(PULSE+SPU9_PTT,	DX18, DefTempo));		
+//				else	MapKeyIO(&HCougar,	H4L,	DX18,		TEMPO(PULSE+CommMenu,	DX18, DefTempo));		
+				}
+//		if (Script_Debug) printf("...Done!\xa");	
+}
+int BS2_WHS_Init(int prof = 1050)
+{
+//		if (Script_Debug) printf("         Hat2 (TMS)...");	
+			if (TrackIR < 2)
+				{
+				MapKeyIO(&Joystick,	H2U,	BS2_SnapView2,		DX7);		//Snapview6 or DX7);
+				MapKeyIO(&Joystick,	H2D,	BS2_SnapView4,		DX9);		//Snapview3 with DE or DX9, possible commstate added in 1.36
+				MapKeyIO(&Joystick,	H2R,	BS2_SnapView3,		DX8);		//Snapview2 or DX8
+				MapKeyIO(&Joystick,	H2L,	BS2_SnapView1,		DX10);		//Snapview1 or DX10
+				}
+			else
+				{
+				MapKeyIO(&Joystick,	H2U,	VR_Zoom_kb,		DX7);		//Autoturn or DX7);
+				MapKeyIO(&Joystick,	H2D,	VR_Spyglass,	DX9);		//Mov Gnd Tgt or DX9
+				MapKey	(&Joystick,	H2R,	DX8);		//AA HO or DX8
+				MapKey	(&Joystick,	H2L,	DX10);		//AA or DX10
+				}
+//		if (Script_Debug) printf("...Done!\xa");	
+//		if (Script_Debug) printf("         Hat3 (DMS)...");		
+			if (WarthogThrottle > 0)
+				{
+				MapKeyIO(&Joystick, 	H3U,	TEMPO(DX11,BS2_LdgLight_Change,DefTempo), DX11);	//main/reserve light toggle
+				MapKeyIO(&Joystick,		H3D,	TEMPO(DX13,BS2_LdgLight_Change,DefTempo), DX13);
+				}
+			else
+				{
+				MapKeyIO(&Joystick, 	H3U,	TEMPO(DX11,Gear_Up,DefTempo), DX11);
+				MapKeyIO(&Joystick,		H3D,	TEMPO(DX13,Gear_Dn,DefTempo), DX13);
+				}
+			MapKeyIO(&Joystick, 	H3R,	TEMPO(DX12, DX16, DefTempo),	DX12);
+			MapKeyIO(&Joystick, 	H3L,	TEMPO(DX14, DX16, DefTempo),	DX14);
+			
+//		if (Script_Debug) printf("...Done!\xa");	
+//		if (Script_Debug) printf("         Hat4 (CMS)...");
+			H4UD_CPTM(prof);	
+			if (TrackIR < 2)
+				{
+				MapKeyIO(&Joystick,	H4R,	BS2_SnapView9,		TEMPO(BS2_SPU9_Mode_Next,				DX18, DefTempo));		//Snapview9 or DX18 (long, autopilot cnx)
+				MapKeyIO(&Joystick,	H4L,	BS2_SnapView6,		TEMPO(BS2_SPU9_Mode_Prev,				DX18, DefTempo));
+//			if (SPU9_BS2 > 0)
+//						MapKeyIO(&Joystick,	H4L,	BS2_SnapView6,		TEMPO(PULSE+SPU9_PTT,	DX18, DefTempo));		//Snapview4 or DX18, added SPU-9 CommMenu for short in 1.36
+//				else	MapKeyIO(&Joystick,	H4L,	BS2_SnapView6,		TEMPO(PULSE+CommMenu,	DX18, DefTempo));		//Snapview4 or DX18, added CommMenu for short in 1.27b6
+				}
+			else	//no VR Snapviews, replaced with autopilot cnx
+				{
+				MapKeyIO(&Joystick,	H4R,	DX18,				TEMPO(BS2_SPU9_Mode_Next,				DX18, DefTempo));
+				MapKeyIO(&Joystick,	H4L,	DX18,				TEMPO(BS2_SPU9_Mode_Prev,				DX18, DefTempo));
+//				if (SPU9_BS2 > 0)
+//						MapKeyIO(&Joystick,	H4L,	DX18,		TEMPO(PULSE+SPU9_PTT,	DX18, DefTempo));		
+//				else	MapKeyIO(&Joystick,	H4L,	DX18,		TEMPO(PULSE+CommMenu,	DX18, DefTempo));		
+				}
+//		if (Script_Debug) printf("...Done!\xa");	
+}
+
+int	BS2_DF_Init(int wh)
+{
+if (wh > 0)
+	{
+//	MapKeyIO(&Throttle,	BSB,	EXEC("BS2_Searchlight_Set(0,Switch_Delay);"),						DX25);
+//	MapKeyR	(&Throttle,	BSB,	0);
+//	MapKeyIO(&Throttle,	BSF,	EXEC("BS2_Searchlight_Set(2,Switch_Delay);"),						PULSE+DX26);
+//	MapKeyRIO(&Throttle,BSF,	0,																	PULSE+DX26);
+//	MapKeyIO(&Throttle,	BSM,	TEMPO(0,EXEC("BS2_Searchlight_Set(1,Switch_Delay);"),DoubleTap),	0);
+
+	MapKeyIO(&Throttle,	BSB,	PULSE+DX25,	DX25);
+	MapKeyRIO(&Throttle,BSB,	PULSE+DX26,	0);
+	MapKey	(&Throttle,	BSF,				PULSE+DX26);
+	MapKeyRIO(&Throttle,BSF,	PULSE+DX25,	PULSE+DX26);
+	MapKey	(&Throttle,	BSM,	0);
+	}
+else
+	{
+	BS2_MapDFT6(GearState,BS2_Starter,RangeKnob);
+	MapKey	(&HCougar, DFM, 0);
+	}
+}
+
+int BS2_MFD_Init()
+{
+//===================================
+//		Standard MFD Buttons
+//===================================
+
+	printf("   Map Cougar Left  MFD (DX31)...");	
+//LOSB 1 in Init
+					MapKey	(&LMFD, OSB02,	CHAIN(DX31,D(ModDelay),DX2));
+					MapKey	(&LMFD, OSB03,	CHAIN(DX31,D(ModDelay),DX3));
+					MapKey	(&LMFD,	OSB04,	CHAIN(DX31,D(ModDelay),DX4));
+//					MapKeyR	(&LMFD,	OSB04,	0);	//for A-10C and F-5E					
+					MapKeyIO(&LMFD, OSB05,	CHAIN(DX31,D(ModDelay),DX5),	TEMPO(CHAIN(DX31,D(ModDelay),DX5), BS2_Rotor_RPM_Warn, DefTempo)	);
+//					MapKeyR	(&LMFD,	OSB05,	0);	//For F-5E
+//LOSB 6-10
+					MapKeyIO(&LMFD,	OSB06,	CHAIN(DX31,D(ModDelay),DX6),	TEMPO(CHAIN(DX31,D(ModDelay),DX6),CHAIN(DX30,DX31,D(ModDelay),DX6), DefTempo)	);			//long Cut of Burst for FC3, HUD Filter for BS2, Copilot AI in UH1
+					MapKey	(&LMFD,	OSB07,	CHAIN(DX31,D(ModDelay),DX7));
+//					MapKeyR	(&LMFD,	OSB07,	0);	//for Bf109
+					MapKeyIO(&LMFD,	OSB08,	TEMPO(CHAIN(DX31,D(ModDelay),DX8),BS2_Flashlight_Lens, DefTempo),	CHAIN(DX31,D(ModDelay),DX8));	//I flashlight and long for color
+					MapKey	(&LMFD,	OSB09,	CHAIN(DX31,D(ModDelay),DX9));
+					MapKeyIO(&LMFD,	OSB10,	TEMPO(0, BS2_Stores_Jett, LongTempo),	DX_LOSB10T	);	// /I jett weps (LONG), /O master arm (discrete)
+
+//LOSB 11-15, 16
+					MapKey	(&LMFD,	OSB11,	DX_LOSB11);
+					MapKeyIO(&LMFD,	OSB12,	TEMPO(BS2_Laser_Pwr_Off,CHAIN(DX31,D(ModDelay),DX12),SwTempo),	CHAIN(DX31,D(ModDelay),DX12));	//Long laser power discrete on
+					MapKeyIO(&LMFD,	OSB13,	EXEC("BS2_Engine_Selector(4, Switch_Delay);"),	DX_LOSB13T);	//added in 1.27 for switch selector routine
+					MapKeyIO(&LMFD,	OSB14,	DX_LOSB14,	DX_LOSB14T);
+					MapKey	(&LMFD,	OSB15,	DX_LOSB15);
+					MapKey	(&LMFD,	OSB16,	DX_LOSB16);
+					
+
+//LOSB 17-19
+					MapKey	(&LMFD,	OSB17,	CHAIN(DX31,D(ModDelay),DX17));
+					MapKey	(&LMFD,	OSB18,	CHAIN(DX31,D(ModDelay),DX18));	
+					MapKey	(&LMFD,	OSB19,	CHAIN(DX31,D(ModDelay),DX19));
+		
+//LMFD 20 in Init
+
+//Left Rocker Switches
+//SYM
+		MapKeyIO(&LMFD,	SYMU,	TEMPO(KB_LSYMU,	BS2_Wiper_Windshield,	DefTempo),	TEMPO(KB_LSYMU,CHAIN(DX30,D(ModDelay),KB_LSYMU),DefTempo)	);
+		MapKeyIO(&LMFD,	SYMD,	TEMPO(KB_LSYMD, BS2_Wiper_Shkval,	 	DefTempo),	TEMPO(KB_LSYMD,CHAIN(DX30,D(ModDelay),KB_LSYMD),DefTempo)	);	//short for aoa pitot, long for ram pitot, unshifted for anti-coll lts
+
+//CON
+		MapKey	(&LMFD,	CONU,	KB_LCONU);
+		MapKey	(&LMFD,	COND,	KB_LCOND);
+		
+//BRT
+		MapKey(&LMFD,	BRTU,	KB_LBRTU);
+		MapKey(&LMFD,	BRTD,	KB_LBRTD);
+		
+//GAIN in Init
+
+	printf("Done!\xa");
+
+	printf("   Map Cougar Right MFD (DX32)...");
+
+//ROSB 1-10
+		MapKey	(&RMFD, OSB01,	CHAIN(DX32,D(ModDelay),DX1)	);
+		MapKey	(&RMFD,	OSB02,	CHAIN(DX32,D(ModDelay),DX2));
+		MapKeyIO(&RMFD,	OSB03,	TEMPO(BS2_Alt_RA, CHAIN(DX32,D(ModDelay),DX3), SwTempo),	CHAIN(DX32,D(ModDelay),DX3)	);						//tempo added for Ka-50 Baro/Ralt switch
+		MapKeyIO(&RMFD,	OSB04,	TEMPO(BS2_Hdg_DT, CHAIN(DX32,D(ModDelay),DX4), SwTempo),	CHAIN(DX32,D(ModDelay),DX4)	);						//tempo added for Ka-50 Hdg/Trk Switch
+		MapKey	(&RMFD,	OSB05,	TEMPO(CHAIN(DX30,DX32,EXEC("BS2_Map_RSYM(1);"),D(ModDelay),DX5),		DefTempo));	//Added in 1.27 to allow backup SAI calibration.  BS2_Map_RSYM remaps SYM to prevent release of DX32.
+		MapKeyR	(&RMFD,	OSB05,	EXEC("BS2_Map_RSYM(0);"));
+		MapKey	(&RMFD,	OSB06,	CHAIN(DX32,D(ModDelay),DX6));
+		MapKey	(&RMFD,	OSB07,	CHAIN(DX32,D(ModDelay),DX7));
+//		MapKeyR	(&RMFD,	OSB07,	0);
+		MapKey	(&RMFD,	OSB08,	CHAIN(DX32,D(ModDelay),DX8));
+		MapKey	(&RMFD,	OSB09,	CHAIN(DX32,D(ModDelay),DX9));
+		
+		if (Scratchpad_Enabled)
+			MapKeyIO(&RMFD,	OSB10,	TEMPO(Scratchpad_Hotkey,	CHAIN(DX32,D(ModDelay),DX10),	DefTempo),	//Long for ABRIS power, short for hotkey
+									TEMPO(CHAIN(DX32,D(ModDelay),DX10), Scratchpad_Hotkey,	DefTempo)	);	//long for hotkey
+		else
+			MapKey	(&RMFD,	OSB10,	CHAIN(DX32,D(ModDelay),DX10));	// /I for power
+//ROSB 16-20
+		MapKey	(&RMFD,	OSB16,	DX_ROSB16);
+		MapKeyIO(&RMFD,	OSB17,	DX_ROSB17,	DX_ROSB17T);
+		MapKeyIO(&RMFD,	OSB18,	DX_ROSB18,	DX_ROSB18T);
+		MapKeyIO(&RMFD,	OSB19,	DX_ROSB19,	DX_ROSB19T);
+		
+		if ((TARS > 0) & (Overlay_Enable_SRS > 0))
+				MapKeyIO(&RMFD,	OSB20,	TEMPO(DX_ROSB20,Rdo_Ovly,DefTempo), DX_ROSB20T);
+//													TEMPO(CHAIN(DX32,D(ModDelay),DX24),	//,EXEC("BS2_UV26_LED_Cycle(0, 200);")),	//cycles LEDs to match UV26 Selection
+//													CHAIN(DX30,DX32,D(ModDelay),DX24),	DefTempo)	);
+		else	MapKeyIO(&RMFD,	OSB20,	DX_ROSB20,	DX_ROSB20T);
+//													TEMPO(CHAIN(DX32,D(ModDelay),DX24),	//,EXEC("BS2_UV26_LED_Cycle(0, 200);")),	//cycles LEDs to match UV26 Selection
+//													CHAIN(DX30,DX32,D(ModDelay),DX24),	DefTempo)	);
+													
+//ROSB 11-12
+//can be used for anything that uses Long shift functionality on outer RMFD
+		MapKeyIO(&RMFD,	OSB11,	DX_ROSB11,	DX_ROSB11T);		//IO because /I w/o TEMPO is cleaner
+		MapKeyIO(&RMFD,	OSB12,	DX_ROSB12,	DX_ROSB12T);
+		MapKeyIO(&RMFD,	OSB13,	DX_ROSB13,	DX_ROSB13T);
+		MapKeyIO(&RMFD,	OSB14,	DX_ROSB14,	DX_ROSB14T);
+		MapKeyIO(&RMFD,	OSB15,	DX_ROSB15,	DX_ROSB15T);
+//		MapKeyR	(&RMFD,	OSB13,	0);	//for Spitfire Engine Start	
+//		MapKeyR	(&RMFD,	OSB14,	0);	//for Spitfire Engine Start	
+
+//Right Rocker Switches
+//SYM
+		BS2_Map_RSYM(0);	//(0) sets BS2 defaults.
+
+//CON
+		BS2_RCON_Map(0);		//sets RMFD CON rocker to perform REXEC while shifted (default state).
+	
+//BRT
+	MapKey	(&RMFD,	BRTU,	KB_RBRTU);
+	MapKey	(&RMFD,	BRTD,	KB_RBRTD);
+
+//GAIN
+	MapKeyIO(&RMFD,	GAINU,	TEMPO(KB_RGAINU, BS2_Pitot_Ram_Clock,	DefTempo),	TEMPO(KB_RGAINU,CHAIN(DX30,D(ModDelay),KB_RGAINU),DefTempo)	);	//TEMPO added in 2.45
+	MapKeyIO(&RMFD,	GAIND,	TEMPO(KB_RGAIND, BS2_Pitot_Static_AoA, 	DefTempo),	TEMPO(KB_RGAIND,CHAIN(DX30,D(ModDelay),KB_RGAIND),DefTempo)	);
+
+
+	printf("Done!\xa");	
+}
+
+
+int BS2_Map_S3(int csforce, int gear, int funct=0)// = DX3)	//csforce is whether Force CommState Off is enabled (DCS World.tmc).  Gear is GearState
+{
+	if (gear) funct = DX4;	//default is DX3 (gear up)
+	else funct = DX3;
+//if (Script_Debug) printf("funct = %i\xa",funct);	//for test purposes
+
+if (WarthogStick > 0)
+	{
+	if (csforce)	MapKey	(&Joystick, S3, CHAIN(DX30,TEMPO(funct, 	EXEC("if (!GraceFlag) BS2_CommState_Toggle(0,SPU9_BS2);S3S4Shifted(ProfID,RudderPedals,GearState,Helicopter);"), ModTempo)));		//DX3 short, long(er) for modifier and eject check, moved here in 0.53, removed S4 and changed argument to "RudderPedals"
+	else			MapKey	(&Joystick, S3, CHAIN(DX30,TEMPO(funct, 	EXEC("S3S4Shifted(ProfID,RudderPedals,GearState,Helicopter);"), ModTempo)));		//DX3 short, long(er) for modifier and eject check, moved here in 0.53, removed S4 and changed argument to "RudderPedals"
+
+					MapKeyR	(&Joystick, S3, 							EXEC("S3Release(ProfID,RudderPedals,GearState,RevANTRudder,Helicopter);"));		//added in 0.53 to release "RudderPedals" argument in S3Shifted
+	
+	}
+else
+	{
+	if (csforce)	MapKey	(&HCougar, S3, CHAIN(DX30,TEMPO(funct, 	EXEC("if (!GraceFlag) BS2_CommState_Toggle(0,SPU9_BS2);S3S4Shifted(ProfID,RudderPedals,GearState,Helicopter);"), ModTempo)));		//DX3 short, long(er) for modifier and eject check, moved here in 0.53, removed S4 and changed argument to "RudderPedals"
+	else			MapKey	(&HCougar, S3, CHAIN(DX30,TEMPO(funct, 	EXEC("S3S4Shifted(ProfID,RudderPedals,GearState,Helicopter);"), ModTempo)));		//DX3 short, long(er) for modifier and eject check, moved here in 0.53, removed S4 and changed argument to "RudderPedals"
+
+					MapKeyR	(&HCougar, S3, 							EXEC("S3Release(ProfID,RudderPedals,GearState,RevANTRudder,Helicopter);"));		//added in 0.53 to release "RudderPedals" argument in S3Shifted
+	}
+}
+
+int BS2_Map_S3_D(int csforce)	//added for DeferCall routines with additional arguments added to master routine in 1.36
+{
+BS2_Map_S3(csforce,1);
+}
+int BS2_Map_S3_U(int csforce)
+{
+BS2_Map_S3(csforce,0);
+}
+
+int BS2_Searchlight_Set(int posit, int delay = 200, int index = 3, int time = 0)	//posit is switch position value (0 for mid, 1 for aft, 2 for fwd), delay is time between switches, time should always start at 0
+{
+if 	(posit > (index-1)) posit = (BS2_Searchlight_Cur+1)%index;	//out of bounds up toggles one step
+else if (posit < 0) posit = (BS2_Searchlight_Cur+(index-1))%index;		//out of bounds down toggles (index-1) steps (comes to -1)
+
+while (BS2_Searchlight_Cur != posit)
+	{
+	if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+BS2_Searchlight_Cycle);
+	BS2_Searchlight_Cur = (BS2_Searchlight_Cur+1)%index;
+	time = time + delay;
+	}
+}
+
+//*************************************************
+//			Ka-50 Specific CommState
+//*************************************************
+int BS2_CommState_Init()
+{
+printf("S2 Set to CommState...");	
+	//S2 declarations
+	//Aries Radio functionality defaulted because of single Mic switch only.
+	if (	(BS2_ForceCommStateOff) & (	(!VAC) | ((WarthogThrottle > 0) & (!Force_VAC_S2_BS2))	)	)	//ForceCommStateOff incompatible with VAICOM (otherwise forces reassignment on commstate_off)
+				{
+				if ((TARS > 0))				//added in 2.45
+						S2_PO	=	CHAIN(Rdo1_VHF_AM,				EXEC("BS2_CommState_Toggle(0,SPU9_BS2); if (AirBrkFlash > -1) DeferCall(LED_Delay,&Lights_RLED1,1);"))	;
+				else	S2_PO	=	CHAIN(PTT_Common,				EXEC("BS2_CommState_Toggle(0,SPU9_BS2); if (AirBrkFlash > -1) DeferCall(LED_Delay,&Lights_RLED1,1);"))	;	
+				S2_RO	=	EXEC("if (AirBrkFlash > -1) DeferCall(2*LED_Delay, &Lights_RLED1, 0);");	//DeferCall to prevent poss overlap with force off
+				}
+	else			
+				{
+				if (	(TARS > 0) & (VAC > 0)& ((!WarthogThrottle) | (Force_VAC_S2_BS2 > 0))	)	//added in 2.45
+						S2_PO	=	CHAIN(Rdo1_VHF_AM,TS3PTT_DX,EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"))	;
+				else if (TARS > 0)								//added in 2.45
+						S2_PO	=	CHAIN(Rdo1_VHF_AM, 			EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"))	;
+				//else if (VAC > 0)								//added in 2.45
+				//		S2_PO	=	CHAIN(TS3PTT_DX, 			EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"))	;
+				else	S2_PO	=	CHAIN(PTT_Common, 			EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"))	;
+				S2_RO	=	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0); DeferCall(CenterPositMapDelay,&S3_CommDly,0);");
+				}
+	if (BS2_DiscreteCommState)
+				S2_PI	=	TEMPO(EXEC("BS2_CommState_Toggle(2,SPU9_BS2);"),		EXEC("BS2_CommState_Toggle(1,SPU9_BS2);"), DefTempo);	//TEMPO Long forces on, Short forces off.  
+	else		S2_PI	=	TEMPO(EXEC("GraceFlag = 1; S3_CommState_Delay = 1; BS2_CommState_Toggle(-1,SPU9_BS2); DeferCall(ModTempo+ModDelay,&Grace_Flag,0);"),		EXEC("BS2_CommState_Toggle(2,SPU9_BS2);"), LongTempo);	//TEMPO Long forces off, Short toggles.  (ModTempo+ModDelay) pushes the grace flag until very shortly (10ms) after the S3 long is activated.  S3_CommState_Delay flags to prevent execution of H4D_CPTM() while active.
+
+				S2_RI	=	EXEC("DeferCall(CenterPositMapDelay,&S3_CommDly,0);");//0;	//DeferCall added to release after H4D_CPTM called
+
+
+
+if (WarthogStick > 0)
+	{
+	MapKeyIO(&Joystick,	S2,	S2_PI,	S2_PO);
+	MapKeyRIO(&Joystick,S2,	S2_RI,	S2_RO);
+	}
+else
+	{
+	MapKeyIO(&HCougar,	S2,	S2_PI,	S2_PO);
+	MapKeyRIO(&HCougar,	S2,	S2_RI,	S2_RO);
+	}
+printf("Done!\xa");	
+}
+
+
+int BS2_CommState_Toggle(int active, int spu9=1)	//changed from force toggle to toggle with (-1) in 1.27.  (2) forces off even if CommState_Toggle_Active 
+{
+if (active < 0) active = (CommState_Toggle_Active + 1)%2;		//toggles value if (-1)
+if (active == 1)
+	{
+	if (spu9 == 1) ActKey(KEYON+PULSE+SPU9_PTT);
+	else ActKey(KEYON+PULSE+CommMenu);
+	CommState_On(CommStateAllow,spu9);
+	}
+else if ((CommState_Toggle_Active) | (active == 2))		//either it's known to be on, or it's being forced with 2.
+	{
+	active = 0;
+	if (!FkeyPress)	//added CommState_Toggle_Active in 1.27 so key isn't pressed on force off w/o it being on
+		{
+		if (spu9 == 1) ActKey(KEYON+PULSE+SPU9_PTT);
+		else ActKey(KEYON+PULSE+CommMenu);
+		}
+	CommState_Off(CommStateAllow, ProfID);
+	}
+else if (active == 0) CommState_Off(CommStateAllow, ProfID);	//kills CommState without toggle (as a just in case toggle didn't take)
+	
+if (VAC > 0) DeferCall(KBDelay+ModDelay, &Lights_RLED2, active);		//defercall to allow LED after S2 release turns it off
+else Lights_RLED2(active);
+//else 
+//	{
+//	if (AirBrkFlash > 0) flashRLED2(active,500);
+//	else Lights_RLED2(active);
+//	}
+CommState_Toggle_Active = active;
+}
+
+int BS2_RCON_Map(int state)	//sets shifted state of RMFD CON to REXEC PVI-800 Brightness knob.  State=1 maps for Rubicon DE Mode
+{
+if (state)
+	{
+	MapKey	(&RMFD,	CONU,	CHAIN(R_CTL,R_SHIFT, REXEC(6, KBDelay, "ActKey(KEYON+PULSE+USB_P);"))	);	//6 is used because it's the same key as used by the UH-1 REXEC
+	MapKey	(&RMFD,	COND,	CHAIN(R_ALT,R_SHIFT, REXEC(6, KBDelay, "ActKey(KEYON+PULSE+USB_P);"))	);	
+	MapKeyR	(&RMFD,	CONU,	EXEC("StopAutoRepeat(6);"));
+	MapKeyR	(&RMFD,	COND,	EXEC("StopAutoRepeat(6);"));
+	}
+else
+	{
+	MapKeyIO(&RMFD,	CONU,	CHAIN(R_CTL,R_SHIFT, REXEC(6, KBDelay, "ActKey(KEYON+PULSE+USB_P);")),	ABRIS_Axis_Decr);
+	MapKeyIO(&RMFD,	COND,	CHAIN(R_ALT,R_SHIFT, REXEC(6, KBDelay, "ActKey(KEYON+PULSE+USB_P);")),	ABRIS_Axis_Incr);	
+	MapKeyRIO(&RMFD,CONU,	EXEC("StopAutoRepeat(6);"),	0);
+	MapKeyRIO(&RMFD,COND,	EXEC("StopAutoRepeat(6);"),	0);
+	}
+}
+	
+int BS2_ReleaseRudderTrim()	//keys rudder to neutralize prior to executing trim function to disable rudder trim.  Obsolete as of DCS World 1.2.16u2
+{
+ActKey(CHAIN(	KEYON+D(),
+    			KEYON+PULSE+Rudder_Left,
+    			KEYON+D(),
+    			KEYON+PULSE+Rudder_Right	));
+}
+
+
+
+//*********************************
+//	BS2 Engine Start Routines
+//*********************************
+
+int BS2_StarterTimer(int time = 0)	
+{
+if	(time > 0)			//makes sure feature is initiated (if disabled will skip)
+	{
+	BS2_Starter = 1;
+	DeferCall(BS2_StarterDelay, &Lights_RLED1, 1);
+	DeferCall(BS2_StarterDelay+time,&BS2_StarterTimer,0);	//calls itself to cancel
+	}
+else	//stops or cancels start
+	{
+	BS2_Starter = 0;
+	Lights_RLED1(0);	//call routine on button release to force light off
+	}
+//if (Script_Debug) printf("BS2 StarterTimer\xa DF_Posit = %i\xa\xa",DF_Posit);	//for test purposea
+if (WarthogThrottle != 1) BS2_MapCommSw(BS2_Starter,RangeKnob,DF_Posit);	
+if ((!GraceFlag) & (WarthogThrottle != 1)) BS2_MapDFT6(GearState,BS2_Starter,RangeKnob);	// prevents doubling up if function performed on T6 /R
+}
+
+int BS2_Engine_Selector(int posit, int delay = 200, int time = 0)	//posit is switch position value (0 for turbo gear, 1 for APU, 2 for right, 3 for left), delay is time between switches, time should always start at 0
+{
+
+if (posit > 3) posit = (Eng_Sel_Sw_Current+1)%4;					//out of bounds up toggles one step
+else if (posit < 0) posit = (Eng_Sel_Sw_Current+3)%4;				//out of bounds down toggles three steps (comes to -1)
+
+while (Eng_Sel_Sw_Current != posit)
+	{
+	if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+BS2_Eng_Sel_Sw);
+	Eng_Sel_Sw_Current = (Eng_Sel_Sw_Current+1)%4;
+//	if (Script_Debug) printf("Eng_Sel_Sw_Current = %i\xa",Eng_Sel_Sw_Current);		//for test purposes only
+	time  = time + delay;
+	}
+if (WarthogThrottle > 0) BS2_Map_Thr(Eng_Sel_Sw_Current);	//added in 1.40 to allow individual throttle manipulation if engine selected.
+}
+
+int BS2_Map_Thr(int eng)	//added for individual engine throttle control
+{
+if (WarthogThrottle == 1)
+	{
+	if 		(eng == 3) 	KeyAxis(&Throttle, THR_FC, 0, AXMAP2(1, 	EXEC("if ((Joystick[S3]) | (TrackIR > 1) | (!WH_Friction_FOV))	{ActKey(KEYON+DX31);BS2_Throttlemove = 1;}")));
+	else if (eng == 2) 	KeyAxis(&Throttle, THR_FC, 0, AXMAP2(1, 	EXEC("if ((Joystick[S3]) | (TrackIR > 1) | (!WH_Friction_FOV))	{ActKey(KEYON+DX32);BS2_Throttlemove = 1;}")));
+//	if 		(eng == 3) 	KeyAxis(&Throttle, THR_FC, 0, AXMAP1(80, 	EXEC("if (Joystick[S3]) ActKey(KEYON+DX31);"),
+//																	EXEC("if (Joystick[S3]) ActKey(KEYON+DX31);"))	);	//Left
+//	else if	(eng == 2)	KeyAxis(&Throttle, THR_FC, 0, AXMAP1(80, 	EXEC("if (Joystick[S3]) ActKey(KEYON+DX32);"),
+//																	EXEC("if (Joystick[S3]) ActKey(KEYON+DX32);"))	);	//Right
+	else				KeyAxis(&Throttle, THR_FC, 0, AXMAP2(1, 	EXEC("if ((Joystick[S3]) | (TrackIR > 1) | (!WH_Friction_FOV))  {ActKey(KEYON+BS2_ThrottleBothMods);BS2_Throttlemove = 1;}")));	//both	//0));
+	}
+}
+
+int BS2_MapDFT6(int gear, int start = 0, int thr = 1)
+{
+if (WarthogThrottle == 0)
+	{
+//	if (Script_Debug) printf("BS2_MapDFT6:\xa Gear = %i\xa Start = %i\xa Thr = %i\xa\xa",gear,start,thr);
+	if (gear)
+		{
+		if ((thr == 1) & (!start))	//APU stop only if starter not engaged and throttle in Auto.  Otherwise engine interrupt.
+						MapKeyIO(&HCougar,	T6,		TEMPO(CHAIN(BS2_APU_Stop, 									EXEC("GraceFlag = 1; BS2_StarterTimer(0);")),	EXEC("EjectCheckT6(ProfID);"),	DefTempo),
+													TEMPO(PULSE+BS2_Shkval_BW,		CHAIN(DX24,EXEC("GraceFlag = 1; BS2_StarterTimer(Starter_Ind_BS2);")),										DefTempo)	);	//GraceFlag to prevent remap of T6 during BS2_StarterTimer().
+		else			MapKeyIO(&HCougar,	T6,		TEMPO(CHAIN(BS2_Engine_Stop, EXEC("GraceFlag = 1; BS2_StarterTimer(0);")),	EXEC("EjectCheckT6(ProfID);"),									DefTempo),
+													TEMPO(PULSE+BS2_Shkval_BW,									CHAIN(DX24,EXEC("GraceFlag = 1; BS2_StarterTimer(Starter_Ind_BS2);")),			DefTempo)	);
+	//	MapKeyR	(&HCougar, T6, 0); //covered in init
+	
+		if ((start) | (!thr))	//added in 127b5 to convert to min throttle or starter; check throttle for this routine
+			{
+//			MapKey	(&HCougar, 	T7, 	EXEC("DF_Posit = 7; if(Eng_Sel_Sw_Move) DeferCall(2*Switch_Delay,&BS2_Engine_Selector,2); else BS2_Engine_Selector(2, Switch_Delay);	BS2_MapCommSw(BS2_Starter,RangeKnob, 7);"));	//2*delay because it takes 2 cycles from T8 to get switch back to APU	
+//			MapKeyR	(&HCougar,	T7, 	EXEC("DeferCall(2*Switch_Delay,&BS2_DFCheck,1); DeferCall(4*Switch_Delay,&Eng_Sel_Sw_Move_Set,0);"));	// to put eng sel switch at APU if in DFM so it won't step on opposite (T8) function; defer 4* for 1 of original defer and 3 to cycle switch from T7
+//			MapKey	(&HCougar,	T8, 	EXEC("DF_Posit = 8; if(Eng_Sel_Sw_Move) DeferCall(3*Switch_Delay,&BS2_Engine_Selector,3); else BS2_Engine_Selector(3, Switch_Delay);	BS2_MapCommSw(BS2_Starter,RangeKnob, 8);"));	//3*delay because it takes 3 cycles from T7 to get switch back to APU
+//			MapKeyR	(&HCougar,	T8, 	EXEC("DeferCall(2*Switch_Delay,&BS2_DFCheck,1); DeferCall(3*Switch_Delay,&Eng_Sel_Sw_Move_Set,0);"));	// to put eng sel switch at APU if in DFM so it won't step on opposite (T7) function; defer 3* for 1 of original defer and 2 to cycle switch from T8
+
+			MapKey	(&HCougar, 	T7, 	CHAIN(PULSE+BS2_Eng_Sel_Rt,EXEC("DF_Posit = 7; if (WarthogThrottle > 0) BS2_Map_Thr(2);	BS2_MapCommSw(BS2_Starter,RangeKnob, 7);"))	);
+			MapKeyR	(&HCougar,	T7, 	EXEC("DeferCall(Switch_Delay,&BS2_DFCheck,1);"));	// to put eng sel switch at APU if in DFM so it won't step on opposite (T8) function
+			MapKey	(&HCougar,	T8, 	CHAIN(PULSE+BS2_Eng_Sel_Lt,EXEC("DF_Posit = 8; if (WarthogThrottle > 0) BS2_Map_Thr(3);	BS2_MapCommSw(BS2_Starter,RangeKnob, 8);"))	);	
+			MapKeyR	(&HCougar,	T8, 	EXEC("DeferCall(Switch_Delay,&BS2_DFCheck,1);"));	// to put eng sel switch at APU if in DFM so it won't step on opposite (T7) function
+
+			}
+		else
+			{
+//			MapKeyIO(&HCougar, 	T7, 	EXEC("DF_Posit = 7; if(Eng_Sel_Sw_Move) DeferCall(2*Switch_Delay,&BS2_Engine_Selector,2); else BS2_Engine_Selector(2, Switch_Delay);	BS2_MapCommSw(BS2_Starter,RangeKnob, 7);"),		//2*delay because it takes 2 cycles from T8 to get switch back to APU
+//										EXEC("DF_Posit = 7; DeferCall(BS2_APMode, &ActKey, KEYON+DX25);	BS2_APMode = KBDelay;"));		//DeferCall+kbdelay forces new autopilot mode after old autopilot release, prevents stepping on modes going direct between T7/T8 (too fast for DFM)
+//			MapKeyRIO(&HCougar,	T7, 	EXEC("DeferCall(Switch_Delay,&BS2_DFCheck,0); DeferCall(4*Switch_Delay,&Eng_Sel_Sw_Move_Set,0);"),	//defer 4* for 1 of original defer and 3 to cycle switch from T7
+//										CHAIN(UP+DX25,D(DoubleTap),EXEC("BS2_DFCheck(0,0,0);"))	);	// /I to put eng sel switch at APU if in DFM so it won't step on opposite (T8) function
+//			MapKeyIO(&HCougar,	T8, 	EXEC("DF_Posit = 8; if(Eng_Sel_Sw_Move) DeferCall(3*Switch_Delay,&BS2_Engine_Selector,3); else BS2_Engine_Selector(3, Switch_Delay);	BS2_MapCommSw(BS2_Starter,RangeKnob, 8);"),		//3*delay because it takes 3 cycles from T7 to get switch back to APU
+//										EXEC("DF_Posit = 8; ActKey(DX25); DeferCall(BS2_APMode, &ActKey, KEYON+PULSE+DX26);	BS2_APMode = KBDelay;"));
+//			MapKeyRIO(&HCougar,	T8, 	EXEC("DeferCall(Switch_Delay,&BS2_DFCheck,0); DeferCall(3*Switch_Delay,&Eng_Sel_Sw_Move_Set,0);"),	//defer 3* for 1 of original defer and 2 to cycle switch from T8
+//										CHAIN(PULSE+DX26,D(DoubleTap),EXEC("BS2_DFCheck(0,0,0);"))	);	// /I to put eng sel switch at APU if in DFM so it won't step on opposite (T7) function
+			
+			
+			MapKeyIO(&HCougar, 	T7, 	CHAIN(PULSE+BS2_Eng_Sel_Rt,EXEC("DF_Posit = 7; if (WarthogThrottle > 0) BS2_Map_Thr(2);	BS2_MapCommSw(BS2_Starter,RangeKnob, 7);")),
+										EXEC("DF_Posit = 7; DeferCall(BS2_APMode, &ActKey, KEYON+DX25);	BS2_APMode = KBDelay;"));		//DeferCall+kbdelay forces new autopilot mode after old autopilot release, prevents stepping on modes going direct between T7/T8 (too fast for DFM)
+			MapKeyRIO(&HCougar,	T7, 	EXEC("DeferCall(Switch_Delay,&BS2_DFCheck,0);"),	
+										CHAIN(UP+DX25,D(DoubleTap),EXEC("BS2_DFCheck(0,0,0);"))	);	// /I to put eng sel switch at APU if in DFM so it won't step on opposite (T8) function
+			MapKeyIO(&HCougar,	T8, 	CHAIN(PULSE+BS2_Eng_Sel_Lt,EXEC("DF_Posit = 8; if (WarthogThrottle > 0) BS2_Map_Thr(3);	BS2_MapCommSw(BS2_Starter,RangeKnob, 8);")),
+										EXEC("DF_Posit = 8; ActKey(DX25); DeferCall(BS2_APMode, &ActKey, KEYON+PULSE+DX26);	BS2_APMode = KBDelay;"));
+			MapKeyRIO(&HCougar,	T8, 	EXEC("DeferCall(Switch_Delay,&BS2_DFCheck,0);"),	
+										CHAIN(PULSE+DX26,D(DoubleTap),EXEC("BS2_DFCheck(0,0,0);"))	);	// /I to put eng sel switch at APU if in DFM so it won't step on opposite (T7) function
+
+			}
+		}
+	else
+		{
+		MapKeyIO(&HCougar,	T6, TEMPO(BS2_Weps_AutoMan, EXEC("EjectCheckT6(ProfID);"), DefTempo),	TEMPO(PULSE+BS2_Shkval_BW, DX5, DefTempo));		//Will check for ejection parameters if shift+held for 500ms.  unshifted long doubles as S1 (target lock).
+		
+		MapKeyIO(&HCougar, 	T7, 0,	EXEC("DF_Posit = 7; DeferCall(BS2_APMode, &ActKey, KEYON+DX25);	BS2_APMode = KBDelay;"));		//DeferCall+kbdelay forces new autopilot mode after old autopilot release, prevents stepping on modes going direct between T7/T8 (too fast for DFM)
+		MapKeyRIO(&HCougar,	T7, 0,	CHAIN(UP+DX25,D(DoubleTap),EXEC("BS2_DFCheck(0,0,0);"))	);
+		MapKeyIO(&HCougar,	T8, 0,	EXEC("DF_Posit = 8; ActKey(DX25); DeferCall(BS2_APMode, &ActKey, KEYON+PULSE+DX26);	BS2_APMode = KBDelay;"));
+		MapKeyRIO(&HCougar,	T8, 0,	CHAIN(PULSE+DX26,D(DoubleTap),EXEC("BS2_DFCheck(0,0,0);"))	);
+		}
+	}
+}
+
+int BS2_DFCheck(int start = 0, int sw = 1, int flag = 1)	//set as function for use in DeferCall (part of BS2_MapDFT6()); gear is gear state, flag for whether to set Eng Sel Sw Move
+{
+if (	((HCougar[DFM]) & (WarthogThrottle==0))	| ((Throttle[FLAPM]) & (WarthogThrottle > 0))	)
+	{
+//	if (Script_Debug) printf("DFM Check TRUE\xaStart = %i\xaThrottle = %i\xa",start,WarthogThrottle);	//for test purposes
+	DF_Posit = 0;
+	Eng_Sel_Sw_Move = flag;			//added in 127b6
+	if (sw)							//reorganized in 127b6; sw determines if engine select switch will be cycled (defaults 1 for DeferCall; 0 when dogfight used for A/P and defercall not needed)
+		{
+		ActKey(KEYON+PULSE+BS2_Eng_Sel_APU); 
+		if (WarthogThrottle > 0) BS2_Map_Thr(1);	//APU
+		//BS2_Engine_Selector(1, Switch_Delay);
+		if (	(WarthogThrottle == 0) & ((start) | (RangeKnob != 1))	)	BS2_MapCommSw(BS2_Starter,RangeKnob);	//rangeknob added in 127b5; only maps CommSwitch to engine functions if engine starting or throttle in idle/casualty
+		}
+	else if (WarthogThrottle != 1) BS2_APMode = 0; 
+	}
+//else if (Script_Debug) printf("DFM Check FALSE\xaThrottle = %i,%i\xa",WarthogThrottle,Throttle[FLAPM]);
+}
+
+
+
+int BS2_MapCommSw(int state, int thr = 1, int df = 0, int dftempo=500)	//added T2/T3 in 1.27 for individual throttle; should change this to state or !thr for engine start routines.  State = whether start is active.  dftempo shouldnt be changed (determined in routine)
+{
+//if (Script_Debug) printf(" State = %i\xa Thr = %i\xa DF = %i\xa DF_Posit = %i\xa\xa\xa",state,thr,df,DF_Posit);	//for test purposes
+if ((state) | (thr != 1))	//if starting or throttle not auto (min or max)
+	{
+	if ((thr == 2) & (!state)) dftempo = LongTempo;	//longtempo if throttle max and not starting.  allows shutdown without making it likely or cumbersome for startup
+	else dftempo = DefTempo;
+//	if (Script_Debug) printf("dftempo = %i\xa",dftempo);		//for test purposes
+	if (df==7)								//maps if dogfight switch up (7 for T7)
+		{
+		MapKey	(&HCougar,	T2,	PULSE+BS2_Throttle_Dn_Lt);
+		MapKey	(&HCougar,	T3,	PULSE+BS2_Throttle_Up_Lt);
+		MapKey	(&HCougar,	T4,	0);
+		MapKey	(&HCougar,	T5, TEMPO(0, PULSE+BS2_Fuel_Cutoff_Lt, DefTempo));
+		}
+	else if (df==8)							//maps if dogfight switch dn (8 for T8)
+		{
+		MapKey	(&HCougar,	T2,	PULSE+BS2_Throttle_Dn_Rt);
+		MapKey	(&HCougar,	T3,	PULSE+BS2_Throttle_Up_Rt);
+		MapKey	(&HCougar,	T4, TEMPO(0, PULSE+BS2_Fuel_Cutoff_Rt, DefTempo));
+		MapKey	(&HCougar,	T5,	0);
+		}
+	else											//dogfight switch centered
+		{
+		if(!thr)
+			{
+			MapKey	(&HCougar,	T2, TEMPO(0, EXEC("RotorBrake_Toggle(0);"), LongTempo));
+			MapKey	(&HCougar,	T3, TEMPO(0, EXEC("RotorBrake_Toggle(1);"), LongTempo));
+			MapKeyIO(&HCougar,	T4, EXEC("RotorBrake_Toggle(-1,0,0);"),	0);	//-1,0,0 forces state toggle without cycling key, and eliminates flash delay 
+			MapKeyIO(&HCougar,	T5, EXEC("RotorBrake_Toggle(-1,0,0);"),	0);
+			}
+		else
+			{
+			MapKeyIO(&HCougar,	T2, TEMPO(BS2_ADF_Bcn_Up,PULSE+BS2_AA_Weps_Sel,	DefTempo),	PULSE+BS2_AA_Weps_Sel);
+			MapKeyIO(&HCougar,	T3, TEMPO(BS2_ADF_Bcn_Up,BS2_Weps_All, 			DefTempo),	BS2_Weps_All);
+			MapKey	(&HCougar,	T4, BS2_Weps_Inbd);
+			MapKey	(&HCougar,	T5, BS2_Weps_Outbd);
+			}
+		}
+	}
+else
+	{
+	MapKeyIO(&HCougar,	T2, TEMPO(BS2_ADF_Bcn_Up,PULSE+BS2_AA_Weps_Sel,	DefTempo),	PULSE+BS2_AA_Weps_Sel);
+	MapKeyIO(&HCougar,	T3, TEMPO(BS2_ADF_Bcn_Up,BS2_Weps_All, 			DefTempo), BS2_Weps_All);
+	MapKey	(&HCougar,	T4, BS2_Weps_Inbd);
+	MapKey	(&HCougar,	T5, BS2_Weps_Outbd);
+	}
+}
+
+int BS2_UV26_LED_Cycle(int dir, int dur = 200)	//dir is operand (1 for +, -1 for -, 0 for cycle forward), dur is entering argument (duration) into UV26_LED call
+{
+if (!dir) 	UV26_Side_Current = (UV26_Side_Current+1)%3;
+else
+	{
+	UV26_Side_Current = (UV26_Side_Current+dir);
+	if (UV26_Side_Current > 2) UV26_Side_Current = 2;
+	else if (UV26_Side_Current < 0) UV26_Side_Current = 0;
+	}
+
+if	(	(!CommState_Toggle_Active)	|	((CommState_Toggle_Active) & (BS2_ForceCommStateOff))	)	//BS2 commstate is on (i.e. RLED2 on)
+	{
+	if ((CommState_Toggle_Active) & (BS2_ForceCommStateOff)) BS2_CommState_Toggle(2,1);	//force commstate off so LED indications will be accurate
+	UV26_LED(0, dur);	//time = 0 because there's no delay, esp with no do loop or actual switch manipulation in the routine.
+	}
+}
+
+int RotorBrake_Toggle(int state, int key = 1, int delay=1000)		//state = 1 means rotor brake is engaged, 0 for disengaged.  key is whether ActKey is performed.  delay is duration of signal.
+{
+if (state < 0) state = (RotorBrake_State+1)%2;	//toggle
+
+if (RotorBrake_State != state)
+	{
+	RotorBrake_State = state;
+	if (key)
+		{
+		ActKey(KEYON+PULSE+BS2_Rotor_Brake);
+		if (RudderPedals < 2)	//makes sure LLED1 is not otherwise in use
+			{
+			flashLLED1(1,250);
+			DeferCall(delay, &flashLLED1,0);
+			}
+		}
+	}
+if (RudderPedals < 2) DeferCall(delay+LED_Delay, &Lights_LLED1,state);
+}
+
+int BS2_Map_RSYM(int state)	//used for backup SAI rotary when knob pulled (1) or with S3 when knob released (0).
+{
+if (state)	//ROSB5 active
+	{
+	MapKey(&RMFD,	SYMU,	BS2_SAI_Rt);
+	MapKey(&RMFD,	SYMD,	BS2_SAI_Lt);
+	}
+//else
+//	{
+//	MapKeyIO(&RMFD,	SYMU,	CHAIN(DX31,DX32,D(ModDelay),DX21),	TEMPO(CHAIN(DX32,D(ModDelay),DX21), CHAIN(DX30,DX32,D(ModDelay),DX21), DefTempo)	);
+//	MapKeyIO(&RMFD,	SYMD,	CHAIN(DX31,DX32,D(ModDelay),DX22),	TEMPO(CHAIN(DX32,D(ModDelay),DX22),	CHAIN(DX30,DX32,D(ModDelay),DX22), DefTempo)	);
+//	}
+else	//replaced in 1.36 (lights remapped to shift, SAI to unshifted)
+	{
+	MapKeyIO(&RMFD,	SYMU,	TEMPO(PULSE+BS2_Lights_Cpt, PULSE+BS2_Lights_SAI, DefTempo),	BS2_SAI_Rt	);
+	MapKeyIO(&RMFD,	SYMD,	TEMPO(PULSE+BS2_Lights_NVG,	PULSE+BS2_Lights_Aux, DefTempo),	BS2_SAI_Lt	);
+	}
+//MapKeyR	(&RMFD,	SYMU,	0);	//added in 1.61 to account for context sensitive R in M2000C
+//MapKeyR	(&RMFD,	SYMD,	0);
+}
+
+int BS2_Fuel_Sw_APU_Cycle(int posit, int key = 1)	//key forces keystroke (0 to set logic)
+{
+if ((posit < 0) | (posit > 1))	BS2_Fuel_Sw_APU_Cur = (BS2_Fuel_Sw_APU_Cur+1)%2;	//toggle catch all
+if (BS2_Fuel_Sw_APU_Cur != posit)
+		{
+		if ((!posit) & (key))
+			{
+			ActKey(KEYON+PULSE+BS2_Fuel_Sw_APU);
+			DeferCall(Switch_Delay, &ActKey, KEYON+PULSE+BS2_Fuel_Sw_APU_Cover);
+			}
+		else if ((posit) & (key))
+			
+//		if	(!BS2_Fuel_Sw_APU_Cover_Cur)	//if switch cover not up, then command will flip cover.  this forces both to prevent out of sync
+			{
+			ActKey(KEYON+PULSE+BS2_Fuel_Sw_APU_Cover);
+			//BS2_Fuel_Sw_APU_Cover_Cur = 1;
+			DeferCall(Switch_Delay, &ActKey, KEYON+PULSE+BS2_Fuel_Sw_APU); 			
+			}
+		
+//		else ActKey(KEYON+PULSE+BS2_Fuel_Sw_APU);
+		BS2_Fuel_Sw_APU_Cur = posit;
+		BS2_Fuel_Sw_APU_Cover_Cur = posit;
+		flashWHT1(posit);
+		}
+}
+
+int BS2_Fuel_Sw_Lt_Cycle(int posit, int cover = 2, int key = 1)	//cover = 2 forces cycle, -1 forces no change, 0/1 desired cover state
+{
+//if (Script_Debug) printf("BS2_Fuel_Sw_Lt_Cycle(%i,%i,%i)\xa",posit,cover,key);
+if ((posit < 0) | (posit > 1))	posit = (BS2_Fuel_Sw_Lt_Cur+1)%2;	//toggle catch all
+if (BS2_Fuel_Sw_Lt_Cur != posit)
+		{
+		if (cover < 0) cover = abs(BS2_Fuel_Sw_Lt_Cover_Cur-1);	//forces toggle
+//		if (Script_Debug) printf(" Switch = %i to %i\xa Cover  = %i to %i.\xa",BS2_Fuel_Sw_Lt_Cur,posit,BS2_Fuel_Sw_Lt_Cover_Cur,cover);
+		if ((BS2_Fuel_Sw_Lt_Cover_Cur != cover) & (cover < 2))	//Cover
+			{
+//			if (Script_Debug) printf(" Cover then Switch.\xa");
+			if		(	(!BS2_Fuel_Sw_Lt_Cover_Cur) & (cover > 0)	)	//cover off, needs to be on (cover, then sw)
+				{
+				if (key)
+					{
+					ActKey(KEYON+PULSE+BS2_Fuel_Sw_Lt_Cover);
+					DeferCall(Switch_Delay, &ActKey, KEYON+PULSE+BS2_Fuel_Sw_Lt);
+					}
+				BS2_Fuel_Sw_Lt_Cover_Cur = 1;
+				DeferCall(LED_Delay, &flashWHT5, 1);			
+				}
+			else if	(	(BS2_Fuel_Sw_Lt_Cover_Cur) & ((!cover)|(cover ==2))	)	//cover on, needs to be off (sw, then cover)
+				{
+//				if (Script_Debug) printf(" Switch then Cover.\xa");
+				if (key)
+					{
+					ActKey(KEYON+PULSE+BS2_Fuel_Sw_Lt);
+					DeferCall(Switch_Delay, &ActKey, KEYON+PULSE+BS2_Fuel_Sw_Lt_Cover);
+					}
+				BS2_Fuel_Sw_Lt_Cover_Cur = 0;
+				DeferCall(LED_Delay, &flashWHT5, 0);			
+				}
+			else if (key) ActKey(KEYON+PULSE+BS2_Fuel_Sw_Lt);
+			BS2_Fuel_Sw_Lt_Cur = posit;
+			Lights_WHT4(posit);
+//			if (Script_Debug) printf(" Switch = %i \xa Cover  = %i.\xa",BS2_Fuel_Sw_Lt_Cur,BS2_Fuel_Sw_Lt_Cover_Cur);	
+			}
+		else if ((BS2_Fuel_Sw_Lt_Cover_Cur > 0) | (cover > 2))	//cover = Cover_Cur or 3 (force sw)
+			{
+//			if (Script_Debug) printf("Cycle Switch Only\xa Switch = %i to %i\xa cover = %i\xa",BS2_Fuel_Sw_Lt_Cur,posit,cover);
+			if (key) ActKey(KEYON+PULSE+BS2_Fuel_Sw_Lt);	
+			BS2_Fuel_Sw_Lt_Cur = posit;
+			Lights_WHT4(posit);
+			}
+		}
+}
+int BS2_Fuel_Sw_Rt_Cycle(int posit, int cover = 2, int key = 1)	//cover < 0 forces cycle, 0/1 desired cover state, 2 forces no change, 3 forces switch regardless of cover
+{
+//if (Script_Debug) printf("BS2_Fuel_Sw_Rt_Cycle(%i,%i,%i)\xa",posit,cover,key);
+if ((posit < 0) | (posit > 1))	posit = (BS2_Fuel_Sw_Rt_Cur+1)%2;	//toggle catch all
+if (BS2_Fuel_Sw_Rt_Cur != posit)
+		{
+		if (cover < 0) cover = abs(BS2_Fuel_Sw_Rt_Cover_Cur-1);	//forces toggle
+//		if (Script_Debug) printf(" Switch = %i to %i\xa Cover  = %i to %i.\xa",BS2_Fuel_Sw_Rt_Cur,posit,BS2_Fuel_Sw_Rt_Cover_Cur,cover);
+		if ((BS2_Fuel_Sw_Rt_Cover_Cur != cover) & (cover < 2))
+			{
+//			if (Script_Debug) printf(" Cover then Switch.\xa");
+			if		(	(!BS2_Fuel_Sw_Rt_Cover_Cur) & (cover > 0)	)	//cover off, needs to be on (cover, then sw)
+				{
+				if (key)
+					{
+					ActKey(KEYON+PULSE+BS2_Fuel_Sw_Rt_Cover);
+					DeferCall(Switch_Delay, &ActKey, KEYON+PULSE+BS2_Fuel_Sw_Rt);
+					}
+				BS2_Fuel_Sw_Rt_Cover_Cur = 1;
+				DeferCall(LED_Delay, &flashWHT3, 1);			
+				}
+			else if	(	(BS2_Fuel_Sw_Rt_Cover_Cur) & ((!cover)|(cover ==2))	)	//cover on, needs to be off (sw, then cover)
+				{
+//				if (Script_Debug) printf(" Switch then Cover.\xa");
+				if (key)
+					{
+					ActKey(KEYON+PULSE+BS2_Fuel_Sw_Rt);
+					DeferCall(Switch_Delay, &ActKey, KEYON+PULSE+BS2_Fuel_Sw_Rt_Cover);
+					}
+				BS2_Fuel_Sw_Rt_Cover_Cur = 0;
+				DeferCall(LED_Delay, &flashWHT3, 0);			
+				}
+			else if (key) ActKey(KEYON+PULSE+BS2_Fuel_Sw_Rt);
+			BS2_Fuel_Sw_Rt_Cur = posit;
+			Lights_WHT2(posit);
+//			if (Script_Debug) printf(" Switch = %i \xa Cover  = %i.\xa",BS2_Fuel_Sw_Rt_Cur,BS2_Fuel_Sw_Rt_Cover_Cur);
+			}
+		else if ((BS2_Fuel_Sw_Rt_Cover_Cur > 0) | (cover > 2))	//cover = Cover_Cur or 3 (force sw)
+			{
+//			if (Script_Debug) printf("Cycle Switch Only\xa Switch = %i to %i\xa cover = %i\xa",BS2_Fuel_Sw_Rt_Cur,posit,cover);
+			if (key) ActKey(KEYON+PULSE+BS2_Fuel_Sw_Rt);	
+			BS2_Fuel_Sw_Rt_Cur = posit;
+			Lights_WHT2(posit);
+			}
+		}
+}
+int BS2_Fuel_Sw_Rt_Cover_Cycle(int posit, int key = 1)	//sw is actual switch position (2 for force cycle)
+{
+//if (Script_Debug) printf("BS2_Fuel_Sw_Rt_Cover_Cycle(%i,%i)\xa",posit,key);
+if ((posit < 0) | (posit > 1))	posit = (BS2_Fuel_Sw_Rt_Cover_Cur+1)%2;	//toggle catch all
+//if (Script_Debug) printf(" Cover = %i to %i\xa",BS2_Fuel_Sw_Rt_Cover_Cur,posit);
+if (	(BS2_Fuel_Sw_Rt_Cover_Cur != posit)	)	//& ((sw > 1) | (sw == BS2_Fuel_Sw_Rt_Cur))	)
+	{
+	//if (cover != BS2_Fuel_Sw_Rt_Cover_Cur)
+	if (key)	ActKey(KEYON+PULSE+BS2_Fuel_Sw_Rt_Cover);
+	BS2_Fuel_Sw_Rt_Cover_Cur = posit;
+	flashWHT3(posit);
+	}
+}
+int BS2_Fuel_Sw_Lt_Cover_Cycle(int posit, int key = 1)	//sw is actual switch position (2 for force cycle)
+{
+//if (Script_Debug) printf("BS2_Fuel_Sw_Lt_Cover_Cycle(%i,%i)\xa",posit,key);
+if ((posit < 0) | (posit > 1))	posit = (BS2_Fuel_Sw_Lt_Cover_Cur+1)%2;	//toggle catch all
+//if (Script_Debug) printf(" Cover = %i to %i\xa",BS2_Fuel_Sw_Lt_Cover_Cur,posit);
+if (	(BS2_Fuel_Sw_Lt_Cover_Cur != posit)	)	//& ((sw > 1) | (sw == BS2_Fuel_Sw_Lt_Cur))	)
+	{
+	if (key)	ActKey(KEYON+PULSE+BS2_Fuel_Sw_Lt_Cover);
+	BS2_Fuel_Sw_Lt_Cover_Cur = posit;
+	flashWHT5(posit);
+	}
+}
+//DeferCall Routines
+int BS2_Fuel_Sw_Cover_Lt_Set_D(int state)	//logical change of cover for defercall
+{
+BS2_Fuel_Sw_Lt_Cover_Cycle(state,0);
+}
+int BS2_Fuel_Sw_Cover_Rt_Set_D(int state)	//logical change of cover for defercall
+{
+BS2_Fuel_Sw_Rt_Cover_Cycle(state,0);
+}
+int BS2_Fuel_Sw_Lt_Set_D(int state)	//logical change of cover for defercall
+{
+BS2_Fuel_Sw_Lt_Cycle(state,3,0);
+}
+int BS2_Fuel_Sw_Rt_Set_D(int state)	//logical change of cover for defercall
+{
+BS2_Fuel_Sw_Rt_Cycle(state,3,0);
+}
+int	BS2_Fuel_Sw_APU_Set_D(int state)	//logical change of switch and cover for defercall
+{
+BS2_Fuel_Sw_APU_Cycle(state,0);
+}
+
+int	BS2_Fuel_Sw_Array_Set(int state, int init = 0) //state is gearstate, init is whether to force initial settings
+{
+if (	(WarthogThrottle > 0)	&	((init) | (!state))	)
+	{
+//	if (Script_Debug) printf("BS2_Fuel_Sw_Array_Set(%i,%i)\xa",state,init);
+	if (init)
+		{
+		DeferCall(500,			&BS2_Fuel_Sw_Cover_Lt_Set_D,0);
+		DeferCall(500+LED_Delay,&BS2_Fuel_Sw_Cover_Lt_Set_D,0);
+		
+		DeferCall(500+2*LED_Delay,&BS2_Fuel_Sw_APU_Set_D,0);
+		}
+		
+	DeferCall(  LED_Delay, &BS2_Fuel_Sw_Lt_Set_D, abs(state-1));	//off for gear, on for air
+	DeferCall(2*LED_Delay, &BS2_Fuel_Sw_Rt_Set_D, abs(state-1));
+	}
+//does not change if gear is manually cycled down, only if manually cycled up or logically cycled either way.
+}
+
+
+int BS2_Salvo_Set(int posit, int delay = 200, int index = 3, int time = 0)	//posit is switch position value (0 for mid, 1 for aft, 2 for fwd), delay is time between switches, time should always start at 0
+{
+if 	(posit > (index-1)) posit = (BS2_Salvo_Cur+1)%index;	//out of bounds up toggles one step
+else if (posit < 0) posit = (BS2_Salvo_Cur+(index-1))%index;		//out of bounds down toggles (index-1) steps (comes to -1)
+
+while (BS2_Salvo_Cur != posit)
+	{
+	if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+BS2_Salvo_Mode);
+	BS2_Salvo_Cur = (BS2_Salvo_Cur+1)%index;
+	time = time + delay;
+	}
+}

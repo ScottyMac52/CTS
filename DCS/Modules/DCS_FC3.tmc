@@ -1,0 +1,2493 @@
+//============================================================================================
+//		DCS World Flaming Cliffs 3 and Su-25T for HOTAS Cougar/Warthog and Cougar MFDs
+//					by Don "Home Fries" Heumphreus
+//						last updated: 27OCT2021
+//
+//	Change Log:
+//	0.1		Initial Beta Release
+//	0.11	Added Engine Start/Stop routine with LEDs.
+//	0.12	Improved Start/Stop routine and separated as function
+//	0.2		Improved Ejection and Autopilot Functions
+//	0.21	Added check to toggle CommMenu if no F key pressed in CommState
+//	0.24	Added option to use DX21 or scroll lock for TS3 PTT
+//			Init added for MFD Engine Start
+//			Added Salvo mode to S1 long
+//	0.25	Updated S4 to remove wheelbrakes if shift
+//	0.30	Removed DX30 and SetShift capability from S4 for global compatibility with diff braking
+//			Updated S3S4Shifted and T6EjectCheck function arguments to (0) because S4 is no longer a shift
+//	0.33	Converted S4 to DiffBraking() with 0 argument for brakes
+//	0.34	Removed Comm_A10C_Active from Init (obsolete)
+//	0.36	Incorporated MFD backlighting routine (placeholder init)
+//	0.41	Moved GearDn_Ind_Default() to DCS World.tmc
+//	0.42	Added Landing Lights to H3R short
+//			Added A2G mode (Shift H2U long) for Ru fighters
+//	0.50	Fixed Aries Radio bug.
+//			MapAxis added to init for P-51D error trap
+//	0.51	Added MapKeyR to T1 for compatibility with P-51D CommState
+//	0.55	Moved S3 to DCS_Init, adjusted S3S4Shifted args for S4
+//	0.58	Fixed bug with VAC when TARS is not enabled
+//	0.59	Moved Analog Throttle Axis from DCS_Init to module
+//	0.61	Added Cut of Burst (MFD DX combo) to S3+S1 long
+//	0.68	Added Helicopter Variable
+//	0.71	Added KBPress variable to DeferCall  and D() commands
+//	0.74	Added MapKeyR null for T6 to clear UH1 MapKeyR
+//	1.00	Initial Release/Rebaseline
+//	1.02	Converted CommState to common
+//	1.04	Added Differential Braking for F-15C
+//			Moved S3 mapping from DCS_Init to local
+//	1.10	Added Diff Braking to S4 and FC3_NWS_Toggle() for S3
+//	1.11	Updated for new S3Release() params
+//			Moved Microstick and ManRng Analog and Digital Axis mapping to Aux_Axis_Init()
+//	1.13	Replaced all TEMPO() and TEMPO(500) with TEMPO(DefTempo)
+//			Replaced DFM TEMPO(100) with TEMPO(KBPress*2)
+//	1.14	Changed T6 FC3_Autopilot_Set() to FC3_T6Press()
+//			Added DragChuteEngage() & DragChuteTimeout()
+//			Removed Drag Chute from S3+T10 (made null)
+//	1.16	Added FC3 Drag Chute to T6 Long when gear is down regardless of T10 position
+//	1.17	Adjusted T1 and S1 for T/O Trim and NWS; removed FC3_NWS_Toggle()
+//			Added FC3MapButtons() to remap S1 based on gear setting
+//	1.18	Added Altitude Hold 'h' to T6 long in FC3_T6Press(force = 1)
+//			Added analog brake toggle to S3+T9 long for F-15C using FC3_Airbrake_Type_Set()
+//	1.21	Added DX19 to T1 /MI short for fuel tank select (F-15C)
+//			Added ActKey(DX1) to TG1 /RI to force DX1 release if stuck
+//			Modified analog brake routine for F-15C
+//	1.22	Added 0 to T10 /RI for analog airbrake
+//			Separated FC3_Airbrake_Type_Set() into FC3_Airbrake_Time_Set() and FC3_Airbrake_Map_Set() to force timing updates
+//	1.23	Applied new pulse-analog brake routine to F-15C
+//			Moved Airbrake_Map_Set() to Global_Subs
+//	1.25	Added delays to "simultaneous" profile start LED use to minimize profile crashes
+//	1.26	Moved major axis mapping to DCS_Axis_Init()
+//			Added T6WheelBrake = 0 and TriggerZoomEnabled = 1 to init
+//	1.27	Enhanced customizability for A-10C/FC3 comm switch layout.  Enhanced Aries Radio functionality.
+//	1.28	Revised LED indications for profile swap
+//	1.29	Moved MFD mappings from DCS_Init
+//	1.30	Moved FC3 CommMenu toggles from CommState_Off() to FC3_CommState_Init()
+//			TEMPO added to ROSB12 for Electrical Power global remap
+//			Added Su-27 to FC3_Eng_Start_Delay_Toggle() and made function discrete across S3+ROSB11-13
+//	1.32	Fixed CommState bug with Aries Radio disabled (lines 542-543; h/t taaaki)
+//	1.33	Updated to allow NWS/Analog braking for F-15C
+//			Moved MapKeyR(S3) to S3_NWS() for bug fix
+//	1.34	DX1 added to TG1 command (removed from TriggerZoom)
+//	1.35	Fixed issue with DirectX PTT with CommState and Aries Radio disabled
+//			Updated WheelBrakeFull argument for new DiffBraking() routine
+//	1.36	Added flap array routine for Su-25 models so that cycling up/down will cycle through maneuvering flaps.
+//			Fixed issue with RLED1 not extinguishing after comm sw release (Aries option disabled)
+//	1.50	Updated for HOTAS Warthog
+//			Added FC3_Map_Flaps() for TQS
+//	1.52	Added UniversRadio Channel Changing and External Radio toggle to CommState Init
+//	1.53	Adjusted for new 2.0 module selection
+//	1.56	Enabled WAV files for aircraft selection
+//	1.61	Moved Su-25 Gear/Flaps Macros from here to DCS_Global_Subs.tmc to fix issue with gear/flaps not working
+//			Added Adjustable Backlighting
+//	1.63	Added DX22/23 functionality to FC3_CommState_Init() for F-5E and future aircraft.
+//	1.66	Moved FC3 CommState_Off routines here
+//			Updated WH autopilot to allow for more modes
+//			Added Su25 3 switch nav light routine and separated light mappings for other acft
+//			Added MapKeyR for ROSB13-14 for compatibilty with Spitfire
+//	1.69	Updated CommState_Off() call and force argument to HCS/WCS Init 
+//			Fixed Su25_HCS_Init() and added force argument to FC3_Map_Flaps()
+//	1.72	Created dedicated Su-33 profile.
+//	2.01	Added Su-33 Wheelbrake Start to DiffBraking() and incorporated special afterburner w/o S3 for when brakes held
+//	2.02	Set FkeyPress=1 on init to prevent Commswitch activation on profile load
+//	2.04	Su-33: Fixed Autothrottle mappings to match JPEG
+//	2.10	Added VAICOM support
+//	2.11	Refined VAICOM/SRS integration for Cougar/Warthog
+//	2.13	Assigned TS3PTT_DX to VAICOM PTT in all cases.
+//	2.20	Added J-11A Flanker B+
+//	2.21	Replaced obsolete DX commands with keystrokes for Display Zoom (CSU/D)
+//			Added NS430 compatibility
+//	2.25b	Removed Fuel Dump command from A-10A
+//	2.26	Added NWS to MiG-29
+//	2.28	Added intelligent refuelling to Su-33
+//	2.28a	Changed Su-27/33 fuel dump to toggle function
+//	2.29	Added MFDisplay module selection
+//			Replaced 4 MFD Led functions with Lights_Four()
+//			Fixed typo for MSR in FC3_CommState_Init_WH() (H/T Dustoff)
+//	2.42	Replaced hard 1000ms with EmerJett_Cycle_Delay for weapons jettison
+//	2.46	Added SRS Overlay to ROSB20
+//	2.50b	Removed duplicate MapKeyR(0) mappings to free stack space.
+//	2.63	Added WHIdle_Enabled parameter to WH Idle commands
+//
+//
+//=============================================================================================
+
+//	Initial Configuration for Flaming Cliffs 3 (including the Su-25T)
+//	Relies heavily on UMD shifted states and keyboard macros for avionics packages
+
+//	MiG29 ToDo:
+//		NWS
+//		Altimeter Setting
+
+
+//	Ideas for Future Implementation:
+//		CommState based on KeyMap: Implemented
+//		Engine Start/Stop based on Idle Detent: Implemented
+
+
+
+//Internal Subs
+//int	Eng_Start_FC3_Def;	//added in 1.11 to select default engine start delay between engines
+int Nav_Mode_Check;
+char FC3_Autopilot_Mode;
+int	DragChuteDeployed;
+
+int FC3_WepsJett;			//added in 2.42
+int FC3_Flaps_Array;		//added in 1.36 to allow cycling through maneuver flaps
+//int	FC3_Flaps_Cur;
+int	Flaps_Array_FC3;	//	Set to 1 to enable "flaps array" where fully up is SHIFT+F, middle is F (toggle function) and down is CTRL+F.  Allows you to go up/down for maneuvering flaps in Su-25, but possible to get "out of sync" on respawn.
+int	FC3_Nav_Lights_Cur;
+int	FC3_AntiColl_Lights_Cur;
+int FC3_Refuel_Lights_Cur;
+int	Gear_Flaps_Up_FC3;
+int	Gear_Flaps_Dn_FC3;
+int	Gear_Flaps_Dn_TGZ_FC3;
+int	Airbrake_Def_FC3;	//legacy variable moved here from dcs world.tmc for sync purposes with brake type toggle
+
+int Eng_Start_FC3_Array;		//collection of possible engine start delay values
+int Eng_Start_FC3_Current;		//the actual value at the Eng_Start_FC3_Array address
+int	Su33_Startbrake;			//added in 2.01
+
+int	Su33_Boom_Cur;				//added in 2.28
+int	Su33_ASC_Refuel_Cur;
+
+int DCS_FC3(int led, int sp, int prof)	//led is whether leds light, sp is speech, prof is profile id
+{
+if		(prof == 2027)
+	{
+	printf("Su-27 Flanker B for DCS\xa");
+		if (WarthogStick > 0)
+		{
+		MapKeyR(&Joystick,	S2, EXEC("DCS_FC3_Init(2027);"));
+		}
+	else
+		{
+		MapKeyR(&HCougar,	S2, EXEC("DCS_FC3_Init(2027);"));
+		}
+	if (sp > 0)	PlayWav("su27.wav");
+	if (led > 0)
+		{
+		//should see 0 * * 0 to indicate that Su-27 has been selected.
+		Lights_Four(0,0,1,0,	ProfileSwapDelay+LED_Delay);
+		}
+	}
+else if	(prof == 2011)
+	{
+	printf("J-11A Flanker B+ for DCS\xa");
+		if (WarthogStick > 0)
+		{
+		MapKeyR(&Joystick,	S2, EXEC("DCS_FC3_Init(2011);"));
+		}
+	else
+		{
+		MapKeyR(&HCougar,	S2, EXEC("DCS_FC3_Init(2011);"));
+		}
+	if (sp > 0)	PlayWav("j11a.wav");
+	if (led > 0)
+		{
+		//should see * 0 * * to indicate that J-11 has been selected.
+		Lights_Four(1,0,1,1,	ProfileSwapDelay+LED_Delay);
+		}
+	}
+else if	(prof == 2033)
+	{
+	printf("Su-33 Flanker D for DCS\xa");
+		if (WarthogStick > 0)
+		{
+		MapKeyR(&Joystick,	S2, EXEC("DCS_FC3_Init(2033);"));
+		}
+	else
+		{
+		MapKeyR(&HCougar,	S2, EXEC("DCS_FC3_Init(2033);"));
+		}
+	if (sp > 0)	PlayWav("su33.wav");
+	if (led > 0)
+		{
+		//should see * * 0 0 to indicate that Su-33 has been selected.
+		Lights_Four(1,1,0,0,	ProfileSwapDelay+LED_Delay);
+		}
+	}
+else if	(prof == 2029)
+	{
+	printf("MiG-29A/C/G Fulcrum for DCS\xa");
+		if (WarthogStick > 0)
+		{
+		MapKeyR(&Joystick,	S2, EXEC("DCS_FC3_Init(2029);"));
+		}
+	else
+		{
+		MapKeyR(&HCougar,	S2, EXEC("DCS_FC3_Init(2029);"));
+		}
+	if (sp > 0)	PlayWav("mig29.wav");
+	if (led > 0)
+		{
+		//should see 0 0 * * to indicate that MiG-29 has been selected.
+		Lights_Four(0,0,1,1,	ProfileSwapDelay+LED_Delay);
+		}
+	}
+else if	(prof == 2509)
+	{
+	printf("A-10A Warthog for DCS\xa");
+		if (WarthogStick > 0)
+		{
+		MapKeyR(&Joystick,	S2, EXEC("DCS_FC3_Init(2509);"));
+		}
+	else
+		{
+		MapKeyR(&HCougar,	S2, EXEC("DCS_FC3_Init(2509);"));
+		}
+	if (sp > 0)	PlayWav("a10a.wav");
+	if (led > 0)
+		{
+		//should see * 0 0 * to indicate that A-10A has been selected.
+		Lights_Four(1,0,0,1,	ProfileSwapDelay+LED_Delay);
+		}
+	}
+else if	(prof == 2515)
+	{
+	printf("F-15C Eagle for DCS\xa");
+		if (WarthogStick > 0)
+		{
+		MapKeyR(&Joystick,	S2, EXEC("DCS_FC3_Init(2515);"));
+		}
+	else
+		{
+		MapKeyR(&HCougar,	S2, EXEC("DCS_FC3_Init(2515);"));
+		}
+	if (sp > 0)	PlayWav("f15c.wav");
+	if (led > 0)
+		{
+		//should see * * 0 * to indicate that FC3 has been selected.
+		Lights_Four(1,1,0,1,	ProfileSwapDelay+LED_Delay);
+		}
+	}
+else
+	{
+	printf("Su-25A/T Frogfoot for DCS\xa");
+	if (WarthogStick > 0)
+		{
+		MapKeyR(&Joystick,	S2, EXEC("DCS_FC3_Init(2025);"));
+		}
+	else
+		{
+		MapKeyR(&HCougar,	S2, EXEC("DCS_FC3_Init(2025);"));
+		}
+	if (sp > 0)	PlayWav("su25.wav");
+	if (led > 0)
+		{
+		//should see 0 * 0 * to indicate that FC3 has been selected.
+		Lights_Four(0,1,0,1,	ProfileSwapDelay+LED_Delay);
+		}
+	}
+//printf("Press and release Trigger to Set HOTAS to FC3\xa");
+//printf("or press and release S1 to cancel...");
+
+//should see 0 0 * * to indicate that FC3 has been selected.
+//	DeferCall(ProfileSwapDelay+LED_Delay,&Lights_LLED1,0);	//Changed to Binary 3 in 1.28
+//	DeferCall(ProfileSwapDelay+2*LED_Delay,&Lights_LLED2,0);
+//	DeferCall(ProfileSwapDelay+3*LED_Delay,&Lights_RLED1,1);
+//	DeferCall(ProfileSwapDelay+4*LED_Delay,&Lights_RLED2,1);
+}
+
+
+int	DCS_Su25_Init()
+{
+DCS_FC3_Init(2025);
+}
+int	DCS_Su27_Init()
+{
+DCS_FC3_Init(2027);
+}
+int	DCS_Su33_Init()
+{
+DCS_FC3_Init(2033);
+}
+int	DCS_MiG29_Init()
+{
+DCS_FC3_Init(2029);
+}
+int	DCS_A10A_Init()
+{
+DCS_FC3_Init(2509);
+}
+int	DCS_F15C_Init()
+{
+DCS_FC3_Init(2515);
+}
+
+int DCS_J11A_Init()
+{
+DCS_FC3_Init(2011);
+}
+
+int	SetMenu_Su25()
+{
+Set_Acft_Array_Cur(2025);
+}
+int	SetMenu_Su27()
+{
+Set_Acft_Array_Cur(2027);
+}
+int	SetMenu_Su33()
+{
+Set_Acft_Array_Cur(2033);
+}
+int	SetMenu_MiG29()
+{
+Set_Acft_Array_Cur(2029);
+}
+int	SetMenu_A10A()
+{
+Set_Acft_Array_Cur(2509);
+}
+int	SetMenu_F15C()
+{
+Set_Acft_Array_Cur(2515);
+}
+int SetMenu_J11A()
+{
+Set_Acft_Array_Cur(2011);
+}
+
+// Free DX Codes:
+//DX8 (now su33 brakestart)
+
+
+int DCS_FC3_Init(int prof)
+{
+char acftname;Dim(&acftname,19);
+
+Determine_Differential_Braking(DiffBraking_Enabled,CougarToeBrakes);	//may need to set CougarToeBrakes=0 if can't find middle ground between analog and digital braking acft
+AirBrake_Init(AirBrkFlash);
+Eng_Start_FC3_Array = SEQ(	Eng_Start_FC3,		//0
+							Eng_Start_A10A,		//1
+							Eng_Start_Su27		//2
+							);
+
+FC3_Flaps_Array = SEQ(	Flaps_Up,
+						Flaps_Cycle,
+						Flaps_Dn
+						);
+
+Su33_Boom_Cur = 0;
+Su33_ASC_Refuel_Cur = 0;
+
+if (EmerJett_Cycle_Delay >= KBDelay)	FC3_WepsJett = REXEC(6,EmerJett_Cycle_Delay,"ActKey(KEYON+PULSE+Weapons_Jettison);");	//added in 2.42
+else	FC3_WepsJett = Weapons_Jettison;
+
+if	(prof == 2025)	//Su-25
+	{
+	sprintf(&acftname,"Su-25A/T Frogfoot");
+	Eng_Start_x	= X(Eng_Start_FC3_Array,0);
+	Eng_Start_FC3_Current = 0;
+	AB_Capable	=	0;	//added in 1.61
+	S4asNWS	= 0;	//moved in 1.61
+	S3holdNWS = 0;	//added in 2.05
+	ToeBrakesAvailable	=	0;	//moved in 1.61
+	FC3_Eng_Start_Delay_Toggle(2,IdleDetentLow);
+	FC3_Airbrake_Type_Set(Airbrake_Def_FC3_Ru,0);
+	NS430_Enabled	=	NS430_Installed*NS430_Enabled_Su25;	//added in 2.21
+	}
+
+if	((prof == 2027) | (prof == 2033)	| (prof == 2029)	|	(prof == 2011))	//RuF; Seaparate out Su-27/33 and add ToeBrakesAvailable when Su-33 AFM completed.
+	{
+	if (prof == 2027)
+		{
+		sprintf(&acftname,"Su-27 Flanker B");
+		NS430_Enabled		=	NS430_Installed*NS430_Enabled_Su27;	//added in 2.21
+		}
+	else if (prof == 2011)
+		{
+		sprintf(&acftname,"J-11A Flanker B+");
+		NS430_Enabled		=	NS430_Installed*NS430_Enabled_J11A;	//added in 2.21
+		}
+	else if (prof == 2033)
+		{
+		sprintf(&acftname,"Su-33 Flanker D");
+		NS430_Enabled		=	NS430_Installed*NS430_Enabled_Su33;	//added in 2.21
+		}
+	else
+		{
+		sprintf(&acftname,"MiG-29A/C/G Fulcrum");
+		NS430_Enabled		=	NS430_Installed*NS430_Enabled_MiG29;	//added in 2.21
+		}
+	Eng_Start_x	= X(Eng_Start_FC3_Array,1);
+	Eng_Start_FC3_Current = 1;
+	AB_Capable	=	1;	//added in 1.61
+//	S4asNWS	= 0;	//moved in 1.61
+//	S3holdNWS = 0;	//added in 2.05
+	S4asNWS	= -NWSwithBrake;	//changed in 2.26
+	S3holdNWS = 1;	//changed in 2.26
+	ToeBrakesAvailable	=	0;	//moved in 1.61
+	FC3_Eng_Start_Delay_Toggle(0,IdleDetentLow);
+	Airbrake_Type_Cur		=	Airbrake_Def_FC3_Ru;	//added in 2.43
+	FC3_Airbrake_Type_Set(Airbrake_Def_FC3_Ru,0);
+	}
+if	(prof == 2509)	//A-10A
+	{
+	sprintf(&acftname,"A-10A Warthog");
+	Eng_Start_x	= X(Eng_Start_FC3_Array,1);
+	Eng_Start_FC3_Current = 1;
+	AB_Capable	=	0;	//added in 1.61
+	S4asNWS	= 0;	//moved in 1.61
+	S3holdNWS = 0;	//added in 2.05
+	ToeBrakesAvailable	=	0;	//moved in 1.61
+	FC3_Eng_Start_Delay_Toggle(1,IdleDetentLow);
+	Airbrake_Type_Cur		=	Airbrake_Def_A10A;	//added in 2.43
+	FC3_Airbrake_Type_Set(Airbrake_Def_A10A,0);
+	NS430_Enabled		=	NS430_Installed*NS430_Enabled_A10A;	//added in 2.21
+	}
+if	(prof == 2515)	//F-15C
+	{
+	sprintf(&acftname,"F-15C Eagle");
+	Eng_Start_x	= X(Eng_Start_FC3_Array,0);
+	Eng_Start_FC3_Current = 0;
+	AB_Capable	=	1;	//added in 1.61
+	FC3_Eng_Start_Delay_Toggle(0,IdleDetentLow);
+	//FC3_Airbrake_Type_Set(2);	//removed for separate components to prevent swap
+	FC3_Airbrake_Time_Set(2) ;
+	S4asNWS	= -NWSwithBrake;	//moved in 1.61
+	S3holdNWS = 1;	//added in 2.05
+	ToeBrakesAvailable	=	3;	//added in 1.40, set to 3 to do both analog with axis sharing (2) and digital DX29
+
+	Airbrake_Type_Cur		=	2;	//added in 2.43
+	if (WarthogThrottle > 0) Airbrake_Map_Set_WH(2,0,0);
+	else Airbrake_Map_Set(2,0,0);
+	NS430_Enabled		=	NS430_Installed*NS430_Enabled_F15C;	//added in 2.21
+	}
+
+FkeyPress			=	1;	//added in 2.02 to prevent Commswitch key activation on profile load.
+GraceFlag			=	0;
+//Eng_Start_x			=	X(Eng_Start_FC3_Array,Eng_Start_FC3_Current);
+Eng_Stop_x			=	Eng_Stop_FC3;
+Starter_Ind_x		=	Starter_Ind_FC3;
+MFD_Eng_Start		=	1;					
+ProfID				=	prof;
+FC3_Autopilot_Mode	=	'6'	;				//Defaults to Route mode if T6 used.
+
+FixedGear			=	0;
+Helicopter			=	0;
+T6WheelBrake		=	0;
+TriggerZoomEnabled	=	1;
+GearCycleTimeUp		=	Gear_Transit_FC3;	//later move to individual
+GearCycleTimeDn		=	Gear_Transit_FC3;
+DragChuteDeployed	=	0;
+S4AnalogBrake		=	JoyAsAnalogBrake;				//added in 1.33, but -NWSwithBrake will ensure DX29 enabled for other FC3 Aircraft
+AnalogParkingBrake	=	JoyYParkingBrake;				//added in 1.33
+//S4asNWS				=	-NWSwithBrake;					//added in 1.33.  True for F-15C, but DX29 enabled when stick not fwd of center for other FC3 acft.  F-15C needs separate diff.lua for analog.
+XYAxisTrim			=	0;	//added in 1.34
+DMS_SnapView		=	0;	//added in 1.34
+WheelBrakeFull		=	1;	//added in 1.35
+FlapState			=	0;	//added in 1.36
+//ToeBrakesAvailable	=	3;	//added in 1.40, set to 3 to do both analog with axis sharing (2) and digital DX29
+NVG_Capable			=	2*FC3_Custom_LUA;	//added in 1.40; NVG capability depends on whether custom LUA is installed.
+Adjust_Backlighting	=	Adjust_Backlight_FC3*WarthogThrottle;	//added in 1.62
+CrewCount			=	1;
+StationChangeModifier	=	0;
+WH_Use_TQS			=	0;	//added in 2.43
+Analog_TDC			=	1;	//added in 2.43
+EngineCount			=	2;	//added in 2.43
+Airbrake_Swap		=	0;	//dummy argument as FC3 uses custom routine
+CommInitType		=	0;	//0 for none/custom, 1 for single channel (P-51), 2 for simple (dual channel), 3 for complex (3 channel).  added in 2.43
+StnCheckDisabled	=	2;	//added in 2.43.  Forced for single seat
+CurrentStation 		=	1;	//moved here in 2.43
+
+
+//AB_Capable per initial acft (above)
+
+
+
+//brake cycle time moved to FC3_Airbrake_Type_Set() in 1.18
+
+
+			
+						
+						
+
+printf("%s for DCS/FC3 Config (Profile v%i.%i):\xa",&acftname,MajorVersion,MinorVersion);
+PlayWavSel(ProfID,abs(Init_Run - 1),DCSFP_Enabled,MFDisplayEnabled);	//added in 1.61, DCSFP added in 2.05, MFDisplay added in 2.29
+//printf("DiffBrakes = %i,%i\xa",DiffBrakes,DiffBraking_Enabled);	//for test purposes
+Pause_TrackIR(0);
+MFD_Init(ProfID);
+
+printf("   Map HOTAS Cougar for %s Config:\xa",&acftname);
+		DCS_Axis_Init(ProfID,EngineCount,Analog_TDC);
+		printf("      Button Mapping:\xa");
+			printf("         Shift Commands: S3+T7/T8 all momentary...");
+			if (WarthogStick > 0)
+				{
+				if (WarthogThrottle > 0) SetShiftButton (&Joystick, S3, &Throttle, BSB, BSF);
+				else SetShiftButton (&Joystick, S3, &HCougar, T7, T8);
+				}
+			else if (WarthogThrottle > 0) 	SetShiftButton(&HCougar, S3, &Throttle, BSB, BSF);
+			else							SetShiftButton(&HCougar, S3, &HCougar, T7, T8);
+				//S3 mapped with FC3MapButtons() in 1.28
+			printf("Done!\xa");	
+			printf("         Stick Buttons...");
+			if (WarthogStick > 0)
+				{
+				MapKeyIO(&Joystick, TG1, EXEC("TriggerZoom_toggle(-1,AirBrkFlash,GearState,FlapState);"), CHAIN(DX1,EXEC("TriggerZoom_in();"))	);
+				//MapKeyRIO(&HCougar,TG1, EXEC("ActKey(DX1);"), EXEC("TriggerZoom_out();"));				//ActKey(DX1) added in 1.21 to force DX1 release if stuck
+				MapKeyRIO(&Joystick,TG1, UP+DX1, EXEC("ActKey(ZoomIn_slow); DeferCall(KBDelay,&TriggerZoom_out,0);"));				//ActKey(DX1) added in 1.21 to force DX1 release if stuck
+				MapKey(&Joystick, TG2, DX6);
+				
+				//S1 mapped with FC3MapButtons() no longer as of 1.28
+				if (prof == 2033)
+					{	
+					MapKeyIOUMD(&Joystick,	S1, TEMPO(DX5,CHAIN(DX31,D(ModDelay),DX6), DefTempo),	TEMPO(DX5,SalvoMode, DefTempo),	//long for salvo mode added in 0.24, /I long for Cut of Burst in 0.61, UMD added in 1.04
+												//TEMPO(CHAIN(DX5,EXEC("if (GraceFlag) ActKey(KEYON+PULSE+Su33_ASC_Refuel);")),CHAIN(DX31,D(ModDelay),DX6), DefTempo),	TEMPO(DX5,CHAIN(PULSE+Refueling_Boom,D(KBDelay),PULSE+Su33_ASC_Refuel),1000),	//long for refuel mode (cut burst /I), short for DX5
+												TEMPO(CHAIN(DX5,EXEC("if (GraceFlag) Su33_Refuel_Set(-1,0);")),CHAIN(DX31,D(ModDelay),DX6), DefTempo),	TEMPO(DX5,EXEC("Su33_Refuel_Set(-1,1);"),1000),	//long for refuel mode (cut burst /I), short for DX5
+												TEMPO(DX5,CHAIN(DX31,D(ModDelay),DX6), DefTempo),	TEMPO(DX5,SalvoMode, DefTempo));
+					MapKeyRIOUMD(&Joystick,S1,	0,0,
+												EXEC("GraceFlag = 1;DeferCall(DoubleTap,&Grace_Flag,0);"),0,
+												0,0);
+					}
+				else
+					{
+					MapKeyIOUMD(&Joystick,	S1, TEMPO(DX5,CHAIN(DX31,D(ModDelay),DX6), DefTempo),	TEMPO(DX5,SalvoMode, DefTempo),	//long for salvo mode added in 0.24, /I long for Cut of Burst in 0.61, UMD added in 1.04
+												TEMPO(DX5,CHAIN(DX31,D(ModDelay),DX6), DefTempo),	TEMPO(DX5,Refueling_Boom,1000),	//long for refuel mode (cut burst /I), short for DX5
+												TEMPO(DX5,CHAIN(DX31,D(ModDelay),DX6), DefTempo),	TEMPO(DX5,SalvoMode, DefTempo));
+					MapKeyR	   (&Joystick,	S1,	0);
+					}				
+				MapKeyIO(&Joystick, S2, CHAIN(DX2,DX10), DX2);											// Override for Ru, Shift Override for US (Wep release for US).  No D(ModDelay) because no modifier.
+				MapKeyR	(&Joystick,	S2, 0);
+				MapKeyIO(&Joystick, S4, EXEC("S3S4Shifted();"), EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,0);"));			
+				MapKeyRIO(&Joystick,S4, 0, EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,1);"));
+				}			
+			else
+				{
+				MapKeyIO(&HCougar, TG1, EXEC("TriggerZoom_toggle(-1,AirBrkFlash,GearState,FlapState);"), CHAIN(DX1,EXEC("TriggerZoom_in();"))	);
+				//MapKeyRIO(&HCougar,TG1, EXEC("ActKey(DX1);"), EXEC("TriggerZoom_out();"));				//ActKey(DX1) added in 1.21 to force DX1 release if stuck
+				MapKeyRIO(&HCougar,TG1, UP+DX1, EXEC("ActKey(ZoomIn_slow); DeferCall(KBDelay,&TriggerZoom_out,0);"));				//ActKey(DX1) added in 1.21 to force DX1 release if stuck
+				MapKey(&HCougar, TG2, DX6);
+				
+				//S1 mapped with FC3MapButtons() no longer as of 1.28
+				if (prof == 2033)
+					{
+					MapKeyIOUMD	(&HCougar,	S1, TEMPO(DX5,CHAIN(DX31,D(ModDelay),DX6), DefTempo),	TEMPO(DX5,SalvoMode, DefTempo),	//long for salvo mode added in 0.24, /I long for Cut of Burst in 0.61, UMD added in 1.04
+												//TEMPO(CHAIN(DX5,EXEC("if (GraceFlag) ActKey(KEYON+PULSE+Su33_ASC_Refuel);")),CHAIN(DX31,D(ModDelay),DX6), DefTempo),	TEMPO(DX5,CHAIN(PULSE+Refueling_Boom,D(KBDelay),PULSE+Su33_ASC_Refuel),1000),	//long for refuel mode (cut burst /I), short for DX5
+												TEMPO(CHAIN(DX5,EXEC("if (GraceFlag) Su33_Refuel_Set(-1,0);")),CHAIN(DX31,D(ModDelay),DX6), DefTempo),	TEMPO(DX5,EXEC("Su33_Refuel_Set(-1,1);"),1000),	//long for refuel mode (cut burst /I), short for DX5
+												TEMPO(DX5,CHAIN(DX31,D(ModDelay),DX6), DefTempo),	TEMPO(DX5,SalvoMode, DefTempo));
+					MapKeyRIOUMD(&HCougar,	S1,	0,0,
+												EXEC("GraceFlag = 1;DeferCall(DoubleTap,&Grace_Flag,0);"),0,
+												0,0);
+					}
+				else
+					{
+					MapKeyIOUMD	(&HCougar,	S1, TEMPO(DX5,CHAIN(DX31,D(ModDelay),DX6), DefTempo),	TEMPO(DX5,SalvoMode, DefTempo),	//long for salvo mode added in 0.24, /I long for Cut of Burst in 0.61, UMD added in 1.04
+												TEMPO(DX5,CHAIN(DX31,D(ModDelay),DX6), DefTempo),	TEMPO(DX5,Refueling_Boom,1000),	//long for refuel mode (cut burst /I), short for DX5
+												TEMPO(DX5,CHAIN(DX31,D(ModDelay),DX6), DefTempo),	TEMPO(DX5,SalvoMode, DefTempo));
+					MapKeyR		(&HCougar,	S1,	0);		
+					}
+				
+				MapKeyIO(&HCougar, S2, CHAIN(DX2,DX10), DX2);											// Override for Ru, Shift Override for US (Wep release for US).  No D(ModDelay) because no modifier.
+				MapKeyR	(&HCougar,	S2, 0);
+				MapKeyIO(&HCougar, S4, EXEC("S3S4Shifted();"), EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,0);"));			
+				MapKeyRIO(&HCougar,S4, 0, EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,1);"));
+				}
+			printf("...Done!\xa");	
+						
+			H1_Init(TrackIR, PadlockEnabled, ProfID);	//moved to individual routines in 1.27 for trim reset removal on helos
+			CommState_Off(1,ProfID,1,0,1);	//Initiates Hats 2=4 out of CommState
+			FC3_Throttle_Init(ProfID);
+
+
+
+//FC3_MFD_Init();
+
+
+FlapState=0;				//for future implementation
+TriggerZoom_state  = 0;		//reset TriggerZoom
+
+ActKey(DX1);				//just in case DX1 lingers from trigger activation
+//Lights_ALL(0);				//Says Initialization complete.
+if ((Adjust_Backlighting > 0) & (WarthogThrottle > 0))
+	{
+	DeferCall(LED_Delay,&D_MFDWHT_Pwr,2*Throttle[APUON]);	//2x because it's max or off
+	if (Script_Debug) printf("APU = %i",Throttle[APUON]);	//for test purposes
+	DeferCall(3*LED_Delay,&Lights_RLED1,0);	//Changed to Binary in 1.28
+	DeferCall(4*LED_Delay,&Lights_RLED2,0);
+	DeferCall(5*LED_Delay,&WHT_Lights_Dn_D,0);
+	}
+else
+	{
+	DeferCall(LED_Delay,&Backlight_Max_Init,0);
+	DeferCall(4*LED_Delay,&Lights_RLED1,0);	//Changed to Binary in 1.28
+	DeferCall(5*LED_Delay,&Lights_RLED2,0);
+	if (WarthogThrottle > 0) DeferCall(6*LED_Delay,&WHT_Lights_Dn_D,0);
+	}
+	
+if (Init_Run == 0) Gear_Ind_Init(GearDn_Ind_Default,FixedGear,Helicopter,AirBrkFlash);
+
+if (GearDn_Ind_Default > 0) Map_Cougar_ToeBrakes(ToeBrakesAvailable);//added in 1.40;
+else	Map_Cougar_ToeBrakes(0);
+
+FC3MapButtons(GearDn_Ind_Default,prof);	//maps S3 and T1
+//FC3_NWS_Current = GearDn_Ind_Default; //obsolete
+
+printf("\xa%s for DCS/FC3 Init Complete!\xa",&acftname);
+//if		(prof == 2027) 	printf("\xaSu-27 Flanker B for DCS Init Complete!\xa");
+//else if	(prof == 2033) 	printf("\xaSu-33 Flanker D for DCS Init Complete!\xa");
+//else if	(prof == 2029) 	printf("\xaMiG-29A/C/G Fulcrum for DCS Init Complete!\xa");
+//else if	(prof == 2509) 	printf("\xaA-10A Warthog for DCS Init Complete!\xa");
+//else if	(prof == 2515) 	printf("\xaF-15C Eagle for DCS Init Complete!\xa");
+//else					printf("\xaSu-25A/T Frogfoot for DCS Init Complete!\xa");
+Set_Acft_Array_Cur(ProfID);
+}
+
+
+int FC3_Throttle_Init(int prof)
+{
+if (WarthogThrottle > 0)
+	{
+		 		printf("         Warthog Throttle Buttons...\xa");	
+	 			
+				//T1 mapped in FC3MapButtons()
+ 			
+//				MapKeyR	(&Joystick, MSP, 0);			//Added in 0.51 to prevent P-51D CommState Release.
+											
+				FC3_CommState_Init_WH();			//Note: CommStateToggle in FC3 by MapKey because U/D switches are already reserved.
+				//FC3_PTT_OnOff();					//Default T3 to TS3 PTT.  Lights RLED2 for Hot Mic while button is pressed.  Obsolete in 1.27
+				
+				//MapKeyIO(&Throttle,	LTB, TEMPO(EXEC("FC3_Autopilot_Emergency_Off();"),EXEC("EjectCheckT6(ProfID);"), DefTempo), TEMPO(EXEC("FC3_T6Press(FC3_Autopilot_Mode,GearState,DragChuteLEDTime);"),EXEC("FC3_T6Press(FC3_Autopilot_Mode,GearState,DragChuteLEDTime,1);"),DefTempo));	//Replaces DX24, shifted checks for eject if held, AP Disengage if short.
+				//MapKeyR	(&Throttle,	LTB, 0);			
+
+if ((prof == 2515) | (prof == 2011))
+				{
+				MapKeyIO(&Throttle,	PSF,	EXEC("FC3_Nav_Lights_Set(1,0);FC3_AntiColl_Lights_Set(0,0);"),EXEC("FC3_Nav_Lights_Set(1);DeferCall(KBDelay,&FC3_AntiColl_Lights_Set,0);"));
+				MapKeyIO(&Throttle,	PSB,	EXEC("FC3_Nav_Lights_Set(1,0);FC3_AntiColl_Lights_Set(1,0);"),EXEC("FC3_Nav_Lights_Set(1);DeferCall(KBDelay,&FC3_AntiColl_Lights_Set,1);"));
+				MapKeyIO(&Throttle,	PSM,	TEMPO(0,EXEC("FC3_Nav_Lights_Set(0,0);FC3_AntiColl_Lights_Set(0,0);"),DoubleTap),
+											TEMPO(0,EXEC("FC3_Nav_Lights_Set(0);DeferCall(KBDelay,&FC3_AntiColl_Lights_Set,0);"),DoubleTap)	);
+				}
+else if (prof == 2025)
+				{
+				MapKeyIO(&Throttle,	PSF,	EXEC("Su25_Nav_Lights_Set(1,0);"),EXEC("Su25_Nav_Lights_Set(1);"));
+				MapKeyIO(&Throttle,	PSB,	EXEC("Su25_Nav_Lights_Set(2,0);"),EXEC("Su25_Nav_Lights_Set(2);"));
+				MapKeyIO(&Throttle,	PSM,	TEMPO(0,EXEC("Su25_Nav_Lights_Set(0,0);"),DoubleTap),
+											TEMPO(0,EXEC("Su25_Nav_Lights_Set(0);"),DoubleTap)	);
+				}
+else if (prof == 2033)
+				{
+				MapKeyIO(&Throttle,	PSF,	EXEC("FC3_Nav_Lights_Set(1,0);FC3_Refuel_Lights_Set(1,0);"),EXEC("FC3_Nav_Lights_Set(1);DeferCall(KBDelay,&FC3_Refuel_Lights_Set,1);"));
+				MapKeyIO(&Throttle,	PSB,	EXEC("FC3_Nav_Lights_Set(1,0);"),EXEC("FC3_Nav_Lights_Set(1);"));
+				MapKeyIO(&Throttle,	PSM,	TEMPO(0,EXEC("FC3_Nav_Lights_Set(0,0);FC3_Refuel_Lights_Set(1,0);"),DoubleTap),
+											TEMPO(0,EXEC("FC3_Nav_Lights_Set(0);DeferCall(KBDelay,&FC3_Refuel_Lights_Set,0);"),DoubleTap)	);
+				}
+else
+				{
+				MapKeyIO(&Throttle,	PSF,	EXEC("FC3_Nav_Lights_Set(1,0);"),EXEC("FC3_Nav_Lights_Set(1);"));
+				MapKeyIO(&Throttle,	PSB,	EXEC("FC3_Nav_Lights_Set(1,0);"),EXEC("FC3_Nav_Lights_Set(1);"));
+				MapKeyIO(&Throttle,	PSM,	TEMPO(0,EXEC("FC3_Nav_Lights_Set(0,0);"),DoubleTap),
+											TEMPO(0,EXEC("FC3_Nav_Lights_Set(0);"),DoubleTap)	);
+				}
+
+if ((prof == 2027) | (prof == 2033))	//Flankers.  poss 2029 or 2011 later
+				{
+				MapKeyIO(&Throttle,	CHF,	TEMPO(Su27_Intake_Grid,Gear_Dn,GearDnTempo),	TEMPO(NextWaypoint,FC3_WepsJett,DefTempo));	//changed from LongTempo to DefTempo in 1.40a2
+				MapKeyIO(&Throttle,	CHB,	TEMPO(Su27_Intake_Grid,Gear_Up,GearUpTempo),	TEMPO(PrevWaypoint,FuelTank_Jettison,DefTempo));	
+				}
+else
+				{
+				MapKeyIO(&Throttle,	CHF,	TEMPO(0,Gear_Dn,GearDnTempo),	TEMPO(NextWaypoint,FC3_WepsJett,DefTempo));	//changed from LongTempo to DefTempo in 1.40a2
+				MapKeyIO(&Throttle,	CHB,	TEMPO(0,Gear_Up,GearUpTempo),	TEMPO(PrevWaypoint,FuelTank_Jettison,DefTempo));										//changed from LongTempo to DefTempo in 1.40a2
+				}
+				MapKeyR	(&Throttle,	CHF,	0);	//Added for F-86 in 1.69
+				MapKeyR	(&Throttle,	CHB,	0);	//Added for F-86 in 1.69
+				
+
+				
+				if (	(prof == 2011)	|	((prof >2025) & (prof < 2500))	)	//Ru Fighters
+					{
+					MapKeyIOUMD(&Throttle,	CSL,	FC3_H3LU,FC3_H3LU,							//Wingspan
+													PRF_Select, FC3_H3LD,
+													PRF_Select, FC3_H3LD);						//Radar L/R (or scan zone)
+					MapKeyIOUMD(&Throttle,	CSR,	FC3_H3RU,FC3_H3RU,
+													RWS_TWS_Toggle,FC3_H3RD,
+													RWS_TWS_Toggle,FC3_H3RD);
+					MapKeyIOUMD(&Throttle,	CSU,	Weapon_Select,Weapon_Select,
+
+
+													DisplayZoom_Out,	FC3_H3UDO,
+													DisplayZoom_Out,	FC3_H3UDO);
+					MapKeyIOUMD(&Throttle,	CSD,	Cannon,	Cannon,
+
+
+													DisplayZoom_In,	FC3_H3DDO,
+													DisplayZoom_In,	FC3_H3DDO);	
+					
+					}								
+				else
+					{
+					MapKeyIO(&Throttle,		CSL,	PRF_Select, FC3_H3LD);						//Radar L/R (or scan zone)
+					MapKeyIO(&Throttle,		CSR,	RWS_TWS_Toggle,FC3_H3RD);
+					MapKeyIO(&Throttle,		CSU,	DisplayZoom_Out,	FC3_H3UDO);	//Radar Elev /I Zoom Display
+					MapKeyIO(&Throttle,		CSD,	DisplayZoom_In,		FC3_H3DDO);
+					}
+				//MapKeyUMD(&Throttle,SC,		TargetDesignator_Center,DX24,TargetDesignator_Center);	//Taken care of in FC3MapButtons
+				
+				printf("         Base Switches...");
+				
+				//FC3_Map_Flaps_WH(Eng_Start_FC3_Def);	//moved to individual aircraft in beginning of profile
+				if (prof == 2033)
+					{
+					MapKeyIO(&Throttle,	EFRNORM,	EXEC("Su33_Refuel_Set(1,1,0);"),	EXEC("Su33_Refuel_Set(1,1,1);"));
+					MapKeyIO(&Throttle,	EFROVER,	EXEC("Su33_Refuel_Set(0,1,0);"),	EXEC("Su33_Refuel_Set(0,1,1);"));
+					}
+				else
+					{
+					MapKeyIO(&Throttle,	EFRNORM,	0,	PULSE+Refueling_Boom);
+					MapKeyIO(&Throttle,	EFROVER,	0,	PULSE+Refueling_Boom);
+					}
+				MapKeyR	(&Throttle,	EFRNORM,	0);
+				if (prof == 2509)
+					{
+					MapKey	(&Throttle,	EFLNORM,	0);
+					MapKeyR	(&Throttle,	EFLNORM,	0);
+					MapKey	(&Throttle,	EFLOVER,	0);	//clears down stroke
+					}
+				else if ((prof == 2515) | (prof == 2011) | (prof == 2027) | (prof == 2033))	//toggle fuel dump for F-15, J-11A, and Su-27/33 (added in 2.28a)
+					{
+					MapKeyIO(&Throttle,	EFLNORM,	0,		PULSE+FuelDump);	//Fuel Dump (/I for sync, /O for toggle)
+					MapKeyRIO(&Throttle,EFLNORM,	0, 		PULSE+FuelDump);
+					MapKey	(&Throttle,	EFLOVER,	0);	//clears down stroke
+					}
+				else
+					{
+					MapKey	(&Throttle,	EFLNORM,	DX24);	//Fuel Dump (for momentary)
+					MapKey	(&Throttle,	EFLOVER,	0);
+					MapKeyR	(&Throttle,	EFLNORM,	0);
+					}
+				
+			if (WHIdle_Enabled > 0)
+				{			
+				MapKeyIO(&Throttle,	IDLERON,	0,	CHAIN(PULSE+Engine_Right_Stop, EXEC("Engine_Shutdown_Ind(2, Engine_Shutdown_Ind_Time, 1);")));
+				MapKeyIO(&Throttle,	IDLEROFF,	0,	CHAIN(PULSE+Engine_Right_Start, EXEC("Engine_Start_Ind(2, Starter_Ind_x, 1);")));
+				MapKeyIO(&Throttle,	IDLELON,	0,	CHAIN(PULSE+Engine_Left_Stop, EXEC("Engine_Shutdown_Ind(1, Engine_Shutdown_Ind_Time, 1);")));
+				MapKeyIO(&Throttle,	IDLELOFF,	0,	CHAIN(PULSE+Engine_Left_Start, EXEC("Engine_Start_Ind(1, Starter_Ind_x, 1);")));
+				}
+				
+				MapKeyIO(&Throttle,	EORMOTOR,	0,	CHAIN(PULSE+Engine_Right_Stop, EXEC("Engine_Shutdown_Ind(2, Engine_Shutdown_Ind_Time, 1);")));
+				MapKeyIO(&Throttle,	EORIGN,		0,	CHAIN(Engine_Right_Start, EXEC("Engine_Start_Ind(2, Starter_Ind_x, 1);")));
+				MapKeyIO(&Throttle,	EOLMOTOR,	0,	CHAIN(PULSE+Engine_Left_Stop, EXEC("Engine_Shutdown_Ind(1, Engine_Shutdown_Ind_Time, 1);")));
+				MapKeyIO(&Throttle,	EOLIGN,		0,	CHAIN(Engine_Left_Start, EXEC("Engine_Start_Ind(1, Starter_Ind_x, 1);")));
+//				MapKey	(&Throttle, EORNORM,	0);
+//				MapKey	(&Throttle, EOLNORM,	0);
+//				MapKeyR	(&Throttle,	EOLIGN,		0);
+//				MapKeyR	(&Throttle,	EORIGN,		0);
+				
+				if (prof == 2509)
+					{
+					MapKey	(&Throttle,	APPAT,	PULSE+A10A_AP_Path);	//updates Laste switch position in A-10A
+					MapKey	(&Throttle,	APAH,	PULSE+A10A_AP_AltHdg);	
+					MapKey	(&Throttle,	APALT,	PULSE+A10A_AP_Alt);	
+					
+//					MapKey	(&Throttle,	RDRNRM,	0);
+//					MapKey	(&Throttle,	RDRDIS,	0);
+					}
+				else if (prof == 2029)	//added in 2.25
+					{
+					
+					MapKey	(&Throttle,	APPAT,	EXEC("if (MiG29PathEnabled) {if (Throttle[RDRNRM]) FC3_Autopilot_Mode = '6'; else FC3_Autopilot_Mode = '5';} else FC3_Autopilot_Mode = '4';")	);	//reapproach, else path
+					MapKey	(&Throttle,	APAH,	EXEC("FC3_Autopilot_Mode = '4';")	);														//att hold
+					MapKey	(&Throttle,	APALT,	EXEC("if (Throttle[RDRNRM]) FC3_Autopilot_Mode = '2'; else FC3_Autopilot_Mode = '1';")	);	//GPRS on, else dampen
+					
+					MapKey	(&Throttle,	RDRNRM,	EXEC("if (Throttle[APALT]) FC3_Autopilot_Mode = '2'; else if ((MiG29PathEnabled) &(Throttle[APPAT])) FC3_Autopilot_Mode = '6';"));
+					MapKey	(&Throttle,	RDRDIS,	EXEC("if (Throttle[APALT]) FC3_Autopilot_Mode = '1'; else if ((MiG29PathEnabled) &(Throttle[APPAT])) FC3_Autopilot_Mode = '5';"));
+					}
+				else
+					{
+					MapKey	(&Throttle,	APPAT,	EXEC("if (Throttle[RDRNRM]) FC3_Autopilot_Mode = '1'; else FC3_Autopilot_Mode = '2';")	);	//att hold on, alt/roll off	
+					MapKey	(&Throttle,	APAH,	EXEC("FC3_Autopilot_Mode = '6';")	);														//soft-mods the default AP mode in other FC3 aircraft; route mode
+					MapKey	(&Throttle,	APALT,	EXEC("if (Throttle[RDRNRM]) FC3_Autopilot_Mode = '5'; else FC3_Autopilot_Mode = '4';")	);	//sets to RadAlt hold if RadAlt NORM, else BaroAlt
+					
+					MapKey	(&Throttle,	RDRNRM,	EXEC("if (Throttle[APALT]) FC3_Autopilot_Mode = '5'; else if (Throttle[APPAT]) FC3_Autopilot_Mode = '1';"));
+					MapKey	(&Throttle,	RDRDIS,	EXEC("if (Throttle[APALT]) FC3_Autopilot_Mode = '4'; else if (Throttle[APPAT]) FC3_Autopilot_Mode = '2';"));
+					}	
+				
+
+				if (prof == 2515)		MapKeyIO(&Throttle,	APENG,	FC3_AP_WH_I,	F15_AP_WH_O);
+				else if (prof == 2029)	MapKeyIO(&Throttle,	APENG,	AP_Disengage,	MiG29_AP_WH_O);	//Added MiG-29 PFM in 2.25
+				else 					MapKeyIO(&Throttle,	APENG,	FC3_AP_WH_I,	FC3_AP_WH_O);
+				
+				if (prof == 2033)	MapKeyIO(&Throttle,	LTB,	Su33_WEP,CHAIN(EXEC("if (Su33_Startbrake) {ActKey(KEYON+DX31);ActKey(KEYON+DX32);}"),Su33_STL_Override_DX));	//allows afterburner without S3 when holding brake
+				else if ((prof == 2027) | (prof == 2011) | (prof == 2029)	)	//added MiG29C in 2.24
+									MapKey	(&Throttle,	LTB,	Su33_STL_Override_DX);	//add DX once fixed by ED
+				else				MapKeyIO(&Throttle,	LTB,	FC3_AP_WH_I,FC3_AP_WH_O);
+				
+				if (prof == 2033)	MapKeyR	(&Throttle,	LTB, CHAIN(UP+DX31,UP+DX32));
+				else				MapKeyR	(&Throttle,	LTB, 0);				
+				
+				if (prof > 2029)	MapKeyIO(&Throttle,	LDGH,	TEMPO(0,EXEC("EjectCheckLDGH(ProfID);"), DefTempo),MASTER_CAUTION_Reset	);	//US Acft: I Long Eject/Toggle Gearstate, /O Master Caution Reset, no Chute
+				else				MapKeyIO(&Throttle,	LDGH,	TEMPO(0,EXEC("EjectCheckLDGH(ProfID);"), DefTempo),TEMPO(MASTER_CAUTION_Reset,EXEC("DragChuteEngage(-1,DragChuteLEDTime);"))	);	//I Long Eject/Toggle Gearstate, /O Short Master Caution Reset, Long for Chute
+				
+				MapKey	(&Throttle,	EACON,	PULSE+A10A_EAC_On);	//also applies to ASP-17 glass in Su-25, ASC in Su-27 and Tailhook in Su-33
+				MapKey	(&Throttle,	EACOFF,	PULSE+A10A_EAC_Off);	
+				
+				if (Adjust_Backlighting > 0)
+					{
+					MapKeyIO(&Throttle,	APUON,	EXEC("MFD_WHT_Power(2,LED_Delay);"),CHAIN(PULSE+Electric_Pwr,	EXEC("MFD_WHT_Power(2,LED_Delay);"))	);
+					MapKeyIO(&Throttle,	APUOFF,	EXEC("MFD_WHT_Power(0,LED_Delay);"),CHAIN(PULSE+Electric_Pwr,	EXEC("MFD_WHT_Power(0,LED_Delay);"))	);
+					}
+				else
+					{
+					MapKey	(&Throttle,	APUON,	PULSE+Electric_Pwr);
+					MapKey	(&Throttle,	APUOFF,	PULSE+Electric_Pwr);
+					}
+			printf("...Done!\xa");
+
+	}
+else
+	{
+		 		printf("         TQS Buttons...");	
+	 			
+				//T1 mapped in FC3MapButtons()
+ 				if (prof == 2033)	MapKeyR	(&HCougar, T1, CHAIN(UP+DX31,UP+DX32));			//Added in 0.51 to prevent P-51D CommState Release.
+				else				MapKeyR	(&HCougar, T1, 0);			//Added in 0.51 to prevent P-51D CommState Release.
+											
+				FC3_CommState_Init();				//Note: CommStateToggle in FC3 by MapKey because U/D switches are already reserved.
+				//FC3_PTT_OnOff();					//Default T3 to TS3 PTT.  Lights RLED2 for Hot Mic while button is pressed.  Obsolete in 1.27
+				
+ 				MapKeyIO(&HCougar,	T6, TEMPO(AP_Disengage,EXEC("EjectCheckT6(ProfID);"), DefTempo), TEMPO(EXEC("FC3_T6Press(FC3_Autopilot_Mode,GearState,DragChuteLEDTime);"),EXEC("FC3_T6Press(FC3_Autopilot_Mode,GearState,DragChuteLEDTime,1);"),DefTempo));	//Replaces DX24, shifted checks for eject if held, AP Disengage if short. /I short was EXEC("FC3_Autopilot_Emergency_Off();")
+//				MapKeyR	(&HCougar,	T6, 0);			
+	}
+	FC3_DF_Init(WarthogThrottle);
+	printf("...Done!\xa");
+	
+if (WarthogThrottle > 0) printf("   HOTAS Warthog Mapping Complete.\xa\xa");
+else	printf("   HOTAS Cougar Mapping Complete.\xa\xa");	
+}
+
+int Su25_HCS_Init(int prof = 2025, int force = 0)	//force added in 1.69 as passthru to allow for initial TGZ_MapGearDn if TGZ disabled. must force if no wh throttle
+{
+		if (Script_Debug) printf("         Hat2 (TMS)...");	
+//U/D
+		if (prof == 2025)	//Su-25
+			{	
+			MapKeyIOUMD(&HCougar, H2U,	FC3_H2UDI,					//UI	E/O Power
+										FC3_H2UDO,					//UO	Tap for CAC Bore mode, Hold for Lock, set Longitudinal on non-fighters
+										FC3_H2UMI,					//MI
+										FC3_H2UMO,					//MO
+										FC3_H2UDI,					//DI	short for BVR, long for A2G (for Ru fighters)
+										FC3_H2UDO);					//DO	Target Lock
+			
+			MapKeyIOUMD(&HCougar, H2D,	FC3_H2DDI,					//UI	map to Target Unlock (w/ DX30 modifier), Backup Gunsight on Ru fighters
+										FC3_H2DDO,					//UO	Need DX key for this (DX9+DX25 orig) (set gunsight reticle on non-fighters)
+										FC3_H2DMI,					//MI	Tailhook long for gunsight (Ru)
+										FC3_H2DMO, 					//MO	
+										FC3_H2DDI,					//DI	should also map this to RWS mode for F-15
+										FC3_H2DDO);					//DO 	Target Unlock (F-15 short is TWS target deselect for F-15, long for RWS mode
+			}		
+		else	
+			{	
+			MapKeyIOUMD(&HCougar, H2U,	FC3_H2UUI,					//UI	map to Target Lock (w/wo DX30 modifier)
+										FC3_H2UUO,					//UO	Tap for CAC Bore mode, Hold for Lock, set Longitudinal on non-fighters
+										FC3_H2UMI,					//MI
+										FC3_H2UMO,					//MO
+										FC3_H2UDI,					//DI	short for BVR, long for A2G (for Ru fighters)
+										FC3_H2UDO);					//DO	Target Lock
+			
+			MapKeyIOUMD(&HCougar, H2D,	FC3_H2DUI,					//UI	map to Target Unlock (w/ DX30 modifier), Backup Gunsight on Ru fighters
+										FC3_H2DUO,					//UO	Need DX key for this (DX9+DX25 orig) (set gunsight reticle on non-fighters)
+										FC3_H2DMI,					//MI	Tailhook long for gunsight (Ru)
+										FC3_H2DMO, 					//MO	
+										FC3_H2DDI,					//DI	should also map this to RWS mode for F-15
+										FC3_H2DDO);					//DO 	Target Unlock (F-15 short is TWS target deselect for F-15, long for RWS mode
+			}
+//L/R		
+		if ((prof == 2033))	//Su-33
+			{
+			MapKeyIOUMD(&HCougar, H2R,	FC3_H2RUI,					//UI formerly RDRScan/GunpodELEStep_Incr
+										FC3_H2RUO, 					//UO	sets logitudinal on non-fighters
+										FC3_H2RMI33, 				//MI Autothrottle Incr
+										FC3_H2RDO,					//MO RWS/TWS
+										FC3_H2RDI,					//DI Set to Intervalometer w/ DX30 on Su-25A/T
+										FC3_H2RDO);					//DO Set to Altimeter on Su-25 and Sgl/Prs release on A-10A
+
+			MapKeyIOUMD(&HCougar, H2L, 	FC3_H2LUI,					//UI formerly RDRScan/GunpodELEStep_Decr
+										FC3_H2LUO,					//UO
+										FC3_H2LMI33,				//MI Autothrottle Decr
+										FC3_H2LDO,					//MO PRF
+										FC3_H2LDI,					//DI Set to Intervalometer w/ DX30 on Su-25A/T
+										FC3_H2LDO);					//DO Set to Altimeter on Su-25 and Sgl/Prs release on A-10A
+			}		
+		else if ((prof == 2029) | (prof == 2027) | (prof == 2515) | (prof == 2011))	//Fighter (not Su-33)
+			{
+			MapKeyIOUMD(&HCougar, H2R,	FC3_H2RUI,					//UI formerly RDRScan/GunpodELEStep_Incr
+										FC3_H2RUO, 					//UO	sets logitudinal on non-fighters
+										FC3_H2RMI, 					//MI Rdrscan
+										FC3_H2RDO,					//MO RWS/TWS
+										FC3_H2RDI,					//DI Set to Intervalometer w/ DX30 on Su-25A/T
+										FC3_H2RDO);					//DO Set to Altimeter on Su-25 and Sgl/Prs release on A-10A
+
+			MapKeyIOUMD(&HCougar, H2L, 	FC3_H2LUI,					//UI formerly RDRScan/GunpodELEStep_Decr
+										FC3_H2LUO,					//UO
+										FC3_H2LMI,					//MI RdrScan
+										FC3_H2LDO,					//MO PRF Select
+										FC3_H2LDI,					//DI Set to Intervalometer w/ DX30 on Su-25A/T
+										FC3_H2LDO);					//DO Set to Altimeter on Su-25 and Sgl/Prs release on A-10A
+			}
+		else
+			{
+			MapKeyIOUMD(&HCougar, H2R,	FC3_H2RUI,					//UI formerly RDRScan/GunpodELEStep_Incr
+										FC3_H2RUO, 					//UO	sets logitudinal on non-fighters
+										FC3_H2RMI, 					//MI Rdrscan
+										FC3_H2RMO,					//MO formerly RDRScan/GunpodELEStep_Incr
+										FC3_H2RDI,					//DI Set to Intervalometer w/ DX30 on Su-25A/T
+										FC3_H2RDO);					//DO Set to Altimeter on Su-25 and Sgl/Prs release on A-10A
+
+			MapKeyIOUMD(&HCougar, H2L, 	FC3_H2LUI,					//UI formerly RDRScan/GunpodELEStep_Decr
+										FC3_H2LUO,					//UO
+										FC3_H2LMI,					//MI RdrScan
+										FC3_H2LMO,					//MO formerly RDRScan/GunpodELEStep_Decr
+										FC3_H2LDI,					//DI Set to Intervalometer w/ DX30 on Su-25A/T
+										FC3_H2LDO);					//DO Set to Altimeter on Su-25 and Sgl/Prs release on A-10A
+			}
+		if (Script_Debug) printf("...Done!\xa");	
+		if (Script_Debug) printf("         Hat3 (DMS)...");
+
+		if (prof == 2025) 	FC3_Map_Flaps(2,force);	//Added in 1.36, changed to routine in 1.40, modified from option to prof in 1.69 (forced matrix)
+		else				FC3_Map_Flaps(0,force);
+
+
+			MapKeyIOUMD(&HCougar, H3R, 	FC3_H3RU,
+										FC3_H3RU,
+										FC3_H3RMI,
+										FC3_H3RMO,
+										FC3_H3RD,
+										FC3_H3RD);
+										
+			MapKeyIOUMD(&HCougar, H3L,	FC3_H3LU,
+										FC3_H3LU,
+										FC3_H3LMI,
+										FC3_H3LMO,
+										FC3_H3LD,
+										FC3_H3LD);					
+			//TriggerZoom_MapGearDn(TriggerZoom_state, prof);	//covered in FC3_Map_Flaps()
+
+			
+			
+		if (Script_Debug) printf("...Done!\xa");	
+		if (Script_Debug) printf("         Hat4 (CMS)...");	
+			MapKey	(&HCougar,	H4U, DX15);	//Countermeasures (Shift Chaff)
+			MapKey	(&HCougar,	H4R, DX16);	//ECM (Shift for IR Jamming)
+			MapKey	(&HCougar,	H4D, DX17);	//Countermeasures (Shift Flare)
+			MapKey	(&HCougar,	H4L, DX18);	//Countermeasures Continuous Release (shift for change RWR mode)
+		if (Script_Debug) printf("...Done!\xa");	
+}
+int Ruf_HCS_Init(int prof = 2027, int force = 0)	//force added in 1.69 as passthru to allow for initial TGZ_MapGearDn if TGZ disabled.
+{
+Su25_HCS_Init(prof, force);
+}
+int F15C_HCS_Init(int prof = 2515, int force = 0)	//force added in 1.69 as passthru to allow for initial TGZ_MapGearDn if TGZ disabled.
+{
+Su25_HCS_Init(prof, force);
+}
+int A10A_HCS_Init(int prof = 2509, int force = 0)	//force added in 1.69 as passthru to allow for initial TGZ_MapGearDn if TGZ disabled. 
+{
+Su25_HCS_Init(prof, force);
+}
+int Su25_WHS_Init(int prof = 2025, int force = 0)	//force added in 1.69 as passthru to allow for initial TGZ_MapGearDn if TGZ disabled. must force if no wh throttle
+{
+		if (Script_Debug) printf("         Hat2 (TMS)...");	
+			if (WarthogThrottle > 0)	//sets H3M U/D to Lock/Unlock for WH (since waypoints are on CH)
+				{				
+				MapKeyIOUMD(&Joystick, H2U,	FC3_H2UUI,
+											FC3_H2UUO,
+											FC3_H2UMI,
+											FC3_H2UDO,	//UDO for Target Lock
+											FC3_H2UDI,
+											FC3_H2UDO);
+				MapKeyIOUMD(&Joystick, H2D,	FC3_H2DUI,
+											FC3_H2DUO,
+											FC3_H2DMI,
+											FC3_H2DDO,	//DDO for Target Unlock
+											FC3_H2DDI,
+											FC3_H2DDO);								
+				
+				}
+			else
+				{		
+				MapKeyIOUMD(&Joystick, H2U,	FC3_H2UUI,
+											FC3_H2UUO,
+											FC3_H2UMI,
+											FC3_H2UMO,
+											FC3_H2UDI,
+											FC3_H2UDO);
+				MapKeyIOUMD(&Joystick, H2D,	FC3_H2DUI,
+											FC3_H2DUO,
+											FC3_H2DMI,
+											FC3_H2DMO,
+											FC3_H2DDI,
+											FC3_H2DDO);								
+				
+				}
+			if (prof == 2033)	//Su-33
+				{
+				MapKeyIOUMD(&Joystick, H2R,	FC3_H2RUI,
+											FC3_H2RUO,
+											FC3_H2RMI33,
+											FC3_H2RDO,
+											FC3_H2RDI,
+											FC3_H2RDO);
+				MapKeyIOUMD(&Joystick, H2L, FC3_H2LUI,
+											FC3_H2LUO,
+											FC3_H2LMI33,
+											FC3_H2LDO,
+											FC3_H2LDI,
+											FC3_H2LDO);
+				}			
+			else if ((prof == 2027) | (prof == 2011))	//Su-27 or J-11A
+				{
+				MapKeyIOUMD(&Joystick, H2R,	FC3_H2RUI,
+											FC3_H2RUO,
+											FC3_H2RMI,
+											FC3_H2RDO,
+											FC3_H2RDI,
+											FC3_H2RDO);
+				MapKeyIOUMD(&Joystick, H2L, FC3_H2LUI,
+											FC3_H2LUO,
+											FC3_H2LMI,
+											FC3_H2LDO,
+											FC3_H2LDI,
+											FC3_H2LDO);
+				}			
+			else
+				{
+				MapKeyIOUMD(&Joystick, H2R,	FC3_H2RUI,
+											FC3_H2RUO,
+											FC3_H2RMI,
+											FC3_H2RMO,
+											FC3_H2RDI,
+											FC3_H2RDO);
+				MapKeyIOUMD(&Joystick, H2L, FC3_H2LUI,
+											FC3_H2LUO,
+											FC3_H2LMI,
+											FC3_H2LMO,
+											FC3_H2LDI,
+											FC3_H2LDO);
+				}
+		if (Script_Debug) printf("Done!\xa");	
+		if (Script_Debug) printf("         Hat3 (DMS)...");
+
+			if (WarthogThrottle > 0)
+				{
+				MapKeyIOUMD(&Joystick, H3R, FC3_H3RU,
+											FC3_H3RU,
+											FC3_H3RMIWH,
+											FC3_H3RMOWH,
+											FC3_H3RD,
+											FC3_H3RD);
+				MapKeyIOUMD(&Joystick, H3L,	FC3_H3LU,
+											FC3_H3LU,
+											FC3_H3LMIWH,
+											FC3_H3LMOWH,
+											FC3_H3LD,
+											FC3_H3LD);
+				}
+			else
+				{
+				MapKeyIOUMD(&Joystick, H3R, FC3_H3RU,
+											FC3_H3RU,
+											FC3_H3RMI,
+											FC3_H3RMO,
+											FC3_H3RD,
+											FC3_H3RD);
+				MapKeyIOUMD(&Joystick, H3L,	FC3_H3LU,
+											FC3_H3LU,
+											FC3_H3LMI,
+											FC3_H3LMO,
+											FC3_H3LD,
+											FC3_H3LD);
+				}			
+			TriggerZoom_MapGearDn_WH(TriggerZoom_state, prof, 0, force);	//Does H3U/D
+		if (Script_Debug) printf("Done!\xa");	
+		if (Script_Debug) printf("         Hat4 (CMS)...");	
+			MapKey	(&Joystick,	H4U, DX15);	//Countermeasures (Shift Chaff)
+			MapKey	(&Joystick,	H4R, DX16);	//Countermeasures Continuous Release (shift for change RWR mode)
+			MapKey	(&Joystick,	H4D, DX17);	//Countermeasures (Shift Flare)
+			MapKey	(&Joystick,	H4L, DX16);	//Countermeasures Continuous Release (shift for change RWR mode)
+			MapKey 	(&Joystick, H4P, DX18);	//ECM (Shift for IR Jamming)
+		if (Script_Debug) printf("...Done!\xa");	
+}
+int Ruf_WHS_Init(int prof = 2027, int force = 0)	//force added in 1.69 as passthru to allow for initial TGZ_MapGearDn if TGZ disabled. must force if no wh throttle
+{
+Su25_WHS_Init(prof,force);
+}
+int F15C_WHS_Init(int prof = 2515, int force = 0)	//force added in 1.69 as passthru to allow for initial TGZ_MapGearDn if TGZ disabled. must force if no wh throttle
+{
+Su25_WHS_Init(prof,force);
+}
+int A10A_WHS_Init(int prof = 2509, int force = 0)	//force added in 1.69 as passthru to allow for initial TGZ_MapGearDn if TGZ disabled. must force if no wh throttle
+{
+Su25_WHS_Init(prof,force);
+}
+
+int	FC3_DF_Init(int wh)
+{
+if (wh > 0)
+	{
+	MapKeyIO(&Throttle,	BSB, 0, PULSE+DX25);				//Close_Air_Combat_Bore_Mode or Longitudinal in A-10/Su-25
+	MapKeyR	(&Throttle,	BSB, 0);
+	MapKeyIO(&Throttle,	BSF, 0, PULSE+DX26);				//Beyond_Visual_Range_Mode or AG mode in A-10/Su-25
+	MapKeyR	(&Throttle,	BSF, 0);
+	MapKeyIO(&Throttle,	BSM, 0, TEMPO(0,PULSE+Nav_Mode, DoubleTap));	//Only enables Nav mode if dogfight switch is centered for 100ms (prevents going into nav mode when going direct b/t AA/AG
+	}
+else
+	{
+	MapKeyIO(&HCougar,	T7, 0, PULSE+DX25);				//Close_Air_Combat_Bore_Mode or Longitudinal in A-10/Su-25
+	MapKeyR	(&HCougar,	T7, 0);
+	MapKeyIO(&HCougar,	T8, 0, PULSE+DX26);				//Beyond_Visual_Range_Mode or AG mode in A-10/Su-25
+	MapKeyR	(&HCougar,	T8, 0);
+	MapKeyIO(&HCougar, 	DFM,0, TEMPO(0,PULSE+Nav_Mode, DoubleTap));	//Only enables Nav mode if dogfight switch is centered for 100ms (prevents going into nav mode when going direct b/t AA/AG
+	}
+}
+
+int	FC3_MFD_Init(int prof)
+{
+//===================================
+//		Standard MFD Buttons
+//===================================
+
+	printf("   Map Cougar Left  MFD (DX31)...");	
+//LOSB 1 in Init
+					MapKey	(&LMFD, OSB02,	CHAIN(DX31,D(ModDelay),DX2));
+					MapKey	(&LMFD, OSB03,	CHAIN(DX31,D(ModDelay),DX3));
+					MapKey	(&LMFD,	OSB04,	CHAIN(DX31,D(ModDelay),DX4));
+//					MapKeyR	(&LMFD,	OSB04,	0);	//for A-10C and F-5E					
+					MapKey	(&LMFD, OSB05,	CHAIN(DX31,D(ModDelay),DX5));
+//					MapKeyR	(&LMFD,	OSB05,	0);	//For F-5E
+//LOSB 6-10
+					MapKeyIO(&LMFD,	OSB06,	CHAIN(DX31,D(ModDelay),DX6),	TEMPO(CHAIN(DX31,D(ModDelay),DX6),CHAIN(DX30,DX31,D(ModDelay),DX6), DefTempo)	);			//long Cut of Burst for FC3, HUD Filter for BS2, Copilot AI in UH1
+					MapKey	(&LMFD,	OSB07,	CHAIN(DX31,D(ModDelay),DX7));
+//					MapKeyR	(&LMFD,	OSB07,	0);	//for Bf109
+					MapKey	(&LMFD,	OSB08,	CHAIN(DX31,D(ModDelay),DX8));
+					MapKey	(&LMFD,	OSB09,	CHAIN(DX31,D(ModDelay),DX9));
+					MapKey	(&LMFD,	OSB10,	CHAIN(DX31,D(ModDelay),DX10));
+
+//LOSB 11-12, 14-15, 16
+					MapKey	(&LMFD,	OSB11,	CHAIN(DX31,D(ModDelay),DX11));
+					MapKey	(&LMFD,	OSB12,	CHAIN(DX31,D(ModDelay),DX12));
+					MapKey	(&LMFD,	OSB14,	CHAIN(DX31,D(ModDelay),DX14));
+if ((prof == 2515) | (prof == 2011))
+						MapKeyIO(&LMFD,	OSB15,	EXEC("FC3_AntiColl_Lights_Set(-1);"),	TEMPO(EXEC("FC3_Nav_Lights_Set(-1);"),EXEC("FC3_AntiColl_Lights_Set(-1);"),DefTempo));	//changed in 1.40 with AntiColl lights for F-15C (DCSW 1.5)
+else if (prof == 2025)	MapKey(&LMFD,	OSB15,	EXEC("FC3_Nav_Lights_Set(-1);"),	TEMPO(EXEC("FC3_Nav_Lights_Set(3);"),EXEC("FC3_Nav_Lights_Set(-1);"),DefTempo));	//updated in 1.66 for 3 position nav switch in su-25
+else					MapKey	(&LMFD,	OSB15,	EXEC("FC3_Nav_Lights_Set(-1);"));	//updated in 1.66 reverting to all other FC3 acft
+
+					MapKey	(&LMFD,	OSB16,	TEMPO(CHAIN(DX31,D(ModDelay),DX16),	CHAIN(DX30,DX31,D(ModDelay),DX16),	LongTempo)	);	//TEMPO added in 1.30 for ASC Direct Control (Cobra)
+
+//LOSB 17,19
+			if ((prof == 2027) )	//Flanker B (intake grid, Chute).  poss 2029 or 2011 later.
+						MapKeyIO(&LMFD,	OSB17,	EXEC("DragChuteEngage(-1,DragChuteLEDTime);"), 		
+												TEMPO(	Su27_Intake_Grid,	EXEC("DragChuteEngage(-1,DragChuteLEDTime);"),LongTempo));	//added in FC3 to force tempo long for drogue chute/wingfold
+			else if ((prof == 2033) )	//Flanker D (intake grid, ASC Refuel, wingfold).
+						MapKeyIO(&LMFD,	OSB17,	TEMPO(	EXEC("Su33_Refuel_Set(-1,0);"),	CHAIN(DX31,D(ModDelay),DX17),	LongTempo),
+												TEMPO(	Su27_Intake_Grid,				EXEC("Su33_Refuel_Set(-1,0);"),	DefTempo));
+			else if ((prof == 2509) | (prof == 2515))	//US birds
+						MapKey	(&LMFD,	OSB17,	0);	//perhaps map something later
+			else		MapKeyIO(&LMFD,	OSB17,	TEMPO(0,CHAIN(DX31,D(ModDelay),DX17),LongTempo), 	TEMPO(	EXEC("if (	((GearState > 0) &  (WarthogThrottle > 0)) | ((!WarthogThrottle) & (HCougar[T10]))	) DragChuteEngage(-1,DragChuteLEDTime);"),
+																											EXEC("DragChuteEngage(-1,DragChuteLEDTime);"),LongTempo));	//added in FC3 to force tempo long for drogue chute/wingfold
+					MapKeyIO(&LMFD,	OSB19,	TEMPO(FuelTank_Jettison,FC3_WepsJett,LongTempo),
+											TEMPO(0,FuelTank_Jettison,LongTempo));	// force tempo long for jettison, changed from DX to macros in 1.33 to deconflict with NWS S4.  changed to DefTempo for Weps in 1.36 to allow for easier sequential drop
+
+//LOSB 13/18 (Su-33 Refuel Lights)
+				if (prof == 2033)
+					{
+					MapKeyIO(&LMFD,	OSB13,	EXEC("FC3_Refuel_Lights_Set(-1);"),	TEMPO(CHAIN(DX31,D(ModDelay),DX13), 	EXEC("FC3_Refuel_Lights_Set(-1);"), DefTempo)	);
+					MapKeyIO(&LMFD,	OSB18,	TEMPO(EXEC("FC3_Refuel_Lights_Set(-1);"),	EXEC("Su33_Refuel_Set(-1,0,0);"),	DefTempo),
+											TEMPO(EXEC("Su33_Refuel_Set(-1,1);"),		EXEC("FC3_Refuel_Lights_Set(-1);"), DefTempo)	);
+					}
+				else
+					{
+					MapKey	(&LMFD,	OSB13,	CHAIN(DX31,D(ModDelay),DX13));
+					MapKey	(&LMFD,	OSB18,	CHAIN(DX31,D(ModDelay),DX18));
+					}
+
+
+//LMFD 20 in Init
+
+//Left Rocker Switches
+//SYM
+		MapKey(&LMFD,	SYMU,	KB_LSYMU);
+		MapKey(&LMFD,	SYMD,	KB_LSYMD);
+
+//CON
+		MapKey	(&LMFD,	CONU,	KB_LCONU);
+		MapKey	(&LMFD,	COND,	KB_LCOND);
+		
+//BRT
+		MapKey(&LMFD,	BRTU,	KB_LBRTU);
+		MapKey(&LMFD,	BRTD,	KB_LBRTD);
+		
+//GAIN in Init
+
+	printf("Done!\xa");
+
+	printf("   Map Cougar Right MFD (DX32)...");
+
+//ROSB 1-10,19-20 at first part of routine (routine includes 19,20 for A/P)
+		MapKey	(&RMFD,	OSB01,	CHAIN(DX32,D(ModDelay),DX1));
+		MapKey	(&RMFD,	OSB02,	CHAIN(DX32,D(ModDelay),DX2));
+		MapKey	(&RMFD,	OSB03,	CHAIN(DX32,D(ModDelay),DX3));
+		MapKey	(&RMFD,	OSB04,	CHAIN(DX32,D(ModDelay),DX4));
+		MapKey	(&RMFD,	OSB05,	CHAIN(DX32,D(ModDelay),DX5));
+//		MapKeyR	(&RMFD,	OSB05,	0);
+//		MapKeyR	(&RMFD,	OSB07,	0);
+		if (prof == 2029)	//MiG-29 PFM added in 2.25
+			{
+			MapKey	(&RMFD,	OSB06,	CHAIN(DX32,D(ModDelay),DX6, EXEC("FC3_Autopilot_Mode = '4';")));	//Attitude Hold
+			MapKey	(&RMFD,	OSB07,	CHAIN(DX32,D(ModDelay),DX7, EXEC("if (MiG29PathEnabled) FC3_Autopilot_Mode = '5';")));	//Path mode
+			MapKey	(&RMFD,	OSB08,	CHAIN(DX32,D(ModDelay),DX8)	);	//altitude hold	
+			MapKey	(&RMFD,	OSB09,	CHAIN(DX32,D(ModDelay),DX9, EXEC("if (MiG29PathEnabled) FC3_Autopilot_Mode = '6';")));	//Reapproach mode
+			MapKey	(&RMFD,	OSB10,	CHAIN(DX32,D(ModDelay),DX10,EXEC("FC3_Autopilot_Mode = '2';")));	//GPWS
+			
+			MapKey	(&RMFD,	OSB19,	CHAIN(AP_GPWS, EXEC("FC3_Autopilot_Mode = '7';")));	//Wing Leveler  AP_GPWS is Wing Leveler for MiG-29
+//			MapKey	(&RMFD,	OSB20,	CHAIN(DX32,D(ModDelay),DX24, EXEC("FC3_Autopilot_Mode = '1';")));	//Dampen Mode
+			}	
+		else
+			{
+			MapKey	(&RMFD,	OSB06,	CHAIN(DX32,D(ModDelay),DX6, EXEC("FC3_Autopilot_Mode = '1';")));	//Attitude Hold
+			MapKey	(&RMFD,	OSB07,	CHAIN(DX32,D(ModDelay),DX7, EXEC("FC3_Autopilot_Mode = '2';")));	//Altitude + Roll Hold	
+			MapKey	(&RMFD,	OSB08,	CHAIN(DX32,D(ModDelay),DX8, EXEC("if (FC3_Autopilot_Mode == '5') FC3_Autopilot_Mode = '6';")));	//changed in 0.24 because it can be a dependent mode or modifier to master AP mode)		
+			MapKey	(&RMFD,	OSB09,	CHAIN(DX32,D(ModDelay),DX9, EXEC("FC3_Autopilot_Mode = '5';")));	//RADALT Hold
+			MapKey	(&RMFD,	OSB10,	CHAIN(DX32,D(ModDelay),DX10));	
+			
+			MapKey	(&RMFD,	OSB19,	CHAIN(AP_Level, EXEC("FC3_Autopilot_Mode = '6';")));	//Wing Leveler (set 6 to toggle) (LALT+3 set to Path in A-10A.  Macro applied in 1.33 for NWS compatibility (F-15C).
+//			MapKey	(&RMFD,	OSB20,	CHAIN(DX32,D(ModDelay),DX24, EXEC("FC3_Autopilot_Mode = '6';")));	//Route Mode
+			}		
+		if ((TARS > 0) & (Overlay_Enable_SRS > 0))
+				MapKeyIO(&RMFD,	OSB20,	Rdo_Ovly,	
+										CHAIN(DX32,D(ModDelay),DX24, EXEC("if (ProfID == 2029) FC3_Autopilot_Mode = '1'; else FC3_Autopilot_Mode = '6';")));	//Dampen Mode for MiG29 else route mode
+		else	MapKey	(&RMFD,	OSB20,	CHAIN(DX32,D(ModDelay),DX24, EXEC("if (ProfID == 2029) FC3_Autopilot_Mode = '1'; else FC3_Autopilot_Mode = '6';")));	//Dampen Mode for MiG29 else route mode
+		
+//ROSB 11-15
+		MapKey	(&RMFD,	OSB11,	CHAIN(DX32,D(ModDelay),DX11));		//FC3_Eng_Start_Delay_Toggle() removed in 1.53
+		MapKeyIO(&RMFD,	OSB12,	CHAIN(DX32,D(ModDelay),DX12),	TEMPO(CHAIN(DX32,D(ModDelay),DX12),	CHAIN(DX30,DX32,D(ModDelay),DX12),	LongTempo)	);
+		MapKeyIO(&RMFD,	OSB13,	CHAIN(DX32,D(ModDelay),DX13),	TEMPO(CHAIN(DX32,D(ModDelay),DX13), CHAIN(DX30,DX32,D(ModDelay),DX13),	LongTempo)	);
+		//MapKeyIO(&RMFD,	OSB11,	EXEC("FC3_Eng_Start_Delay_Toggle(2,IdleDetentLow);"),	CHAIN(DX32,D(ModDelay),DX11));
+		//MapKeyIO(&RMFD,	OSB12,	EXEC("FC3_Eng_Start_Delay_Toggle(1,IdleDetentLow);"),	TEMPO(CHAIN(DX32,D(ModDelay),DX12),	CHAIN(DX30,DX32,D(ModDelay),DX12),	LongTempo)	);
+		//MapKeyIO(&RMFD,	OSB13,	EXEC("FC3_Eng_Start_Delay_Toggle(0,IdleDetentLow);"),	TEMPO(CHAIN(DX32,D(ModDelay),DX13),CHAIN(DX30,DX32,D(ModDelay),DX13),LongTempo));	//shifted toggles engine start delay, unshifted short added in 1.21; shifted toggle changed to discrete FC3 (from -1) in 1.30
+//Engine Start for FC3
+		
+		MapKeyIO(&RMFD,	OSB14,	CHAIN(DX32,D(ModDelay),DX14, EXEC("Engine_Shutdown_Ind(2, Engine_Shutdown_Ind_Time, MFD_Eng_Start);")),
+								CHAIN(DX32,D(ModDelay),DX14, EXEC("Engine_Start_Ind(2, Starter_Ind_x, MFD_Eng_Start);")));		//Engine Start added in 0.24, modified to prof 3 in 0.54
+		MapKeyIO(&RMFD,	OSB15,	CHAIN(DX32,D(ModDelay),DX15, EXEC("Engine_Shutdown_Ind(1, Engine_Shutdown_Ind_Time, MFD_Eng_Start);")),
+								CHAIN(DX32,D(ModDelay),DX15, EXEC("Engine_Start_Ind(1, Starter_Ind_x, MFD_Eng_Start);")));
+//		MapKeyR	(&RMFD,	OSB13,	0);	//for Spitfire Engine Start	
+//		MapKeyR	(&RMFD,	OSB14,	0);	//for Spitfire Engine Start	
+//ROSB 16-18
+//FC3 Autopilot
+		MapKey	(&RMFD,	OSB16,	CHAIN(DX32,D(ModDelay),DX16));
+		if (prof == 2029)
+				MapKeyIO(&RMFD,	OSB17,	AP_Alt_Roll_Hold,	TEMPO(CHAIN(DX32,D(ModDelay),DX17), AP_Alt_Roll_Hold, DefTempo)	); //GCAS for MiG-29 (added in 2.25)
+		else if (prof == 2033)
+				MapKeyIO(&RMFD,	OSB17,	AP_GPWS,	TEMPO(CHAIN(DX32,D(ModDelay),DX17), AP_GPWS, DefTempo)	); 
+		else	MapKey	(&RMFD,	OSB17,	CHAIN(DX32,D(ModDelay),DX17));
+		MapKey	(&RMFD,	OSB18,	CHAIN(DX32,D(ModDelay),DX18));
+
+	
+
+//Right Rocker Switches
+//SYM
+		MapKey	(&RMFD,	SYMU,	KB_RSYMU);
+		MapKey	(&RMFD,	SYMD,	KB_RSYMD);
+//		MapKeyR	(&RMFD,	SYMU,	0);	//added in 1.61 to account for context sensitive R in M2000C
+//		MapKeyR	(&RMFD,	SYMD,	0);
+		
+//CON
+		MapKey	(&RMFD,	CONU,	KB_RCONU);
+		MapKey	(&RMFD,	COND,	KB_RCOND);
+//		MapKeyR	(&RMFD,	CONU,	0);	//added in 1.24 to account for context sensitive R in UH-1
+//		MapKeyR	(&RMFD,	COND,	0);
+	
+//BRT
+	MapKey	(&RMFD,	BRTU,	KB_RBRTU);
+	MapKey	(&RMFD,	BRTD,	KB_RBRTD);
+
+//GAIN
+	MapKey	(&RMFD,	GAINU,	KB_RGAINU);
+	MapKey	(&RMFD,	GAIND,	KB_RGAIND);
+
+	printf("Done!\xa");	
+}
+
+int FC3MapButtons(int state, int prof = 2515)	//added in 1.17 to allow remapping of buttons based on gear state (state)
+{
+if (Script_Debug) printf("FC3 Map Buttons(%i,%i)...",state,prof);
+Global_S3_Init(prof, state);		//maps S3
+
+if(WarthogThrottle > 0)
+	{
+	if (Script_Debug) printf("WH...");
+	if ((prof == 2011) | (prof == 2027) | (prof == 2033))	//Su-27/33/J-11A (fuel dump is toggle)		
+		{
+		if (prof == 2033)	//Flanker D
+			{
+						if (Script_Debug) printf("Su-33\xa");
+						MapKeyIOUMD(&Throttle, SC,	TargetDesignator_Center,DX7,		//UO Tgt Lock
+													Autothrottle,PULSE+DX24,			//M Set for Fuel Dump
+													TargetDesignator_Center,DX7);		//DO Tgt Lock		
+			}
+		else
+			{
+						if (Script_Debug) printf("Su-27\xa");
+			 			MapKeyIOUMD(&Throttle, SC,	TargetDesignator_Center,DX7,		//UO Tgt Lock
+													PULSE+DX24,PULSE+DX24,				//M Set for Fuel Dump
+													TargetDesignator_Center,DX7);		//DO Tgt Lock
+			}
+		MapKeyRIOUMD(&Throttle,SC,	0,0,
+									0,PULSE+DX24,										//Closes fuel dump switch only if unshifted (toggle for shifted)
+									0,0);
+		}
+	else
+		{		
+		if ((prof == 2515) & (state > 0)) 		//gear down
+			{
+						if (Script_Debug) printf("F-15C Gear Down\xa");
+						//MapKeyIO	(&HCougar, S1, 	0, DX24); //F-15C NWS Range only on /O to prevent inadvertent disengage
+						MapKeyIO	(&Throttle, SC,	CHAIN(DX31,DX32,D(ModTempo),DX3),FC3_TO_Trim);	//DX31/32+DX3 to disengage NWS; should work with no Direct Entry
+						
+			}
+		else if (prof == 2509)	//A-10A added in 2.25b
+			{
+						if (Script_Debug) printf("A-10A\xa");
+			 			MapKeyIO	(&Throttle, SC,	TargetDesignator_Center,DX7);		//O Tgt Lock
+			}
+		else				//gear up
+			{
+						if (Script_Debug) printf("Default/Gear Up\xa");
+			 			MapKeyIOUMD(&Throttle, SC,	TargetDesignator_Center,DX7,		//UO Tgt Lock
+													DOWN+DX24,DX24,							//M Set for Fuel Dump
+													TargetDesignator_Center,DX7);		//DO Tgt Lock
+			}
+			
+		MapKeyR		(&Throttle,	SC,	0);	
+		}	
+	}
+else
+	{
+	if (Script_Debug) printf("HC...");
+	if (prof == 2033)
+		{
+					if (Script_Debug) printf("Su-33\xa");
+					MapKeyIOUMD(&HCougar, T1,	TEMPO(	TargetDesignator_Center,	//UI
+		 												Su33_WEP,					//UI long for WEP
+														DefTempo),
+														DX7,						//UO Tgt Lock
+												TEMPO(	DX24,						//MI short for shifted DX19 (fuel tank select for F-15C) added in 1.21
+														Su33_WEP,					//MI long for WEP
+														DefTempo),													
+														CHAIN(EXEC("if (Su33_Startbrake) {ActKey(KEYON+DX31);ActKey(KEYON+DX32);}"),DX24),	//MO Set for Fuel Dump (specialAB if brake on so no S3)
+												TEMPO(	TargetDesignator_Center,	//DI
+		 												Su33_WEP,					//DI long for WEP
+														DefTempo),
+														DX7);						//DO Tgt Lock		
+		}
+	else if ((prof == 2011) | (prof == 2027))	//separated out in 2.28a
+		{
+					if (Script_Debug) printf("Su-33\xa");
+					MapKeyIOUMD(&HCougar, T1,	TargetDesignator_Center,	//UI
+		 										DX7,						//UO Tgt Lock
+												DX24,						//
+												DX24,						//M Set for Fuel Dump 
+												TargetDesignator_Center,	//DI
+		 										DX7);						//DO Tgt Lock		
+		}
+	else if (prof == 2509)		//A-10A
+		{
+		if (Script_Debug) printf("A-10A\xa");
+		MapKeyIO	(&HCougar, T1,	TargetDesignator_Center,DX7);	//DX7 Target Lock
+		
+		}
+	else if ((prof == 2515) & (state > 0)) 		// F-15C + gear down
+		{
+					if (Script_Debug) printf("F-15C Gear Down\xa");
+					//MapKeyIO	(&HCougar, S1, 	0, DX24); //F-15C NWS Range only on /O to prevent inadvertent disengage
+					MapKeyIO	(&HCougar, T1,	CHAIN(DX31,DX32,D(ModTempo),DX3),FC3_TO_Trim);	//DX31/32+DX3 to disengage NWS; should work with no Direct Entry
+		}
+	else				//gear up
+		{
+					if (Script_Debug) printf("Default/Gear Up\xa");
+		 			MapKeyIOUMD(&HCougar, T1,	TEMPO(	TargetDesignator_Center,	//UI
+		 												FuelTank_Jettison,			//UI long for FT Jett
+														1000),
+														DX7,						//UO Tgt Lock
+												TEMPO(	DX24,						//MI short for shifted DX19 (fuel tank select for F-15C) added in 1.21
+														FuelTank_Jettison,			//MI long for FT Jett
+														1000),													
+														DX24,						//MO Set for Fuel Dump
+												TEMPO(	TargetDesignator_Center,	//DI
+		 												FuelTank_Jettison,			//DI long for FT Jett
+														1000),
+														DX7);						//DO Tgt Lock
+		}
+	}
+}
+
+//FC3 Specific Press to Talk Light for TS3
+//int FC3_PTT_OnOff()		//lights RLED1 for Hot Mic while button is pressed., obsolete in 1.27
+//{
+//if (TS3_DX > 0) MapKey(&HCougar,	T3,	CHAIN(TS3PTT_DX, EXEC("Lights_RLED1(1);")));		
+//else MapKey(&HCougar,	T3,	CHAIN(TS3PTT, EXEC("Lights_RLED1(1);")));	
+//MapKeyR(&HCougar,	T3,	EXEC("Lights_RLED1(0);"));
+//}
+
+//=========================
+//		FC3 Intelligent Autopilot 
+//=========================
+
+//LOGIC:
+//Set to toggle existing mode, defauts initially to 6 (route)
+
+int FC3_T6Press(int apkey, int gear, int delay = 10000, int force = 0)	//FC3_Autopilot_Mode,GearState, delay is amount of time to sustain chute light, force engages altitude or  enables drag chute regardless of T10 state
+{
+if (	(ProfID < 2500)	&	(GearState > 0)		& 	(	((HCougar[T10]) | (force == 1))	|	((ProfID == 2033))	)	)
+	{
+	if ((ProfID != 2033))	DragChuteEngage(-1,delay);	//if 2033, used for brake
+	}									
+else if (force == 1)
+	{
+	if (ProfID == 2509) ActKey(KEYON+PULSE+A10A_EAC_On);
+	else FC3_Autopilot_Set('h');							//added in 1.18 for Altitude hold (F-15C, but should work on others)
+	}
+else	FC3_Autopilot_Set(apkey);
+}
+
+//int FC3_WH_AP_Press(int apkey, int gear, int delay = 10000, int force = 0)	//FC3_Autopilot_Mode,GearState, delay is amount of time to sustain chute light, force engages altitude or enables drag chute regardless of T10 state
+//{
+//if ((GearState > 0)		& 	((Throttle[SPDF]) | (force == 1))	)	DragChuteEngage(-1,delay);
+//else if (force == 1) FC3_Autopilot_Set('h');							//added in 1.18 for Altitude hold (F-15C, but should work on others)
+//else	FC3_Autopilot_Set(apkey);
+//}
+
+int FC3_Autopilot_Set(char apkey)
+{
+
+if (Script_Debug) printf("Autopilot Mode %c \xa",apkey);		//Test only
+						ActKey(KEYON+L_ALT);
+DeferCall(ModDelay,		&ActKey,KEYON+PULSE+apkey);
+DeferCall(KBPress*2,	&ActKey,L_ALT);
+}
+
+int FC3_Autopilot_Emergency_Off()		//Toggles Altitude/Attitude modes off, Kills AP, Resets to Route Mode
+{
+if (Script_Debug) printf("Autopilot Emergency Off...");	//test only
+									ActKey(DX31);					//disables NWS in favor of autopilot discon.  added in 1.33
+									ActKey(KEYON+DX32);				//Trim Reset and RMFD Modifier
+DeferCall(ModDelay,					&ActKey,KEYON+PULSE+DX18);		//RMFD OSB10 (AP Disengage) 
+DeferCall(KBPress   + 2*ModDelay,	&ActKey,KEYON+PULSE+DXHATDOWN);	//with DX30+DX32, Trim Reset
+DeferCall(KBPress*2 + 3*ModDelay,	&ActKey,DX32);
+FC3_Autopilot_Mode	=	'6';
+if (Script_Debug) printf("Done\xa");		//test only
+}	
+
+int DragChuteEngage(int state, int delay = 10000)
+{
+if (state < 0) state = abs(DragChuteDeployed -1);	//forces toggle
+ActKey(KEYON+PULSE+Drogue_Chute_DX);
+DragChuteDeployed = state;
+if (Script_Debug) printf("State, DragChuteDeployed = %i, %i\xa",state, DragChuteDeployed);		//for test purposes
+if (delay > 0)
+	{
+	flashRLED2(state);
+	if (state > 0) DeferCall(delay, &DragChuteTimeout,0);	//0 is a dummy argument
+	}
+}
+
+int DragChuteTimeout(int dummy = 0)	//dummy argument necessary to use with DeferCall
+{
+flashRLED2(0);
+DragChuteDeployed = 0;
+}
+
+//==========================================
+//		FC3 Specific CommState routines
+//==========================================
+//int T5_P;
+//int	T5_R;
+
+//Note: No toggle state.  This is because FC3 uses Keymapping as opposed to U state to implement CommState
+int FC3_CommState_Init()
+{
+if (WarthogThrottle > 0) FC3_CommState_Init_WH();
+else
+	{
+	//if (TS3_DX > 0)	T4_P	=	CHAIN(TS3PTT_DX, EXEC("Lights_RLED1(1);"));								//Makes T4/T5 TS3 PTT if not Aries
+	//else			T4_P	=	CHAIN(TS3PTT, EXEC("Lights_RLED1(1);"));	
+	T4_P	=	CHAIN(PTT_Common, EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));
+	T4_R	=	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);");
+	
+	T5_P	=	T4_P;
+	T5_R	=	T4_R;
+
+	if(CommStateAllow > 0)
+		{
+		//T2/T3/T4/T5 declarations (T3 default TS3 PTT)
+		if (TARS > 0)
+			{
+			//T2 (Down)
+			if (	((TARS_PTT_Common) & (X(Comm_Sw_Dn,1)!=PTT_Common) )	|	((!TARS_PTT_Common) & (X(Comm_Sw_Dn,1)==PTT_Common))	)		//either PTT_Common is used and this isn't it, or common not used and this is the normal common.  Either way, use for AI comms because it wont be used for vox.
+				{
+				printf("T2 AI Comms\xa");
+					if (VAC > 0)
+								{
+								//T2_PO	=	CHAIN(X(Comm_Sw_Fwd,1),D(ModDelay+KBDelay),EXEC("CommState_On(CommStateVAC); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(1);"));	//DX30+Switch enables radio without doing so for vox only
+								T2_PO	=	CHAIN(TS3PTT_DX,D(ModDelay+KBDelay),EXEC("CommState_On(CommStateVAC); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(1);"));	//DX30+Switch enables radio without doing so for vox only
+								T2_PI	=	CHAIN(PULSE+CommMenu, EXEC("CommState_On(CommStateAllow);"));										//toggles comm menu and enters CommState.  Be sure to release shift before using hat switch commands.
+								T2_RO	=	EXEC("CommState_Off(CommStateVAC, ProfID); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(0);");			//disables CommState and restores original Hat switch functionality
+								T2_RI	=	EXEC("CommState_Off(CommStateAllow, ProfID);");			//disables CommState and restores original Hat switch functionality
+								}
+					
+					
+					else
+						{
+						if (!TARS_PTT_Common)
+								{
+								T2_PO	=	CHAIN(X(Comm_Sw_Dn,TS3_DX),D(ModDelay+KBDelay),EXEC("CommState_On(CommStateVAC);"));	//DX30+Switch enables radio without doing so for vox only	
+								T2_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(Comm_Sw_Dn,0));CommState_Off(CommStateVAC, ProfID);");			//disables CommState and restores original Hat switch functionality
+								}
+						else
+								{
+								T2_PO	=	CHAIN(PULSE+DX30,D(ModDelay),PULSE+X(Comm_Sw_Dn,TS3_DX),D(ModDelay+KBDelay),EXEC("CommState_On(CommStateVAC);"));	//DX30+Switch enables radio without doing so for vox only	
+								T2_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(Comm_Sw_Dn,TS3_DX));CommState_Off(CommStateVAC, ProfID);");			//disables CommState and restores original Hat switch functionality
+								}
+						T2_PI	=	CHAIN(PULSE+CommMenu, EXEC("CommState_On(CommStateAllow);"));										//toggles comm menu and enters CommState.  Be sure to release shift before using hat switch commands.
+						T2_RI	=	EXEC("if ((FkeyPress < 1) & (CommStateAllow > 0)) ActKey(KEYON+PULSE+CommMenu);CommState_Off(CommStateAllow, ProfID);");
+						}
+					
+				MapKeyIO(&HCougar,	T2,	T2_PI, T2_PO);
+				MapKeyRIO(&HCougar,	T2, T2_RI, T2_RO);
+				
+
+				}
+			else	//this is a normally used vox circuit and shouldn't be used for AI comms
+				{		
+				printf("T2 Vox\xa");
+				if (X(Comm_Sw_Dn,1) == PTT_Common)	T2_PO	=	CHAIN(PTT_Common,EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));	
+				//else if ((TARS == 2) & (Comm_Sw_Dn == Mic_Sw_Aft))	//convert to UHF
+				//									T2_PO	=	CHAIN(X(Mic_Sw_Dn,TS3_DX),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));	
+				else								T2_PO	=	CHAIN(X(Comm_Sw_Dn,TS3_DX),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));							//DX22 for Aries Radio PTT only
+													T2_RO	=	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);");														//DX21 only enabled, so only lights out
+
+				MapKey	(&HCougar,	T2,	T2_PO);
+				MapKeyR	(&HCougar,	T2, T2_RO);
+				}
+	
+			//T3 (Up)
+			if (	((TARS_PTT_Common) &(X(Comm_Sw_Up,1)!=PTT_Common) )	|	((!TARS_PTT_Common) & (X(Comm_Sw_Up,1)==PTT_Common))	)		//either PTT_Common is used and this isn't it, or common not used and this is the normal common.  Either way, use for AI comms because it wont be used for vox.
+				{
+				printf("T3 AI Comms\xa");
+								
+				if (VAC > 0)	{
+								//T3_PO	=	CHAIN(X(Comm_Sw_Up,TS3_DX),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(1);"));	//DX30+Switch enables radio without doing so for vox only
+								T3_PO	=	CHAIN(TS3PTT_DX,D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(1);"));	//DX30+Switch enables radio without doing so for vox only
+								T3_PI	=	CHAIN(PULSE+CommMenu, EXEC("CommState_On(CommStateAllow);"));
+								T3_RO	=	EXEC("CommState_Off(CommStateVAC, ProfID); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(0);");			//disables CommState and restores original Hat switch functionality
+								T3_RI	=	EXEC("CommState_Off(CommStateAllow, ProfID);");			//disables CommState and restores original Hat switch functionality
+								}	
+				else
+					{
+					if (!TARS_PTT_Common)
+								{
+								T3_PO	=	CHAIN(X(Comm_Sw_Up,TS3_DX),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);"));	//DX30+Switch enables radio without doing so for vox only
+								T3_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(Comm_Sw_Up,0));CommState_Off(CommStateVAC, ProfID);");			//disables CommState and restores original Hat switch functionality
+								}
+					else
+								{
+								T3_PO	=	CHAIN(PULSE+DX30,D(ModDelay),PULSE+X(Comm_Sw_Up,TS3_DX),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);"));	//DX30+Switch enables radio without doing so for vox only
+								T3_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(Comm_Sw_Up,TS3_DX));CommState_Off(CommStateVAC, ProfID);");			//disables CommState and restores original Hat switch functionality
+								}
+					T3_PI	=	CHAIN(PULSE+CommMenu, EXEC("CommState_On(CommStateAllow);"));										//toggles comm menu and enters CommState.  Be sure to release shift before using hat switch commands.
+					T3_RI	=	EXEC("if ((FkeyPress < 1) & (CommStateAllow > 0)) ActKey(KEYON+PULSE+CommMenu);CommState_Off(CommStateAllow, ProfID);");
+					}
+					
+				MapKeyIO(&HCougar,	T3,	T3_PI, T3_PO);
+				MapKeyRIO(&HCougar,	T3,	T3_RI, T3_RO);
+				}
+			else	//this is a normally used vox circuit and shouldn't be used for AI comms
+				{
+				printf("T3 Vox\xa");
+				if (X(Comm_Sw_Up,1) == PTT_Common)	T3_PO	=	CHAIN(PTT_Common,EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));	
+				//else if ((TARS == 2) & (Comm_Sw_Up == Mic_Sw_Aft))	//convert to UHF
+				//									T3_PO	=	CHAIN(X(Mic_Sw_Dn,TS3_DX),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));	
+				else								T3_PO	=	CHAIN(X(Comm_Sw_Up,TS3_DX),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));							//DX21 for Aries Radio PTT only
+													T3_RO	=	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);");														//DX21 only enabled, so only lights out
+
+				MapKey	(&HCougar,	T3,	T3_PO);
+				MapKeyR	(&HCougar,	T3, T3_RO);
+				}
+				
+			//T4 (Right)																	
+			if (	((TARS_PTT_Common) &(X(Comm_Sw_Rt,1)!=PTT_Common) )	|	((!TARS_PTT_Common) & (X(Comm_Sw_Rt,1)==PTT_Common))	)		//either PTT_Common is used and this isn't it, or common not used and this is the normal common.  Either way, use for AI comms because it wont be used for vox.
+				{
+				printf("T4 AI Comms\xa");
+
+
+				if (VAC > 0)	{
+								//T4_PO	=	CHAIN(X(Comm_Sw_Rt,1),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(1);"));	//DX30+Switch enables radio without doing so for vox only
+								T4_PO	=	CHAIN(TS3PTT_DX,D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(1);"));	//DX30+Switch enables radio without doing so for vox only
+								T4_PI	=	CHAIN(PULSE+CommMenu, EXEC("CommState_On(CommStateAllow);"));										//toggles comm menu and enters CommState.  Be sure to release shift before using hat switch commands.
+								T4_RO	=	EXEC("CommState_Off(CommStateVAC, ProfID); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(0);");			//disables CommState and restores original Hat switch functionality
+								T4_RI	=	EXEC("CommState_Off(CommStateAllow, ProfID);");			//disables CommState and restores original Hat switch functionality						
+								}
+				else
+					{
+					if (!TARS_PTT_Common)
+								{
+								T4_PO	=	CHAIN(PULSE+DX30,D(ModDelay),PULSE+X(Comm_Sw_Rt,TS3_DX),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);"));	//DX30+Switch enables radio without doing so for vox only
+								T4_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(Comm_Sw_Rt,TS3_DX));CommState_Off(CommStateVAC, ProfID);");			//disables CommState and restores original Hat switch functionality
+								}
+					else
+								{
+								T4_PO	=	CHAIN(PULSE+DX30,D(ModDelay),PULSE+X(Comm_Sw_Rt,TS3_DX),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);"));	//DX30+Switch enables radio without doing so for vox only
+								T4_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(Comm_Sw_Rt,TS3_DX));CommState_Off(CommStateVAC, ProfID);");			//disables CommState and restores original Hat switch functionality
+
+								}
+					T4_PI	=	CHAIN(PULSE+CommMenu, EXEC("CommState_On(CommStateAllow);"));										//toggles comm menu and enters CommState.  Be sure to release shift before using hat switch commands.
+					T4_RI	=	EXEC("if ((FkeyPress < 1) & (CommStateAllow > 0)) ActKey(KEYON+PULSE+CommMenu);CommState_Off(CommStateAllow, ProfID);");
+					}
+								
+				MapKeyIO(&HCougar,	T4,	T4_PI, T4_PO);
+				MapKeyRIO(&HCougar,	T4, T4_RI, T4_RO);
+				}
+			else	//this is a normally used vox circuit and shouldn't be used for AI comms
+				{
+				printf("T4 Vox\xa");
+				if (X(Comm_Sw_Rt,1) == PTT_Common)	T4_PO	=	CHAIN(PTT_Common,EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));	
+				//else if ((TARS == 2) & (Comm_Sw_Rt == Mic_Sw_Aft))	//convert to UHF
+				//									T4_PO	=	CHAIN(X(Mic_Sw_Dn,TS3_DX),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));	
+				else								T4_PO	=	CHAIN(X(Comm_Sw_Rt,TS3_DX),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));							//DX21 for Aries Radio PTT only
+													T4_RO	=	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);");														//DX21 only enabled, so only lights out
+
+				MapKey	(&HCougar,	T4,	T4_PO);
+				MapKeyR	(&HCougar,	T4, T4_RO);
+				}
+	
+			//T5 (Left)																										
+			if (	((TARS_PTT_Common) &(X(Comm_Sw_Lt,1)!=PTT_Common) )	|	((!TARS_PTT_Common) & (X(Comm_Sw_Lt,1)==PTT_Common))	)		//either PTT_Common is used and this isn't it, or common not used and this is the normal common.  Either way, use for AI comms because it wont be used for vox.
+				{
+				printf("T5 AI Comms\xa");
+
+				if (VAC > 0)	{
+								//T5_PO	=	CHAIN(X(Comm_Sw_Lt,1),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(1);"));	//DX30+Switch enables radio without doing so for vox only
+								T5_PO	=	CHAIN(TS3PTT_DX,D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(1);"));	//DX30+Switch enables radio without doing so for vox only
+								T5_RO	=	EXEC("CommState_Off(CommStateVAC, ProfID); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(0);");			//disables CommState and restores original Hat switch functionality
+								T5_PI	=	CHAIN(PULSE+CommMenu, EXEC("CommState_On(CommStateAllow);"));										//toggles comm menu and enters CommState.  Be sure to release shift before using hat switch commands.
+								T5_RI	=	EXEC("CommState_Off(CommStateAllow, ProfID);");			//disables CommState and restores original Hat switch functionality
+
+								}
+				else 
+					{
+					if (!TARS_PTT_Common)
+								{
+								T5_PO	=	CHAIN(PULSE+DX30,D(ModDelay),PULSE+X(Comm_Sw_Lt,TS3_DX),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);"));	//DX30+Switch enables radio without doing so for vox only
+								T5_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(Comm_Sw_Lt,TS3_DX));CommState_Off(CommStateVAC, ProfID);");			//disables CommState and restores original Hat switch functionality
+								}
+					else
+								{
+								T5_PO	=	CHAIN(PULSE+DX30,D(ModDelay),PULSE+X(Comm_Sw_Lt,TS3_DX),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);"));	//DX30+Switch enables radio without doing so for vox only
+								T5_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(Comm_Sw_Lt,TS3_DX));CommState_Off(CommStateVAC, ProfID);");			//disables CommState and restores original Hat switch functionality
+								}
+					T5_PI	=	CHAIN(PULSE+CommMenu, EXEC("CommState_On(CommStateAllow);"));										//toggles comm menu and enters CommState.  Be sure to release shift before using hat switch commands.
+					T5_RI	=	EXEC("if ((FkeyPress < 1) & (CommStateAllow > 0)) ActKey(KEYON+PULSE+CommMenu);CommState_Off(CommStateAllow, ProfID);");
+					}		
+				MapKeyIO(&HCougar,	T5,	T5_PI, T5_PO);
+				MapKeyRIO(&HCougar,	T5, T5_RI, T5_RO);
+				}
+			else	//this is a normally used vox circuit and shouldn't be used for AI comms
+				{
+				printf("T5 Vox\xa");
+				if (X(Comm_Sw_Lt,1) == PTT_Common)	T5_PO	=	CHAIN(PTT_Common,EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));	
+				//else if ((TARS == 2) & (Comm_Sw_Lt == Mic_Sw_Aft))	//convert to UHF
+				//									T5_PO	=	CHAIN(X(Mic_Sw_Dn,TS3_DX),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));	
+				else								T5_PO	=	CHAIN(X(Comm_Sw_Lt,TS3_DX),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));							//DX21 for Aries Radio PTT only
+													T5_RO	=	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);");														//DX21 only enabled, so only lights out
+			
+				MapKey	(&HCougar,	T5,	T5_PO);
+				MapKeyR	(&HCougar,	T5, T5_RO);
+				}
+	
+	
+	
+	
+	//		T4_PO	=	CHAIN(DX22,EXEC("Lights_RLED1(1);"));													//Sets T4/T5 to Aries Radio if TARS enabled
+	//		T4_RO	=	T2_RO;
+	//		T5_PO	=	CHAIN(DX23,EXEC("Lights_RLED1(1);"));
+	//		T5_RO	=	T2_RO;
+			}	
+		else		//no TARS/Aries, so down is AI Comms and other 3 are PTT
+			{
+			printf("SRS Disabled\xa");
+			if (VAC > 0)	//	T2_PO	=	CHAIN(PULSE+CommMenu,D(KBDelay),MOUSE_CENTER,D(KBPress*2),EXEC("CommState_On(CommStateAllow);"));
+				{
+				//T2_PO	=	CHAIN(X(Mic_Sw_Fwd,1),EXEC("if (AirBrkFlash > -1) Lights_LLED1(1);"));							//toggles comm menu and enters CommState
+				T2_PO	=	CHAIN(TS3PTT_DX,EXEC("if (AirBrkFlash > -1) Lights_LLED1(1);"));							//toggles comm menu and enters CommState
+				T2_PI	=	CHAIN(PULSE+CommMenu, EXEC("CommState_On(CommStateAllow);if (AirBrkFlash > -1) Lights_LLED1(1);"));																	//enables CommState without toggling comms menu.  good for replies
+				T2_RI	=	EXEC("CommState_Off(CommStateAllow, ProfID);if (AirBrkFlash > -1) Lights_LLED1(0);");														//no if/actkey because it was shifted in first place (i.e. CommMenu not toggled).  Fixed in 1.32
+				T2_RO	=	EXEC("CommState_Off(CommStateVAC, ProfID);if (AirBrkFlash > -1) Lights_LLED1(0);");			//if no key pressed in CommState, CommMenu toggled off.  CommState disabled.  Fixed in 1.32
+				}	
+			else
+				{
+				T2_PO	=	CHAIN(PULSE+CommMenu, EXEC("CommState_On(CommStateVAC);"));							//toggles comm menu and enters CommState
+				T2_PI	=	EXEC("CommState_On(CommStateVAC);");																	//enables CommState without toggling comms menu.  good for replies
+				T2_RI	=	EXEC("CommState_Off(CommStateVAC, ProfID);");														//no if/actkey because it was shifted in first place (i.e. CommMenu not toggled).  Fixed in 1.32
+				T2_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+CommMenu);CommState_Off(CommStateVAC, ProfID);");			//if no key pressed in CommState, CommMenu toggled off.  CommState disabled.  Fixed in 1.32
+				}
+			T3_PO	=	CHAIN(X(Mic_Sw_Up,1),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));	//Forced to X(Mic_Sw_Up,1) for PTT_Common (0 is A10_Mic_Sw_Up)
+			T3_RO	=	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);");	//T2_RI;
+			T4_PO	=	CHAIN(X(Mic_Sw_Up,1),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));
+			T4_RO	=	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);");	//T2_RI;
+			T5_PO	=	CHAIN(X(Mic_Sw_Up,1),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));
+			T5_RO	=	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);");	//T2_RI;
+			
+			MapKeyIO (&HCougar,	T2,	T2_PI, T2_PO);
+			MapKeyRIO(&HCougar, T2, T2_RI, T2_RO);	
+	
+			MapKey	(&HCougar,	T3,	T3_PO);
+			MapKeyR	(&HCougar,	T3, T3_RO);
+	
+			MapKey	(&HCougar,	T4,	T4_PO);
+			MapKeyR	(&HCougar,	T4, T4_RO);
+	
+			MapKey	(&HCougar,	T5,	T5_PO);
+			MapKeyR	(&HCougar,	T5, T5_RO);
+			}
+		//End T2/T3/T4/T5 Declarations
+	
+		//CommState Mapping
+	//	MapKeyIO (&HCougar,	T2,	T2_PI, T2_PO);
+	//	MapKeyRIO(&HCougar, T2, T2_RI, T2_RO);
+		}
+	else 	//Non-CommState mapping
+		{
+		printf("CommState Disabled...");	
+		if (TARS > 0)
+			{
+			printf("SRS...");
+			//T2 (Down)
+			if (	((TARS_PTT_Common) &(X(Comm_Sw_Dn,1)!=PTT_Common) )	|	((!TARS_PTT_Common) & (X(Comm_Sw_Dn,1)==PTT_Common))	)		//either PTT_Common is used and this isn't it, or common not used and this is the normal common.  Either way, use for AI comms because it wont be used for vox.
+				{
+				printf("T2 AI Comms\xa");
+				if (VAC > 0)	T2_PO	=	TS3PTT_DX;	//	T2_PO	=	X(Comm_Sw_Dn,1);
+				else			T2_PO	=	CHAIN(PULSE+DX30,D(ModDelay),PULSE+X(Comm_Sw_Dn,TS3_DX));											//DX30+Switch enables radio without doing so for vox only
+								T2_PI	=	PULSE+CommMenu;																						//toggles comm menu 
+								T2_RO	=	0;																									//Release Null without Commstate
+					
+				MapKeyIO(&HCougar,	T2,	T2_PI, T2_PO);
+				MapKeyR	(&HCougar,	T2, T2_RO);
+				}
+			else	//this is a normally used vox circuit and shouldn't be used for AI comms
+				{		
+				printf("T2 Vox\xa");
+				T2_PO	=	CHAIN(X(Comm_Sw_Dn,TS3_DX),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));																	//DX22 for Aries Radio PTT only		
+				T2_RO	=	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);");																							//DX21 only enabled, so only lights out
+				
+				MapKey	(&HCougar,	T2,	T2_PO);
+				MapKeyR	(&HCougar,	T2, T2_RO);
+				}
+	
+			//T3 (Up)
+			if (	((TARS_PTT_Common) &(X(Comm_Sw_Up,1)!=PTT_Common) )	|	((!TARS_PTT_Common) & (X(Comm_Sw_Up,1)==PTT_Common))	)		//either PTT_Common is used and this isn't it, or common not used and this is the normal common.  Either way, use for AI comms because it wont be used for vox.
+				{
+				printf("T3 AI Comms\xa");
+				if (VAC > 0)	T3_PO	=	TS3PTT_DX;	//T3_PO	=	X(Comm_Sw_Up,1);
+				else			T3_PO	=	CHAIN(PULSE+DX30,D(ModDelay),PULSE+X(Comm_Sw_Up,TS3_DX));											//DX30+Switch enables radio without doing so for vox only
+								T3_PI	=	PULSE+CommMenu;																						//toggles comm menu 
+								T3_RO	=	0;																									//Release Null without Commstate
+					
+				MapKeyIO(&HCougar,	T3,	T3_PI, T3_PO);
+				MapKeyR	(&HCougar,	T3, T3_RO);
+				}
+			else	//this is a normally used vox circuit and shouldn't be used for AI comms
+				{		
+				printf("T3 Vox\xa");
+				T3_PO	=	CHAIN(X(Comm_Sw_Up,TS3_DX),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));																	//DX22 for Aries Radio PTT only
+				T3_RO	=	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);");																							//DX21 only enabled, so only lights out
+				
+				MapKey	(&HCougar,	T3,	T3_PO);
+				MapKeyR	(&HCougar,	T3, T3_RO);
+				}
+	
+			//T4 (Right)
+			if (	((TARS_PTT_Common) &(X(Comm_Sw_Rt,1)!=PTT_Common) )	|	((!TARS_PTT_Common) & (X(Comm_Sw_Rt,1)==PTT_Common))	)		//either PTT_Common is used and this isn't it, or common not used and this is the normal common.  Either way, use for AI comms because it wont be used for vox.
+				{
+				printf("T4 AI Comms\xa");
+				if (VAC > 0)	T4_PO	=	TS3PTT_DX;	//X(Comm_Sw_Rt,1);
+				else			T4_PO	=	CHAIN(PULSE+DX30,D(ModDelay),PULSE+X(Comm_Sw_Rt,TS3_DX));											//DX30+Switch enables radio without doing so for vox only
+								T4_PI	=	PULSE+CommMenu;																						//toggles comm menu 
+								T4_RO	=	0;																									//Release Null without Commstate
+	
+				MapKeyIO(&HCougar,	T4,	T4_PI, T4_PO);
+				MapKeyR	(&HCougar,	T4, T4_RO);
+				}
+			else	//this is a normally used vox circuit and shouldn't be used for AI comms
+				{		
+				printf("T4 Vox\xa");
+				T4_PO	=	CHAIN(X(Comm_Sw_Rt,TS3_DX),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));																	//DX22 for Aries Radio PTT only
+				T4_RO	=	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);");																							//DX21 only enabled, so only lights out
+				
+				MapKey	(&HCougar,	T4,	T4_PO);
+				MapKeyR	(&HCougar,	T4, T4_RO);
+				}
+	
+			//T5 (Left)
+			if (	((TARS_PTT_Common) &(X(Comm_Sw_Lt,1)!=PTT_Common) )	|	((!TARS_PTT_Common) & (X(Comm_Sw_Lt,1)==PTT_Common))	)		//either PTT_Common is used and this isn't it, or common not used and this is the normal common.  Either way, use for AI comms because it wont be used for vox.
+				{
+				printf("T5 AI Comms\xa");	
+				if (VAC > 0)	T5_PO	=	TS3PTT_DX;	//X(Comm_Sw_Lt,1);				
+				else			T5_PO	=	CHAIN(PULSE+DX30,D(ModDelay),PULSE+X(Comm_Sw_Lt,TS3_DX));											//DX30+Switch enables radio without doing so for vox only
+								T5_PI	=	PULSE+CommMenu;																						//toggles comm menu 
+								T5_RO	=	0;																									//Release Null without Commstate
+					
+				MapKeyIO(&HCougar,	T5,	T5_PI, T5_PO);
+				MapKeyR	(&HCougar,	T5, T5_RO);
+				}
+			else	//this is a normally used vox circuit and shouldn't be used for AI comms
+				{		
+				printf("T5 Vox\xa");
+				T5_PO	=	CHAIN(X(Comm_Sw_Lt,TS3_DX),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));																	//DX22 for Aries Radio PTT only
+				T5_RO	=	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);");																							//DX21 only enabled, so only lights out
+				
+				MapKey	(&HCougar,	T5,	T5_PO);
+				MapKeyR	(&HCougar,	T5, T5_RO);
+				}
+			}
+	
+		else	//no Aries Radio, no Commstate
+			{
+			printf("No SRS, no CommState\xa");
+			if (VAC > 0)	T2_PO	=	TS3PTT_DX;
+			else			T2_PO	=	PULSE+CommMenu;																			//toggles comm menu and enters CommState
+			T2_PI	=	PULSE+CommMenu;																							//enables CommState without toggling comms menu.  good for replies
+			T2_RO	=	0;	
+			
+			T3_PO	=	CHAIN(X(Mic_Sw_Up,1),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));	//Forced to X(Mic_Sw_Up,1) for PTT_Common (0 is A10_Mic_Sw_Up)
+			T3_RO	=	EXEC("Lights_RLED1(0);");
+			T4_PO	=	CHAIN(X(Mic_Sw_Up,1),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));
+			T4_RO	=	T3_RO;
+			T5_PO	=	CHAIN(X(Mic_Sw_Up,1),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));
+			T5_RO	=	T3_RO;
+			
+			MapKeyIO(&HCougar,	T2,	T2_PI, T2_PO);
+			MapKeyR	(&HCougar,	T2, T2_RO);	
+	
+			MapKey	(&HCougar,	T3,	T3_PO);
+			MapKeyR	(&HCougar,	T3, T3_RO);
+	
+			MapKey	(&HCougar,	T4,	T4_PO);
+			MapKeyR	(&HCougar,	T4, T4_RO);
+	
+			MapKey	(&HCougar,	T5,	T5_PO);
+			MapKeyR	(&HCougar,	T5, T5_RO);
+			}
+		}
+	}
+}
+
+int FC3_CommState_Init_WH()
+{
+//if (TS3_DX > 0)	T4_P	=	CHAIN(TS3PTT_DX, EXEC("Lights_RLED1(1);"));								//Makes T4/T5 TS3 PTT if not Aries
+//else			T4_P	=	CHAIN(TS3PTT, EXEC("Lights_RLED1(1);"));	
+T4_P	=	CHAIN(PTT_Common, EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));
+T4_R	=	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);");
+
+T5_P	=	T4_P;
+T5_R	=	T4_R;
+
+TP_P	=	CHAIN(PTT_Common, EXEC("if (AirBrkFlash > -1) Lights_RLED1(1); MSPCheck = 1;"));
+TP_R	=	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0); DeferCall(500,&MSPCheck_Set,0);");
+
+
+if(CommStateAllow > 0)
+	{
+	//T2/T3/T4/T5 declarations (T3 default TS3 PTT)
+	if (TARS >0)
+		{
+		printf("SRS: %i\xa  PTT Common: %i\xa  ProfID: %i\xa",TARS,TARS_PTT_Common,ProfID);	//for test purposes
+		//T2 (Down)
+		if (	((TARS_PTT_Common) & (X(Comm_Sw_Dn,1)!=PTT_Common) )	|	((!TARS_PTT_Common) & (X(Comm_Sw_Dn,1)==PTT_Common))	)		//either PTT_Common is used and this isn't it, or common not used and this is the normal common.  Either way, use for AI comms because it wont be used for vox.
+			{
+			printf("T2 AI Comms\xa");
+
+
+			if (VAC > 0)	//	T2_PI	=	CHAIN(PULSE+CommMenu,D(KBDelay),MOUSE_CENTER,D(KBPress*2),EXEC("CommState_On(CommStateAllow);"));	//enables comm menu and MMB after short delay.  CommState still prevents inadvertent view switching if bad VOX.	
+				{
+				//T2_PO	=	CHAIN(X(Comm_Sw_Dn,1),D(ModDelay+KBDelay),EXEC("CommState_On(CommStateVAC); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(1);"));	//DX30+Switch enables radio without doing so for vox only
+				T2_PO	=	CHAIN(TS3PTT_DX,D(ModDelay+KBDelay),EXEC("CommState_On(CommStateVAC); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(1);"));	//DX30+Switch enables radio without doing so for vox only
+				T2_PI	=	CHAIN(PULSE+CommMenu, EXEC("CommState_On(CommStateAllow);"));										//toggles comm menu and enters CommState.  Be sure to release shift before using hat switch commands.
+				T2_RO	=	EXEC("CommState_Off(CommStateVAC, ProfID); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(0);");			//disables CommState and restores original Hat switch functionality
+				T2_RI	=	EXEC("CommState_Off(CommStateAllow, ProfID);");
+				}
+			else
+				{
+				if (!TARS_PTT_Common)	//VOX channel, but PTT Common not used (forces long vox)						
+					{
+					T2_PO	=	CHAIN(X(Comm_Sw_Dn,TS3_DX),D(ModDelay+KBDelay),EXEC("CommState_On(CommStateVAC);"));	//DX30+Switch enables radio without doing so for vox only
+					T2_PI	=	CHAIN(PULSE+CommMenu, EXEC("CommState_On(CommStateAllow);"));										//toggles comm menu and enters CommState.  Be sure to release shift before using hat switch commands.
+					T2_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(Comm_Sw_Dn,0));CommState_Off(CommStateVAC, ProfID);");			//disables CommState and restores original Hat switch functionality
+					}
+			else							
+					{
+					T2_PO	=	CHAIN(PULSE+DX30,D(ModDelay),PULSE+X(Comm_Sw_Dn,TS3_DX),D(ModDelay+KBDelay),EXEC("CommState_On(CommStateVAC);"));	//DX30+Switch enables radio without doing so for vox only
+					T2_PI	=	CHAIN(PULSE+CommMenu, EXEC("CommState_On(CommStateVAC);"));										//toggles comm menu and enters CommState.  Be sure to release shift before using hat switch commands.
+					T2_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(Comm_Sw_Dn,TS3_DX));CommState_Off(CommStateVAC, ProfID);");			//disables CommState and restores original Hat switch functionality
+					}
+				T2_RI	=	EXEC("if ((FkeyPress < 1) & (CommStateAllow > 0)) ActKey(KEYON+PULSE+CommMenu);CommState_Off(CommStateAllow, ProfID);");
+				}	
+			
+			MapKeyIO(&Throttle,	MSD,	T2_PI, T2_PO);
+			MapKeyRIO(&Throttle,MSD, 	T2_RI, T2_RO);
+			}
+		else	//this is a normally used vox circuit and shouldn't be used for AI comms
+			{		
+			printf("T2 Vox\xa");
+			if (X(Comm_Sw_Dn,1) == PTT_Common)	T2_PO	=	CHAIN(PTT_Common,EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));	
+			else								T2_PO	=	CHAIN(X(Comm_Sw_Dn,TS3_DX),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));							//DX22 for SRS PTT only
+												T2_RO	=	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);");														//DX21 only enabled, so only lights out
+			MapKey	(&Throttle,	MSD,	T2_PO);
+			MapKeyR	(&Throttle,	MSD,	T2_RO);
+			}
+
+		//T3 (Up)
+		if (	((TARS_PTT_Common) &(X(Comm_Sw_Up,1)!=PTT_Common) )	|	((!TARS_PTT_Common) & (X(Comm_Sw_Up,1)==PTT_Common))	)		//either PTT_Common is used and this isn't it, or common not used and this is the normal common.  Either way, use for AI comms because it wont be used for vox.
+			{
+			printf("T3 AI Comms\xa");
+			if (VAC > 0)	//	T3_PI	=	CHAIN(PULSE+CommMenu,D(KBDelay),MOUSE_CENTER,D(KBPress*2),EXEC("CommState_On(CommStateAllow);"));	//enables comm menu and MMB after short delay.  CommState still prevents inadvertent view switching if bad VOX.
+				{
+				//T3_PO	=	CHAIN(X(Comm_Sw_Up,1),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(1);"));	
+				T3_PO	=	CHAIN(TS3PTT_DX,D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(1);"));	
+				T3_PI	=	CHAIN(PULSE+CommMenu, EXEC("CommState_On(CommStateAllow);"));										//toggles comm menu and enters CommState.  Be sure to release shift before using hat switch commands.
+				T3_RO	=	EXEC("CommState_Off(CommStateVAC, ProfID); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(0);");			//disables CommState and restores original Hat switch functionality
+				T3_RI	=	EXEC("CommState_Off(CommStateAllow, ProfID);");			//disables CommState and restores original Hat switch functionality
+				}
+			else
+				{
+				if (!TARS_PTT_Common)	//VOX channel, but PTT Common not used (forces long vox)	
+					{
+					T3_PO	=	CHAIN(X(Comm_Sw_Up,TS3_DX),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);"));	//DX30+Switch enables radio without doing so for vox only
+					T3_PI	=	CHAIN(PULSE+CommMenu, EXEC("CommState_On(CommStateAllow);"));										//toggles comm menu and enters CommState.  Be sure to release shift before using hat switch commands.
+					T3_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(Comm_Sw_Up,0));CommState_Off(CommStateVAC, ProfID);");			//disables CommState and restores original Hat switch functionality
+					}
+				else
+					{
+					T3_PO	=	CHAIN(PULSE+DX30,D(ModDelay),PULSE+X(Comm_Sw_Up,TS3_DX),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);"));	//DX30+Switch enables radio without doing so for vox only
+					T3_PI	=	CHAIN(PULSE+CommMenu, EXEC("CommState_On(CommStateVAC);"));										//toggles comm menu and enters CommState.  Be sure to release shift before using hat switch commands.
+					T3_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(Comm_Sw_Up,TS3_DX));CommState_Off(CommStateVAC, ProfID);");			//disables CommState and restores original Hat switch functionality
+					}
+				T3_RI	=	EXEC("if ((FkeyPress < 1) & (CommStateAllow > 0)) ActKey(KEYON+PULSE+CommMenu);CommState_Off(CommStateAllow, ProfID);");
+				}				
+							
+			
+			MapKeyIO(&Throttle,	MSU,	T3_PI, T3_PO);
+			MapKeyRIO(&Throttle,MSU,	T3_RI, T3_RO);
+			}
+		else	//this is a normally used vox circuit and shouldn't be used for AI comms
+			{
+			printf("T3 Vox\xa");
+			if (X(Comm_Sw_Up,1) == PTT_Common)	T3_PO	=	CHAIN(PTT_Common,EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));	
+			else								T3_PO	=	CHAIN(X(Comm_Sw_Up,TS3_DX),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));							//DX21 for SRS PTT only
+												T3_RO	=	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);");														//DX21 only enabled, so only lights out
+			
+			MapKey	(&Throttle,	MSU,	T3_PO);
+			MapKeyR	(&Throttle,	MSU,	T3_RO);
+			}
+			
+		//T4 (Right)																	
+		if (	((TARS_PTT_Common) &(X(Comm_Sw_Rt,1)!=PTT_Common) )	|	((!TARS_PTT_Common) & (X(Comm_Sw_Rt,1)==PTT_Common))	)		//either PTT_Common is used and this isn't it, or common not used and this is the normal common.  Either way, use for AI comms because it wont be used for vox.
+			{
+			printf("T4 AI Comms\xa");
+
+			if (VAC > 0)	//	T4_PI	=	CHAIN(PULSE+CommMenu,D(KBDelay),MOUSE_CENTER,D(KBPress*2),EXEC("CommState_On(CommStateAllow);"));	//enables comm menu and MMB after short delay.  CommState still prevents inadvertent view switching if bad VOX.
+				{
+				//T4_PO	=	CHAIN(X(Comm_Sw_Rt,1),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(1);"));	//DX30+Switch enables radio without doing so for vox only
+				T4_PO	=	CHAIN(TS3PTT_DX,D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(1);"));	//DX30+Switch enables radio without doing so for vox only
+				T4_PI	=	CHAIN(PULSE+CommMenu, EXEC("CommState_On(CommStateAllow);"));										//toggles comm menu and enters CommState.  Be sure to release shift before using hat switch commands.
+				T4_RO	=	EXEC("CommState_Off(CommStateVAC, ProfID); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(0);");			//disables CommState and restores original Hat switch functionality
+				T4_RI	=	EXEC("CommState_Off(CommStateAllow, ProfID);");			//disables CommState and restores original Hat switch functionality
+				}
+			else
+				{
+				if (!TARS_PTT_Common)	//VOX channel, but PTT Common not used (forces long vox)	
+					{
+					T4_PO	=	CHAIN(X(Comm_Sw_Rt,TS3_DX),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);"));	//DX30+Switch enables radio without doing so for vox only
+					T4_PI	=	CHAIN(PULSE+CommMenu, EXEC("CommState_On(CommStateAllow);"));										//toggles comm menu and enters CommState.  Be sure to release shift before using hat switch commands.
+					T4_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(Comm_Sw_Rt,0));CommState_Off(CommStateVAC, ProfID);");			//disables CommState and restores original Hat switch functionality
+					}			
+				else 
+					{
+					T4_PO	=	CHAIN(PULSE+DX30,D(ModDelay),PULSE+X(Comm_Sw_Rt,TS3_DX),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);"));	//DX30+Switch enables radio without doing so for vox only
+					T4_PI	=	CHAIN(PULSE+CommMenu, EXEC("CommState_On(CommStateVAC);"));										//toggles comm menu and enters CommState.  Be sure to release shift before using hat switch commands.
+					T4_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(Comm_Sw_Rt,TS3_DX));CommState_Off(CommStateVAC, ProfID);");	//disables CommState and restores original Hat switch functionality
+					}
+				T4_RI	=	EXEC("if ((FkeyPress < 1) & (CommStateAllow > 0)) ActKey(KEYON+PULSE+CommMenu);CommState_Off(CommStateAllow, ProfID);");				
+				}
+			
+			MapKeyIO(&Throttle,	MSR,	T4_PI, T4_PO);
+			MapKeyRIO(&Throttle,MSR,	T4_RI, T4_RO);
+			}
+		else	//this is a normally used vox circuit and shouldn't be used for AI comms
+			{
+			printf("T4 Vox\xa");
+			if (X(Comm_Sw_Rt,1) == PTT_Common)	T4_PO	=	CHAIN(PTT_Common,EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));	
+			else								T4_PO	=	CHAIN(X(Comm_Sw_Rt,TS3_DX),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));							//DX21 for Aries Radio PTT only
+												T4_RO	=	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);");														//DX21 only enabled, so only lights out
+			
+			MapKey	(&Throttle,	MSR,	T4_PO);
+			MapKeyR	(&Throttle,	MSR,	T4_RO);
+			}
+
+		//T5 (Left)																										
+		if (	((TARS_PTT_Common) &(X(Comm_Sw_Lt,1)!=PTT_Common) )	|	((!TARS_PTT_Common) & (X(Comm_Sw_Lt,1)==PTT_Common))	)		//either PTT_Common is used and this isn't it, or common not used and this is the normal common.  Either way, use for AI comms because it wont be used for vox.
+			{
+			printf("T5 AI Comms\xa");
+
+			if (VAC > 0)	//	T5_PI	=	CHAIN(PULSE+CommMenu,D(KBDelay),MOUSE_CENTER,D(KBPress*2),EXEC("CommState_On(CommStateAllow);"));	//enables comm menu and MMB after short delay.  CommState still prevents inadvertent view switching if bad VOX.
+				{
+				//T5_PO	=	CHAIN(X(Comm_Sw_Lt,1),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(1);"));	//DX30+Switch enables radio without doing so for vox only
+				T5_PO	=	CHAIN(TS3PTT_DX,D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(1);"));	//DX30+Switch enables radio without doing so for vox only
+				T5_PI	=	CHAIN(PULSE+CommMenu, EXEC("CommState_On(CommStateAllow);"));										//toggles comm menu and enters CommState.  Be sure to release shift before using hat switch commands.
+				T5_RO	=	EXEC("CommState_Off(CommStateVAC, ProfID); if ((CommStateVAC < 1) & (AirBrkFlash > -1)) Lights_RLED1(0);");			//disables CommState and restores original Hat switch functionality	
+				T5_RI	=	EXEC("CommState_Off(CommStateAllow, ProfID);");			//disables CommState and restores original Hat switch functionality					
+				}
+			else
+				{
+				if (!TARS_PTT_Common)	//VOX channel, but PTT Common not used (forces long vox)						
+					{
+					T5_PO	=	CHAIN(X(Comm_Sw_Lt,TS3_DX),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);"));	//DX30+Switch enables radio without doing so for vox only
+					T5_PI	=	CHAIN(PULSE+CommMenu, EXEC("CommState_On(CommStateVAC);"));										//toggles comm menu and enters CommState.  Be sure to release shift before using hat switch commands.
+					T5_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(Comm_Sw_Lt,0));CommState_Off(CommStateVAC, ProfID);");			//disables CommState and restores original Hat switch functionality	
+					}
+				else 
+					{
+					T5_PO	=	CHAIN(PULSE+DX30,D(ModDelay),PULSE+X(Comm_Sw_Lt,TS3_DX),D(KBDelay+ModDelay),EXEC("CommState_On(CommStateVAC);"));	//DX30+Switch enables radio without doing so for vox only
+					T5_PI	=	CHAIN(PULSE+CommMenu, EXEC("CommState_On(CommStateVAC);"));										//toggles comm menu and enters CommState.  Be sure to release shift before using hat switch commands.
+					T5_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateVAC > 0)) ActKey(KEYON+PULSE+X(Comm_Sw_Lt,TS3_DX));CommState_Off(CommStateVAC, ProfID);");			//disables CommState and restores original Hat switch functionality	
+					}
+				T5_RI	=	EXEC("if ((FkeyPress < 1) & (CommStateAllow > 0)) ActKey(KEYON+PULSE+CommMenu);CommState_Off(CommStateAllow, ProfID);");
+				}
+				
+			MapKeyIO(&Throttle,	MSL,	T5_PI, T5_PO);
+			MapKeyRIO(&Throttle,MSL,	T5_RI, T5_RO);
+			}
+		else	//this is a normally used vox circuit and shouldn't be used for AI comms
+			{
+			printf("T5 Vox\xa");
+			if (X(Comm_Sw_Lt,1) == PTT_Common)	T5_PO	=	CHAIN(PTT_Common,EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));	
+			else								T5_PO	=	CHAIN(X(Comm_Sw_Lt,TS3_DX),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));							//DX21 for Aries Radio PTT only
+												T5_RO	=	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);");														//DX21 only enabled, so only lights out
+			
+			MapKey	(&Throttle,	MSL,	T5_PO);
+			MapKeyR	(&Throttle,	MSL,	T5_RO);
+			}
+
+
+
+
+//		T4_PO	=	CHAIN(DX22,EXEC("Lights_RLED1(1);"));													//Sets T4/T5 to Aries Radio if TARS enabled
+//		T4_RO	=	T2_RO;
+//		T5_PO	=	CHAIN(DX23,EXEC("Lights_RLED1(1);"));
+//		T5_RO	=	T2_RO;
+		
+	}		
+	else		//no TARS/Aries, so down is AI Comms and other 3 are PTT
+		{
+		printf("SRS Disabled\xa");
+		//if (VAC > 0)	T2_PO	=	CHAIN(PULSE+CommMenu,D(KBDelay),MOUSE_CENTER,D(KBPress*2),EXEC("CommState_On(CommStateAllow);"));
+		if (VAC > 0)	
+			{
+			//T2_PO	=	CHAIN(X(Mic_Sw_Fwd,1),EXEC("CommState_On(CommStateVAC);"));
+			T2_PO	=	CHAIN(TS3PTT_DX,EXEC("CommState_On(CommStateVAC);"));
+			T2_PI	=	CHAIN(PULSE+CommMenu,EXEC("CommState_On(CommStateAllow);"));	
+			T2_RI	=	EXEC("CommState_Off(CommStateAllow, ProfID);");														//no if/actkey because it was shifted in first place (i.e. CommMenu not toggled).  Fixed in 1.32
+			T2_RO	=	EXEC("CommState_Off(CommStateVAC, ProfID);");			//if no key pressed in CommState, CommMenu toggled off.  CommState disabled.  Fixed in 1.32
+			}
+		else
+			{
+			T2_PO	=	CHAIN(PULSE+CommMenu, EXEC("CommState_On(CommStateVAC);"));							//toggles comm menu and enters CommState
+			T2_PI	=	EXEC("CommState_On(CommStateVAC);");
+			T2_RI	=	EXEC("CommState_Off(CommStateVAC, ProfID);");														//no if/actkey because it was shifted in first place (i.e. CommMenu not toggled).  Fixed in 1.32
+			T2_RO	=	EXEC("if ((FkeyPress < 1) & (CommStateAllow > 0)) ActKey(KEYON+PULSE+CommMenu);CommState_Off(CommStateVAC, ProfID);");			//if no key pressed in CommState, CommMenu toggled off.  CommState disabled.  Fixed in 1.32
+			}
+																			//enables CommState without toggling comms menu.  good for replies
+		
+		
+		
+		T3_PO	=	CHAIN(X(Mic_Sw_Up,1),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));	//Forced to X(Mic_Sw_Up,1) for PTT_Common (0 is A10_Mic_Sw_Up)
+		T3_RO	=	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);");	//T2_RI;
+		T4_PO	=	CHAIN(X(Mic_Sw_Up,1),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));
+		T4_RO	=	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);");	//T2_RI;
+		T5_PO	=	CHAIN(X(Mic_Sw_Up,1),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));
+		T5_RO	=	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);");	//T2_RI;
+		
+		MapKeyIO(&Throttle, MSD,	T2_PI, T2_PO);
+		MapKeyRIO(&Throttle,MSD,	T2_RI, T2_RO);	
+
+		MapKey	(&Throttle,	MSU,	T3_PO);
+		MapKeyR	(&Throttle,	MSU,	T3_RO);
+
+		MapKey	(&Throttle,	MSR,	T4_PO);
+		MapKeyR	(&Throttle,	MSR,	T4_RO);
+
+		MapKey	(&Throttle,	MSL,	T5_PO);
+		MapKeyR	(&Throttle,	MSL,	T5_RO);
+		}
+	//End T2/T3/T4/T5 Declarations
+
+	//CommState Mapping
+//	MapKeyIO (&HCougar,	T2,	T2_PI, T2_PO);
+//	MapKeyRIO(&HCougar, T2, T2_RI, T2_RO);
+	}
+else 	//Non-CommState mapping
+	{
+	printf("CommState Disabled...");	
+	if (TARS > 0)
+		{
+		printf("SRS...");
+		//T2 (Down)
+		if (	((TARS_PTT_Common) &(X(Comm_Sw_Dn,1)!=PTT_Common) )	|	((!TARS_PTT_Common) & (X(Comm_Sw_Dn,1)==PTT_Common))	)		//either PTT_Common is used and this isn't it, or common not used and this is the normal common.  Either way, use for AI comms because it wont be used for vox.
+			{
+			printf("T2 AI Comms\xa");
+
+			if (VAC > 0)	T2_PO	=	TS3PTT_DX;	//X(Comm_Sw_Dn,1);											//DX30+Switch enables radio without doing so for vox only
+			else 			T2_PO	=	CHAIN(PULSE+DX30,D(ModDelay),PULSE+X(Comm_Sw_Dn,TS3_DX));		//DX30+Switch enables radio without doing so for vox only
+				T2_PI	=	PULSE+CommMenu;																						//toggles comm menu 
+				T2_RO	=	0;																									//Release Null without Commstate
+			
+			MapKeyIO(&Throttle,	MSD,	T2_PI, T2_PO);
+			MapKeyR	(&Throttle,	MSD,	T2_RO);
+			}
+		else	//this is a normally used vox circuit and shouldn't be used for AI comms
+			{		
+			printf("T2 Vox\xa");
+			T2_PO	=	CHAIN(X(Comm_Sw_Dn,TS3_DX),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));																	//DX22 for Aries Radio PTT only
+			T2_RO	=	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);");																							//DX21 only enabled, so only lights out
+			
+			MapKey	(&Throttle,	MSD,	T2_PO);
+			MapKeyR	(&Throttle,	MSD,	T2_RO);
+			}
+
+		//T3 (Up)
+		if (	((TARS_PTT_Common) &(X(Comm_Sw_Up,1)!=PTT_Common) )	|	((!TARS_PTT_Common) & (X(Comm_Sw_Up,1)==PTT_Common))	)		//either PTT_Common is used and this isn't it, or common not used and this is the normal common.  Either way, use for AI comms because it wont be used for vox.
+			{
+			printf("T3 AI Comms\xa");
+			if (VAC > 0)	T3_PO	=	TS3PTT_DX;	//X(Comm_Sw_Up,1);
+			else			T3_PO	=	CHAIN(PULSE+DX30,D(ModDelay),PULSE+X(Comm_Sw_Up,TS3_DX));											//DX30+Switch enables radio without doing so for vox only
+							T3_PI	=	PULSE+CommMenu;																						//toggles comm menu 
+							T3_RO	=	0;																									//Release Null without Commstate
+				
+			MapKeyIO(&Throttle,	MSU,	T3_PI, T3_PO);
+			MapKeyR	(&Throttle,	MSU,	T3_RO);
+			}
+		else	//this is a normally used vox circuit and shouldn't be used for AI comms
+			{		
+			printf("T3 Vox\xa");
+			T3_PO	=	CHAIN(X(Comm_Sw_Up,TS3_DX),EXEC("Lights_RLED1(1);"));																	//DX22 for Aries Radio PTT only
+			T3_RO	=	EXEC("Lights_RLED1(0);");																							//DX21 only enabled, so only lights out
+			
+			MapKey	(&Throttle,	MSU,	T3_PO);
+			MapKeyR	(&Throttle,	MSU,	T3_RO);
+			}
+
+		//T4 (Right)
+		if (	((TARS_PTT_Common) &(X(Comm_Sw_Rt,1)!=PTT_Common) )	|	((!TARS_PTT_Common) & (X(Comm_Sw_Rt,1)==PTT_Common))	)		//either PTT_Common is used and this isn't it, or common not used and this is the normal common.  Either way, use for AI comms because it wont be used for vox.
+			{
+			printf("T4 AI Comms\xa");
+			if (VAC > 0)		T4_PO	=	TS3PTT_DX;	//X(Comm_Sw_Rt,1);	
+			else				T4_PO	=	CHAIN(PULSE+DX30,D(ModDelay),PULSE+X(Comm_Sw_Rt,TS3_DX));											//DX30+Switch enables radio without doing so for vox only
+								T4_PI	=	PULSE+CommMenu;																						//toggles comm menu 
+								T4_RO	=	0;																									//Release Null without Commstate
+
+			MapKeyIO(&Throttle,	MSR,	T4_PI, T4_PO);
+			MapKeyR	(&Throttle,	MSR,	T4_RO);
+			}
+		else	//this is a normally used vox circuit and shouldn't be used for AI comms
+			{		
+			printf("T4 Vox\xa");
+			T4_PO	=	CHAIN(X(Comm_Sw_Rt,TS3_DX),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));																	//DX22 for Aries Radio PTT only
+			T4_RO	=	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);");																							//DX21 only enabled, so only lights out
+			
+			MapKey	(&Throttle,	MSR,	T4_PO);
+			MapKeyR	(&Throttle,	MSR,	T4_RO);
+			}
+
+		//T5 (Left)
+		if (	((TARS_PTT_Common) &(X(Comm_Sw_Lt,1)!=PTT_Common) )	|	((!TARS_PTT_Common) & (X(Comm_Sw_Lt,1)==PTT_Common))	)		//either PTT_Common is used and this isn't it, or common not used and this is the normal common.  Either way, use for AI comms because it wont be used for vox.
+			{
+			printf("T5 AI Comms\xa");	
+			if (VAC > 0)	T5_PO	=	TS3PTT_DX;	//X(Comm_Sw_Lt,1);
+			else			T5_PO	=	CHAIN(PULSE+DX30,D(ModDelay),PULSE+X(Comm_Sw_Lt,TS3_DX));											//DX30+Switch enables radio without doing so for vox only
+							T5_PI	=	PULSE+CommMenu;																						//toggles comm menu 
+							T5_RO	=	0;																									//Release Null without Commstate
+				
+			MapKeyIO(&Throttle,	MSL,	T5_PI, T5_PO);
+			MapKeyR	(&Throttle,	MSL,	T5_RO);
+			}
+		else	//this is a normally used vox circuit and shouldn't be used for AI comms
+			{		
+			printf("T5 Vox\xa");
+			T5_PO	=	CHAIN(X(Comm_Sw_Lt,TS3_DX),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));																	//DX22 for Aries Radio PTT only
+			T5_RO	=	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);");																							//DX21 only enabled, so only lights out
+			
+			MapKey	(&Throttle,	MSL,	T5_PO);
+			MapKeyR	(&Throttle,	MSL,	T5_RO);
+			}
+		}
+
+	else	//no Aries Radio, no Commstate
+		{
+		printf("No SRS, no CommState\xa");
+		if (VAC > 0)	
+			{
+			T2_PO	=	TS3PTT_DX;	//X(Mic_Sw_Up,1);
+			T3_PO	=	CHAIN(X(Mic_Sw_Up,1),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));
+			}
+		else
+			{
+			T2_PO	=	PULSE+CommMenu;
+			T3_PO	=	CHAIN(X(Mic_Sw_Up,1),EXEC("if (AirBrkFlash > -1) Lights_RLED1(1);"));	//Forced to X(Mic_Sw_Up,1) for PTT_Common (0 is A10_Mic_Sw_Up)
+			}	
+		T4_PO = T3_PO;
+		T5_PO = T3_PO;
+
+		T2_PI	=	PULSE+CommMenu;																							
+		T2_RO	=	0;	
+		
+		T3_RO	=	EXEC("if (AirBrkFlash > -1) Lights_RLED1(0);");
+		T4_RO	=	T3_RO;
+		T5_RO	=	T3_RO;
+		
+		MapKeyIO(&Throttle,	MSD,	T2_PI, T2_PO);
+		MapKeyR	(&Throttle,	MSD,	T2_RO);	
+
+		MapKey	(&Throttle,	MSU,	T3_PO);
+		MapKeyR	(&Throttle,	MSU,	T3_RO);
+
+		MapKey	(&Throttle,	MSR,	T4_PO);
+		MapKeyR	(&Throttle,	MSR,	T4_RO);
+
+		MapKey	(&Throttle,	MSL,	T5_PO);
+		MapKeyR	(&Throttle,	MSL,	T5_RO);
+		}
+	}
+if ((VAC >0) &(VACChatter > 0))	// VAICOM with chatter pack
+	{
+	MapKeyIO(&Throttle,	MSP,	TEMPO(0,CHAIN(VAICOM_Chatter,EXEC("MSPCheck = 1;")),DefTempo),	TP_P);
+	MapKeyRIO(&Throttle,MSP,	0,									TP_R);		
+	}
+else
+	{
+	MapKey	(&Throttle,	MSP,	TP_P);
+	MapKeyR	(&Throttle,	MSP,	TP_R);		
+	}
+}
+
+int FC3_Eng_Start_Delay_Toggle(int state, int enable = 0, int index = 2)	//state for discrete (-1 for cycle), enable to determine whether function performs or just returns default DX value, 
+																			//index for upper boundary of array (start at 0; allows for function expansion) and should always be last argument
+{
+//if ((state < 0) | (state > index)) state = (Eng_Start_FC3_Def+1)%(index+1);					//if out of bounds, then increment
+if (state == 2) Flaps_Array_FC3 = 1;
+else Flaps_Array_FC3 = 0;
+
+flashRLED1(0,250);
+if (Init_Run == 0)
+	{
+	flashRLED1(1,250);										//start flashing at 250ms increments
+	DeferCall(state*500+500,&flashRLED1,0);					//stop flashing after state+1 flashes
+	if (Script_Debug) printf("FC3 Engine Start Delay(%i) = %i\xa",state, Eng_Start_FC3_Current);	//for testing purposes
+	}	
+	
+if (WarthogThrottle == 0)	//TQS							
+	{
+	if (enable > 0)	//throttle routine enabled (or just 1 for init)
+		{
+		Eng_Start_FC3_Current = X(Eng_Start_FC3_Array,state);	//gets value from array
+		Eng_Start_x	= Eng_Start_FC3_Current;					//applies value to engine start routine.  2 step to keep Eng_Start_FC3_Current in memory if profile switches from and back to FC3
+		//Eng_Start_FC3_Def = state;								//syncs Default delay  (actually the array index) with new state for future toggles
+		}
+	FC3_Map_Flaps(state);
+	}
+else if (WarthogThrottle > 0) FC3_Map_Flaps_WH(state);
+
+if (WarthogThrottle == 0) CommState_Off(1,ProfID);	//only remaps H3 if flap switch not in place
+}
+
+int FC3_Airbrake_Type_Set(int type,int wav = 1, int index = 2)	//calls other functions in order with delay to force timing values prior to init
+//type is airbrake type, index for upper boundary of array (start at 0; allows for function expansion) and should always be last argument
+//index set to 1 to prevent cycling of type 2 airbrake (A-10C).  Can re-index if A-10A changed to this model.
+{
+if ((type < 0) | (type > index)) type = (Airbrake_Def_FC3+1)%(index+1);	//allows toggle/cycle
+
+FC3_Airbrake_Time_Set(type) ;
+if (wav)	DeferCall(100,&FC3_Airbrake_Type_Set_DW,type);
+else		DeferCall(100,&FC3_Airbrake_Type_Set_D, type);
+}
+int FC3_Airbrake_Type_Set_D(int type)	//for defercall
+{
+if (WarthogThrottle > 0) 	Airbrake_Map_Set_WH(type,3,AirBrkFlash,0);
+else						Airbrake_Map_Set(type,3,AirBrkFlash,0);
+Airbrake_Def_FC3 = type; 	//syncs airbrake type with current config
+}
+int FC3_Airbrake_Type_Set_DW(int type)	//for defercall with wav
+{
+if (WarthogThrottle > 0) 	Airbrake_Map_Set_WH(type,3,AirBrkFlash,1);
+else						Airbrake_Map_Set(type,3,AirBrkFlash,1);
+Airbrake_Def_FC3 = type; 	//syncs airbrake type with current config
+}
+
+int FC3_Airbrake_Time_Set(int type)	//type is airbrake type
+{
+if (type > 1) //updated for type 2 in 1.29
+	{
+	BrakeOnCycleTime	=	Airbrake_Out_F15C;
+	BrakeOffCycleTime	=	Airbrake_In_F15C;
+	}
+else
+	{
+	BrakeOnCycleTime	=	Airbrake_Out_FC3;
+	BrakeOffCycleTime	=	Airbrake_In_FC3;
+	}
+DeferCall(50,&AirBrake_Init,AirBrkFlash);	//delay to allow for new airbrake times (added in 1.22)
+}
+
+
+						
+int	FC3_Flaps_Cycle(int posit, int index=3)			//added in 1.36; posit is array position, index is max array size (starting with 1)
+{
+
+if ((posit > index-1) | (posit < 0))
+	{
+	if ((posit > index-1) & (FlapState < index-1))	FlapState = (FlapState+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (FlapState> 0))			FlapState = (FlapState+index-1)%index;	//posit < 0 will cycle by -1 
+	}
+else	FlapState = posit;						//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(FC3_Flaps_Array,FlapState));
+}	
+
+int	FC3_Map_Flaps_WH(int state)	//	added in 1.40 to set flap switch state based on selected aircraft, Su-25 changed to array in 1.40a3
+{
+if (WarthogThrottle > 0)
+	{
+	if (state == 2)		//Su-25A/T
+		{
+		MapKey	(&Throttle,	FLAPU,	EXEC("FC3_Flaps_Cycle(0);"));
+		MapKey	(&Throttle,	FLAPD,	EXEC("FC3_Flaps_Cycle(2);"));
+		MapKeyR	(&Throttle,	FLAPU,	0);
+		MapKeyR	(&Throttle,	FLAPD,	0);
+		MapKeyIO(&Throttle,	FLAPM,	0,	TEMPO(0,EXEC("FC3_Flaps_Cycle(1);"), DoubleTap));	
+		}
+	else if (state == 1)	//A-10A
+		{
+		MapKey	(&Throttle,	FLAPU,	CHAIN(PULSE+Flaps_Up,D(KBDelay+ModDelay),EXEC("if (GraceFlag == 1) ActKey(KEYON+PULSE+Flaps_Up);"))	);	//if going directly from down to up, will do flaps up twice
+		MapKey	(&Throttle,	FLAPD,	CHAIN(PULSE+Flaps_Dn,D(KBDelay+ModDelay),EXEC("if (GraceFlag == 1) ActKey(KEYON+PULSE+Flaps_Dn);"))	);	//if going directly from up to down, will do flaps dn twice
+		MapKeyR	(&Throttle,	FLAPU,	CHAIN(PULSE+Flaps_Dn,EXEC("GraceFlag = 1;"))	);
+		MapKeyR	(&Throttle,	FLAPD,	CHAIN(PULSE+Flaps_Up,EXEC("GraceFlag = 1;"))	);
+		MapKey	(&Throttle,	FLAPM,	TEMPO(0,EXEC("GraceFlag = 0;"),DoubleTap));
+		}
+	else
+		{
+						
+		MapKey	(&Throttle,	FLAPU,	PULSE+Flaps_Up);
+		MapKey	(&Throttle,	FLAPD,	PULSE+Flaps_Dn);
+		MapKeyR	(&Throttle,	FLAPU,	0);
+		MapKeyR	(&Throttle,	FLAPD,	0);
+		MapKey	(&Throttle,	FLAPM,	0);	
+		}
+	}
+else FC3_Map_Flaps(state);
+}
+
+int FC3_Map_Flaps(int state, int force = 0)		//force added in 1.69 as passthrough argument for TriggerZoom_MapGearDn()
+{
+if (WarthogThrottle > 0) FC3_Map_Flaps_WH(state);
+else
+	{
+	if (state == 2)		//Su-25A/T
+			MapKeyIOUMD(&HCougar, H3U,	FC3_H3UUIF,					//UI short for target desig center, long for flaps up (discrete)
+										FC3_H3UUO,					//UO set for Radar (E/O for Su-25T); be sure to reassign in FC3 and remove DX11 only command
+										FC3_H3UMIF,					//MI Hold for Gear up, Tap for Flaps up (array cycle)
+										FC3_H3UMO,					//MO set for Radar (E/O for Su-25T)
+										FC3_H3UDIF,					//DI set for Radar (E/O for Su-25T), long for flaps up (discrete)
+										FC3_H3UDO);					//DO set for scan mode/disp zoom in for A-10A/Su-25T (remove Modifier in FC3)
+	else
+			MapKeyIOUMD(&HCougar, H3U,	FC3_H3UDI,					//UI short for target desig center, long for flaps up
+										FC3_H3UUO,					//UO set for Radar (E/O for Su-25T); be sure to reassign in FC3 and remove DX11 only command
+										FC3_H3UMI,					//MI Hold for Gear up, Tap for Flaps up, NWS state forced off in 1.04, removed in 1.17
+										FC3_H3UMO,					//MO set for Radar (E/O for Su-25T)
+										FC3_H3UDI,					//DI set for Radar (E/O for Su-25T), long for flaps up
+										FC3_H3UDO);					//DO set for scan mode/disp zoom in for A-10A/Su-25T (remove Modifier in FC3)
+	TriggerZoom_MapGearDn(TriggerZoom_state, ProfID,0,force);
+	}
+}
+
+int	Su33_Refuel_Set(int posit, int boom, int key = 1)	//posit is boom/asc mode, boom is whether boom is cycled (sync's with ASC), key is whether key is actuated
+{
+if (posit < 0) 
+	{
+	if (boom)	posit = abs(Su33_Boom_Cur - 1);			//determines whether the baseline for toggle is the boom or the ASC.  if boom, ASC should cover down.
+	else		posit = abs(Su33_ASC_Refuel_Cur - 1);
+	}
+
+if ((Su33_Boom_Cur != posit) & (boom))					//if boom, then this will cycle as required.
+	{
+	if (key)	DeferCall(KBDelay, &ActKey, KEYON+PULSE+Refueling_Boom);
+	Su33_Boom_Cur = posit;
+	if ((WarthogThrottle > 0) & (AirBrkFlash > -1))	DeferCall(LED_Delay,&Lights_WHT4,posit);
+	}
+if (Su33_ASC_Refuel_Cur != posit)						//ASC will cycle if mmismatched regardless.
+	{
+	if (key)	ActKey(KEYON+PULSE+Su33_ASC_Refuel);
+	Su33_ASC_Refuel_Cur = posit;
+	if ((WarthogThrottle > 0) & (AirBrkFlash > -1))	Lights_WHT5(posit);
+	}
+	
+}
+
+int FC3_Nav_Lights_Set(int posit, int key = 1)		//posit is switch position value, key is whether keystroke is executed (i.e. 0 for sync purposes), default 1 for possible DeferCall
+{
+if (FC3_Nav_Lights_Cur > 1) FC3_Nav_Lights_Cur =  1;				//added in 1.66 for possible 3 position nav lights in Su-25
+if	((posit < 0) ) posit = abs(FC3_Nav_Lights_Cur-1);				//forces toggle
+if 	(posit != FC3_Nav_Lights_Cur) 									//if not same, sets to match
+	{
+	if (key) ActKey(KEYON+PULSE+FC3_Nav_lights);
+	FC3_Nav_Lights_Cur = posit;
+	}
+if (Script_Debug) printf("Nav Lights: %i\xa",FC3_Nav_Lights_Cur);		//for test purposes
+}
+
+int FC3_AntiColl_Lights_Set(int posit, int key = 1)	//posit is switch position value, key is whether keystroke is executed (i.e. 0 for sync purposes), default 1 for possible DeferCall
+{
+if	((posit < 0) ) posit = abs(FC3_AntiColl_Lights_Cur-1);			//forces toggle
+if 	(posit != FC3_AntiColl_Lights_Cur)								//if not same, sets to match
+	{
+	if (key) ActKey(KEYON+PULSE+FC3_AntiColl_Lights);
+	FC3_AntiColl_Lights_Cur = posit;
+	}	
+if (Script_Debug) printf("AntiColl Lights: %i\xa",FC3_AntiColl_Lights_Cur);		//for test purposes
+}
+int Su25_Nav_Lights_Set(int posit, int key = 1, int delay = 200, int index = 3, int time = 0)	//posit is switch position value (0 for mid, 1 for aft, 2 for fwd), delay is time between switches, time should always start at 0
+{
+if 	(posit > (index-1)) posit = (FC3_Nav_Lights_Cur+1)%index;	//out of bounds up toggles one step
+else if (posit < 0) posit = (FC3_Nav_Lights_Cur+(index-1))%index;		//out of bounds down toggles (index-1) steps (comes to -1)
+
+while (FC3_Nav_Lights_Cur != posit)
+	{
+	if ((delay > 0) & (key > 0)) DeferCall(time, &ActKey, KEYON+PULSE+FC3_Nav_lights);
+	FC3_Nav_Lights_Cur = (FC3_Nav_Lights_Cur+1)%index;
+	time = time + delay;
+	}
+if (Script_Debug) printf("Nav Lights: %i\xa",FC3_Nav_Lights_Cur);		//for test purposes
+}
+int FC3_Refuel_Lights_Set(int posit, int key = 1)		//posit is switch position value, key is whether keystroke is executed (i.e. 0 for sync purposes), default 1 for possible DeferCall
+{
+if (FC3_Refuel_Lights_Cur > 1) FC3_Refuel_Lights_Cur =  1;				//added in 1.66 for possible 3 position nav lights in Su-25
+if	((posit < 0) ) posit = abs(FC3_Refuel_Lights_Cur-1);				//forces toggle
+if 	(posit != FC3_Refuel_Lights_Cur) 									//if not same, sets to match
+	{
+	if (key) ActKey(KEYON+PULSE+Su33_Refuel_Lts);
+	FC3_Refuel_Lights_Cur = posit;
+	}
+if (Script_Debug) printf("Refuel Lights: %i\xa",FC3_Refuel_Lights_Cur);		//for test purposes
+}
+
+int Su33_WheelbrakeLED(int state)	//used for DeferCall to set LED1
+{
+if ((Joystick[S4]) | (HCougar[S4])) Lights_LLED1(state);
+}

@@ -1,0 +1,1210 @@
+//======================================================================
+//		DCS World Mirage 2000C for HOTAS Cougar/Warthog and Cougar MFDs
+//					by Don "Home Fries" Heumphreus
+//						last updated: 20NOV2021
+//
+//	Change Log:
+//	1.50	Initial Release
+//	1.53	Adjusted for new 2.0 module selection
+//	1.55	Updated for DCS 1.5.3
+//	1.60	Enabled WAV files for aircraft selection
+//			Updated M2000C for new commands
+//	1.61	Added new M2000 routines for DCSW 1.5.4
+//	1.62	Added Adjustable Backlighting
+//	1.65	Added INS PCN Array for Direct Entry functionality
+//	1.66	Moved M-2000C CommState_Off routines here
+//			Fixed unshifted SnapViews 1 and 3 (INS and fwd left panel)
+//			Added PCA Select to CS
+//			Added PSM functionality and updated RMFD bottom row
+//			Added MapKeyR for ROSB13-14 for compatibilty with Spitfire
+//	1.69	Updated CommState_Off() call
+//	1.73	Added Autopilot override to S1 via /I or TEMPO
+//	2.02	Set FkeyPress=1 on init to prevent Commswitch activation on profile load
+//	2.05	Added Drag Chute to Warthog Throttle EOLIGN
+//	2.10	Improved VAICOM/SRS Compatibility
+//	2.10a	Fixed Parking Brake on RMFD
+//	2.11	Remapped PCA/Magic/Cannon switch to Dogfight (radar exclusively on LMFD)
+//	2.13	Replaced S3+H4L/R altimeter setting with decoy program cycle, moved altim to S3+LCON
+//	2.20	WH: relocated Park Brake LED from LLED1 to WHT5, assigned WHT2-4 to PRF setting
+//	2.21	Added NS430 compatibility
+//	2.28	TriggerZoomEnabled set to 2 to deconflict with KP*/ on INS
+//	2.29	Added MFDisplay module selection
+//			Replaced 4 MFD Led functions with Lights_Four()
+//	2.35	Added NVG
+//	2.42	Added A/P Standby toggle function to S1
+//			Updated for new cockpit
+//	2.43	Added MFD_Count to Adjust_Backlighting init check.
+//			Removed SnapView for VR and replaced with Radar/Ext Lts functions
+//			Added TEMPO Radar functions for LMFD (Cougar)
+//	2.44	Changed EngineCount to 2 to allow for emergency throttle on LZ axis
+//			Added M2k_CMProg_Set() to allow discrete countermeasure program set on H4
+//	2.45	Added M2k_HUD_Altim_Baro to CHB
+//			Added D2M to M2k_CMProg_Set()
+//			Added HUD functionality to LOSB3-5, remapped LSYM
+//			Reoriented PSM/PCN for consistency
+//	2.46	Added SRS Overlay to ROSB20
+//			Added VTB functionality to LMFD.
+//	2.50	Fixed MapKey/MapKeyIO assignments on LOSB4 and ROSB2.
+//	2.50b	Removed duplicate MapKeyR(0) mappings to free stack space.
+//	2.51	Removed Script_Debug print commands to free stack space.
+//	2.55	Replaced INS arrays with cycle commands
+//			Added DX8/10 to discrete switches (NVG Lights and G lim respectively), remapped OSB8/10.
+//			Replaced Radar Range with A/P Altitude on Warthog H2L/R, added APAlt TEMPO to Cougar H2.
+//			Added A/P Altitude and TACAN commands to L/RMFD right column respectively.
+//			Remapped NVG Mount/Stow, RADALT Power, and HUD Power to allow NVG Lighting on LSYM.
+//			Added VAD+/- to CS (Warthog) or H2 Long (Cougar)
+//	2.56	Revised RBRT/RCON behavior.
+//			Changed A/A stores short to DX10 pulse instead of up to allow cycling at start.
+//	2.57	Reverted A/A Stores to DOWN+DX10, added FBW AA/Charges toggle option (CTS selectable).
+//	2.57b	Added DEC radar mode to APENG
+//	2.63	Added WHIdle_Enabled parameter to WH Idle commands
+//			Added A and VISU modes to APENG
+//			Added Emer throttle to CH long
+//			Fixed WHS/TQS H3 bug
+//	2.65	Replaced PPI/B Scope DX with original cycle array, moved DX16 to FBW Spin Switch
+//			Added TDC Mode to LOSB19 Short, PPI/B to Long (Cougar)
+//
+//	
+//======================================================================
+
+
+// DX13-14, 16, 18 switches,  8,10 nvg lights and fbw limiter.  DX13-14 for ANT ELEV (Cougar).  S3+DX24 Jammer (WH) and Master Caution (Cougar).
+
+int	M2k_Scan_Width_Cur;
+int	M2k_Scan_Width_Array;
+int	M2k_Scan_Bars_Cur;
+int	M2k_Scan_Bars_Array;
+int	M2k_Scope_Cur;
+int	M2k_Scope_Array;
+int	M2k_TDC_Mode_Cur;
+int	M2k_TDC_Mode_Array;
+int	M2k_PRF_Cur;
+int	M2k_PRF_Array;
+int M2k_HSI_Mode_Cur;
+int	M2k_HSI_Mode_Array;
+int	M2k_530_Sw_Cur;
+int	M2k_530_Sw_Array;
+int	M2k_Vent_Sw_Cur;
+int	M2k_Vent_Sw_Array;
+int	M2k_Rdr_Cur;	//added in 1.61 for WH (not needed for TQS)
+int	M2k_Rdr_Array;	
+//int M2k_INS_PCN_Array;	//added in 1.65 for INS Display Mode	INS arrays obsolete in 2.55
+//int	M2k_INS_PCN_Cur;	
+//int M2k_INS_PSM_Array;	//added in 1.66 for INS Functional Mode
+//int	M2k_INS_PSM_Cur;	
+int	M2k_CMProg_Array;	//added in 2.44
+int	M2k_LCON;			//added in 2.46
+
+
+int DCS_M2000C(int led, int sp)
+{
+printf("DCS Mirage 2000C\xa");
+
+if (WarthogStick > 0)
+	{
+	MapKeyR(&Joystick,	S2, EXEC("DCS_M2000C_Init();"));
+	}
+else
+	{
+	MapKeyR(&HCougar,	S2, EXEC("DCS_M2000C_Init();"));
+	}
+if (sp > 0)	PlayWav("m2000c.wav");
+if (led > 0)
+	{
+	//Lights_ALL(1);	//indicates M-2000C profile selected
+	Lights_Four(1,1,0,1,	ProfileSwapDelay+LED_Delay);
+	}
+}
+
+int	SetMenu_M2000C()
+{
+Set_Acft_Array_Cur(2520);
+}
+
+
+int DCS_M2000C_Init()
+{
+Determine_Differential_Braking(DiffBraking_Enabled,CougarToeBrakes);
+
+FkeyPress				=	1;	//added in 2.02 to prevent Commswitch key activation on profile load.
+GraceFlag				=	0;
+Eng_Start_x				=	0;
+Eng_Stop_x				=	0;
+Starter_Ind_x			=	0;
+MFD_Eng_Start			=	0;
+ProfID					=	2520;
+FixedGear				=	0;
+Helicopter				=	0;
+	HeloRotateMicrostick=	1;
+	CenterPositRudder	=	CenterPositRudder_DX;
+T6WheelBrake			=	0;
+TriggerZoomEnabled		=	2;
+GearCycleTimeDn			=	Gear_Deploy_M2000C;
+GearCycleTimeUp			=	Gear_Retract_M2000C;
+BrakeOnCycleTime		=	Airbrake_Out_M2000C;
+BrakeOffCycleTime		=	Airbrake_In_M2000C;
+XYAxisTrim				=	0;					//added in 1.34
+	JoyXTrim			=	0;					//added in 1.34
+	JoyYTrim			=	0;					//added in 1.34
+DMS_SnapView			=	0;					//added in 1.34
+WheelBrakeFull			=	1;					//added in 1.35
+ToeBrakesAvailable		=	2;					//added in 1.40, change to 2 once analog TDC in game;2 applies a modifier to deconflict with SC
+S4AnalogBrake			=	JoyAsAnalogBrake;	//added in 1.33
+AnalogParkingBrake		=	0;					//use actual parking brake with wheelbrakes + T10/SPDF
+S4asNWS					=	0;					//NWS is toggle
+S3holdNWS 				= 	0;	//added in 2.05
+NVG_Capable				=	1;					//added in 1.40
+AB_Capable				=	1;					//added in 1.61
+Adjust_Backlighting		=	Adjust_Backlight_M2000C;	//added in 1.62
+NS430_Enabled			=	NS430_Installed*NS430_Enabled_M2000C;	//added in 2.21
+CrewCount				=	1;
+StationChangeModifier	=	0;
+WH_Use_TQS				=	0;	//added in 2.43
+Analog_TDC				=	1;	//added in 2.43
+EngineCount				=	1;	//LZ for emergency throttle (exception added to helicopter argument in DCS_Axis_Init()
+Airbrake_Type_Cur		=	Airbrake_Type_M2000C;	//added in 2.43
+CommInitType			=	2;	//0 for none/custom, 1 for single channel (P-51), 2 for simple (dual channel), 3 for complex (3 channel).  added in 2.43
+StnCheckDisabled		=	2;	//added in 2.43.  Forced for single seat
+CurrentStation 			=	1;	//moved here in 2.43
+
+
+M2k_Scan_Width_Array	=	SEQ(	M2k_Scan_60,
+									M2k_Scan_30,
+									M2k_Scan_15);
+M2k_Scan_Bars_Array		=	SEQ(	M2k_Bars_4,
+									M2k_Bars_2,
+									M2k_Bars_1);
+M2k_Scope_Array			=	SEQ(	M2k_Radar_PPI,
+									M2k_Radar_B);
+M2k_TDC_Mode_Array		=	SEQ(	M2k_TDC_S,
+									M2k_TDC_Z);																	
+M2k_PRF_Array			=	SEQ(	M2k_PRF_High,
+									M2k_PRF_Int,
+									M2k_PRF_Low);
+M2k_HSI_Mode_Array		=	SEQ(	M2k_HSI_Mode_1_NavCv,
+									M2k_HSI_Mode_2_Nav,
+									M2k_HSI_Mode_3_TAC,
+									M2k_HSI_Mode_4_VAD,
+									M2k_HSI_Mode_5,
+									M2k_HSI_Mode_6,
+									M2k_HSI_Mode_7_TEL);
+M2k_530_Sw_Array		=	SEQ(	M2k_530_Left,
+									M2k_530_Right,
+									M2k_530_Auto);	//Auto set as 2 to allow toggle b/t l/r
+M2k_Vent_Sw_Array		=	SEQ(	M2k_Vent_Sw_Off,
+									M2k_Vent_Sw_Left,
+									M2k_Vent_Sw_Right);
+M2k_Rdr_Array			=	SEQ(	M2k_Radar_On,
+									M2k_Radar_Stby,
+									M2k_Radar_Warm,
+									M2k_Radar_Off);	//array is "backward" to allow on/standby toggle with abs(cur-1)
+//M2k_INS_PCN_Array		=	SEQ(	M2k_INS_PCN_RDTD,		//0
+//									M2k_INS_PCN_BUT_LG,		//1
+//									M2k_INS_PCN_BUT_ALT,	//2
+//									M2k_INS_PCN_BUT_CPDP,	//3
+//									M2k_INS_PCN_DRLT,		//4
+//									M2k_INS_PCN_TRVS,		//5
+//									M2k_INS_PCN_DVFV,		//6
+//									M2k_INS_PCN_DEC,		//7
+//									M2k_INS_PCN_BAD_POLAR,	//8
+//									M2k_INS_PCN_BAD_ALT,	//9 
+//									M2k_INS_PCN_BAD_LG);	//10 (~)								
+//M2k_INS_PSM_Array		=	SEQ(	M2k_INS_PSM_AR,			//0
+//									M2k_INS_PSM_VEI,		//1
+//									M2k_INS_PSM_CAL,		//2
+//									M2k_INS_PSM_TST,		//3
+//									M2k_INS_PSM_ALN,		//4
+//									M2k_INS_PSM_ALCM,		//5
+//									M2k_INS_PSM_NAV	,		//6
+//									M2k_INS_PSM_SEC);		//7
+									
+M2k_CMProg_Array		=	SEQ(	M2k_Decoy_ProgOff,		//0
+									M2k_Decoy_Prog1,		//1
+									M2k_Decoy_Prog2,		//2
+									M2k_Decoy_Prog3,		//3
+									M2k_Decoy_Prog4,		//4
+									M2k_Decoy_Prog5,		//5
+									M2k_Decoy_Prog6,		//6
+									M2k_Decoy_Prog7,		//7
+									M2k_Decoy_Prog8,		//8
+									M2k_Decoy_Prog9,		//9
+									M2k_Decoy_Prog10,		//10
+									M2k_Decoy_Semi,			//11
+									M2k_Decoy_Auto,			//12
+									M2k_D2M_Off,			//13
+									M2k_D2M_On,				//14
+									M2k_IFF_Off,			//15
+									M2k_IFF_Sector,			//16
+									M2k_IFF_Cont			//17
+									);	//be sure to increment index in M2k_CMProg_Set() if adding more.
+									
+
+
+//error traps to prevent OOB discrete calls
+if 		(Scan_Bar_Set_M2000C > 2)	Scan_Bar_Set_M2000C = 2;
+else if (Scan_Bar_Set_M2000C < 0)	Scan_Bar_Set_M2000C = 0;
+if 		(Scan_Width_Set_M2000C > 2)	Scan_Width_Set_M2000C = 2;
+else if (Scan_Width_Set_M2000C < 0)	Scan_Width_Set_M2000C = 0;
+if		(VTB_Sw_M2k > 4)			VTB_Sw_M2k = 4;
+else if (VTB_Sw_M2k < 1)			VTB_Sw_M2k = 1;
+
+printf("Done\xa Execute DCS M-2000C Config (Profile v%i.%i):\xa",MajorVersion,MinorVersion);
+
+AirBrake_Init(AirBrkFlash);	//moved to individual modules in 1.22 
+if (!SuppressWavInit) DeferCall(2550,&DX_Airbrake_Type_Set,Airbrake_Type_Cur); //changed to defercall in 2.45; 2550 for 1550 calling mirage +1000 selected+interval
+else DX_Airbrake_Type_Set(Airbrake_Type_Cur,0);	//suppress wav
+PlayWavSel(ProfID,abs(Init_Run - 1),DCSFP_Enabled,MFDisplayEnabled);	//added in 1.61, DCSFP added in 2.05, MFDisplay added in 2.29
+Pause_TrackIR(0);
+MFD_Init(ProfID);
+M2k_Array_Init(GearDn_Ind_Default);
+	printf("   Map HOTAS for DCS M-2000C Config:\xa");
+	DCS_Axis_Init(ProfID,EngineCount,Analog_TDC);
+if (WarthogStick > 0)
+	{
+		printf("      Warthog Stick Button Mapping:\xa");
+			printf("         Shift Commands: S3  momentary...");
+				if (WarthogThrottle > 0) SetShiftButton(&Joystick, S3, &Throttle, 0, 0);
+				else	SetShiftButton(&Joystick, S3, &HCougar, 0, 0);
+				MapKey	(&Joystick,	S3,	BTN_S3P);	//use until IFF implemented on M2000C (and then only if IFF requires sustained S3)
+				MapKeyR	(&Joystick,	S3,	BTN_S3R);
+			printf("...Done!\xa");	
+			printf("         Cougar Stick Buttons...");	
+				
+				MapKeyIO(&Joystick, TG1, BTN_TG1PI_TGZ, BTN_TG1PO_TGZ);
+				MapKeyRIO(&Joystick,TG1, BTN_TG1RI_TGZ, BTN_TG1RO_TGZ);				//ActKey(DX1) added in 1.21 to force DX1 release if stuck
+
+				MapKey	(&Joystick, TG2, DX6);
+//				MapKeyR	(&Joystick, TG2, 0);
+				//MapKeyIO(&Joystick, S1,	TEMPO(UP+DX4,DOWN+DX4,DefTempo),	TEMPO(DX5,	DX4,	DefTempo));	//S1 in M2k_S1_Set()
+				MapKey	(&Joystick, S2, DX2);
+				MapKeyR	(&Joystick,	S2, 0);
+				MapKeyIO(&Joystick, S4, BTN_S4PI, BTN_S4PO);	//Chain allows DX4 and wheelbrakes; diffbraking added in 0.24, DX30 removed, DX4 moved to Diffbraking in 0.32
+				MapKeyRIO(&Joystick, S4, 0, BTN_S4R);
+			printf("...Done!\xa");	
+	}
+else
+	{
+		printf("      Button Mapping:\xa");
+			printf("         Shift Commands: S3  momentary...");
+				SetShiftButton(&HCougar, S3, &HCougar, 0, 0);
+				MapKey	(&HCougar,	S3,	BTN_S3P);	//use until IFF implemented on M2000C (and then only if IFF requires sustained S3)
+				MapKeyR	(&HCougar,	S3,	BTN_S3R);
+			printf("...Done!\xa");	
+			printf("         Cougar Stick Buttons...");	
+				
+				MapKeyIO(&HCougar, TG1, BTN_TG1PI_TGZ, BTN_TG1PO_TGZ);
+				MapKeyRIO(&HCougar,TG1, BTN_TG1RI_TGZ, BTN_TG1RO_TGZ);				//ActKey(DX1) added in 1.21 to force DX1 release if stuck
+
+				MapKey(&HCougar, TG2, DX6);
+//				MapKeyR(&HCougar, TG2, 0);
+				//MapKeyIO(&HCougar, S1, TEMPO(UP+DX4,DOWN+DX4,DefTempo),	TEMPO(DX5,	DX4,	DefTempo));		//S1 in M2k_S1_Set()
+				MapKey(&HCougar, S2, DX2);
+				MapKeyR	(&HCougar,	S2, 0);
+				MapKeyIO(&HCougar, S4, EXEC("S3S4Shifted();"), EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,0);"));	//Chain allows DX4 and wheelbrakes; diffbraking added in 0.24, DX30 removed, DX4 moved to Diffbraking in 0.32
+				MapKeyRIO(&HCougar, S4, 0, EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,1);"));
+			printf("...Done!\xa");	
+	}
+	
+			H1_Init(TrackIR, PadlockEnabled, ProfID, XYAxisTrim);	//moved to individual routines in 1.27 for trim reset removal on helos, added XYAxisTrim in 1.34
+			CommState_Off(1,ProfID,1,0,1);		//sets hats 2-4 to DX functions, 3 partially to SnapViews
+if (WarthogThrottle > 0)
+	{
+			printf("         Throttle Buttons...");	
+				MapKey	(&Throttle, SC, DX19);
+//				MapKeyR	(&Throttle, SC, 0);							//Added in 0.51 to prevent P-51D CommState Release.
+
+				MapKeyIO(&Throttle, CSR,	TEMPO(M2k_TDC_Up,M2k_TDC_Rt,DefTempo),	EXEC("M2k_Scan_Width_Cycle(3);"));	// /I VAD with DX30
+				MapKeyIO(&Throttle, CSL,	TEMPO(M2k_TDC_Dn,M2k_TDC_Lt,DefTempo),	EXEC("M2k_Scan_Width_Cycle(-1);"));	
+
+				MapKey	(&Throttle, CSU,	CHAIN(DX31,DX32,D(ModDelay),DXHATUP));
+				MapKey	(&Throttle, CSD,	CHAIN(DX31,DX32,D(ModDelay),DXHATDOWN));
+
+				MapKey	(&Throttle, LTB,	DX24);	//TEMPO(DX24,Smoke,LongTempo),	DX24);		//Chaff, jammer or Smoke (T) for emer throttle
+//				MapKeyR	(&Throttle, LTB,	0);
+				
+
+				MapKeyIO(&Throttle,	LDGH,	TEMPO(M2k_EmerJett,EXEC("EjectCheckLDGH(ProfID);"),DefTempo),	TEMPO(M2k_MasterCaution_Reset, M2k_FBW_Reset, LongTempo)	);	//TEMPO(M2k_MasterCaution_Reset,M2k_Lights_Test,DefTempo));
+				MapKeyIO(&Throttle,	APENG,	Autopilot,	TEMPO(Weapon_Select,	Radar_ELINT,	DefTempo)	);	//A for A mode, Weapon (D) for DEC, and ELINT (I) for VISU
+											//M2k_EmerJett,CHAIN(DX30,D(ModDelay),DX24)); //shift DX for jammer toggle
+				
+//				MapKeyIO(&Throttle,	CHF,	TEMPO(M2k_HUD_Altim_Rdr, Gear_Dn,GearDnTempo),		M2k_Radar_Rng_Incr);
+				MapKeyIO(&Throttle,	CHB,	TEMPO(M2k_HUD_Altim_Baro,Gear_Up,GearUpTempo),		TEMPO(M2k_Radar_Rng_Decr,M2k_EmerThr_Decr,DefTempo)	);
+//				MapKeyR	(&Throttle,	CHF,	0);	//Added for F-86 in 1.69
+//				MapKeyR	(&Throttle,	CHB,	0);	//Added for F-86 in 1.69
+
+				M2k_PS_Set(GearDn_Ind_Default);		//added in 1.66 for context sensitive Pinky switch
+			if (WHIdle_Enabled > 0)
+				{			
+				MapKeyIO(&Throttle,	IDLERON,	0,PULSE+Engines_Stop);
+				MapKeyIO(&Throttle,	IDLEROFF,	0,PULSE+Engines_Start);
+				}
+				
+//				MapKey	(&Throttle,	IDLELON,	0);
+//				MapKey	(&Throttle,	IDLELOFF,	0);
+				
+			
+//				MapKey	(&Throttle,	EACOFF,		0);
+				MapKey	(&Throttle,	EACON,		DX26);	//master arm
+				MapKey	(&Throttle,	RDRNRM,		DX25);	//gun arm
+//				MapKey	(&Throttle,	RDRDIS,		0);	
+
+				MapKey	(&Throttle,	APPAT,		DX13);	//0,EXEC("M2k_Scan_Bars_Cycle(0);"));
+//				MapKey	(&Throttle,	APAH,		0);		//0,TEMPO(0,EXEC("M2k_Scan_Bars_Cycle(1);"),DoubleTap)	);
+				MapKey	(&Throttle,	APALT,		DX14);	//0,EXEC("M2k_Scan_Bars_Cycle(2);"));	
+
+				MapKeyIO(&Throttle,	EFLNORM,	0,EXEC("M2k_Scope_Cycle(0);")	);	//DX16);
+//				MapKeyR	(&Throttle,	EFLNORM,	0);
+				MapKeyIO(&Throttle,	EFLOVER,	0,EXEC("M2k_Scope_Cycle(1);")	);	//rem out
+				MapKey	(&Throttle,	EFRNORM,	DX18);	//0,PULSE+M2k_TDC_S);
+//				MapKeyR	(&Throttle,	EFRNORM,	0);
+//				MapKey	(&Throttle,	EFROVER,	0);		//0,PULSE+M2k_TDC_Z);
+				
+				MapKeyIO(&Throttle,	EOLIGN,		PULSE+Drogue_Chute,	TEMPO(0,CHAIN(PULSE+Drogue_Chute,EXEC("GraceFlag = 1;")),DefTempo));	//graceflag to prevent cycle to Police Light On after push
+				MapKeyIO(&Throttle,	EOLNORM,	0,EXEC("if (!GraceFlag) ActKey(KEYON+PULSE+M2k_PoliceLts_On); else ActKey(KEYON+PULSE+M2k_PoliceLts_Off);GraceFlag = 0;")	);
+				MapKeyIO(&Throttle,	EOLMOTOR,	0,PULSE+M2k_PoliceLts_Off);		
+//				MapKeyR	(&Throttle,	EOLIGN,		0);
+				
+				MapKeyIO(&Throttle,	EORIGN,		TEMPO(EXEC("M2k_Rdr_Cycle(abs(M2k_Rdr_Cur-1));GraceFlag = 1;"),EXEC("M2k_Rdr_Cycle(2);GraceFlag = 1;"),DefTempo),	//GraceFlag set to 1 even on long so that radar cycles to warm on command (and only once)
+												TEMPO(CHAIN(DX30,EXEC("M2k_Rdr_Cycle(1);GraceFlag = 1;")), CHAIN(DX30,EXEC("M2k_Rdr_Cycle(0);GraceFlag = 1;")), DefTempo	)	);	//sustained DX30, GraceFlag to prevent cycling back to Warm, Null /I allows cycling to warm
+				MapKeyIO(&Throttle,	EORNORM,	CHAIN(D(ModDelay),EXEC("if (!GraceFlag) M2k_Rdr_Cycle(2); GraceFlag = 0;")),	CHAIN(DOWN+DX30,D(ModDelay),EXEC("if (!GraceFlag) M2k_Rdr_Cycle(2);GraceFlag = 0;"),D(KBDelay+ModDelay),UP+DX30)	);	//GraceFlag should prevent cycling back to 2 after 0/1 cycle
+				MapKeyIO(&Throttle,	EORMOTOR,	0,	CHAIN(DOWN+DX30,D(ModDelay),EXEC("M2k_Rdr_Cycle(3);"),D(KBDelay+ModDelay),UP+DX30)	);	//long DX30 pulse
+				MapKeyRIO(&Throttle,EORIGN,		0,	EXEC("DeferCall(KBDelay,&Grace_Flag,0);"));	//Reset GraceFlag shortly after release of IGN
+				
+				//Slats
+				MapKey	(&Throttle,	FLAPU,	PULSE+M2k_Slats_Dn);
+				MapKey	(&Throttle,	FLAPD,	PULSE+M2k_Slats_Up);
+//				MapKeyR	(&Throttle,	FLAPU,	0);
+//				MapKeyR	(&Throttle,	FLAPD,	0);
+				MapKeyIO(&Throttle,	FLAPM,	0,	TEMPO(0,PULSE+M2k_Slats_Auto, DoubleTap));	
+			
+
+	}
+else
+	{
+			printf("         TQS Buttons...");	
+//				MapKeyIO(&HCougar, T1, TEMPO(M2k_PoliceLts_Off,M2k_PoliceLts_On, DefTempo),	DX19);
+				MapKey	(&HCougar, T1, DX19);
+
+//				MapKeyR	(&HCougar, T1, 0);							//Added in 0.51 to prevent P-51D CommState Release.
+
+				MapKeyIO(&HCougar, T6,	TEMPO(DX24, EXEC("EjectCheckT6(ProfID);"), DefTempo),TEMPO(DX24,ECM,DefTempo));		//Will check for ejection parameters if T6+S3 held for 500ms.
+//				MapKeyR	(&HCougar, T6,	0);
+
+	}
+	
+	Simple_Comm_Init(ProfID,1,0);			//Set Comms routine (DX21, PTTLED, and simple commmenu (\)
+//	DeferCall(2550,&DX_Airbrake_Type_Set,Airbrake_Type_Cur); //changed to defercall in 2.45; 2550 for 1550 calling mirage +1000 selected+interval, moved up top in 2.45a to honor SuppressWavInit
+	M2000C_DF_Init(WarthogThrottle);
+	printf("...Done!\xa");
+printf("   HOTAS Mapping Complete.\xa");			
+
+//DX_MFD_Init();
+
+
+FlapState=0;				//for future implementation
+TriggerZoom_state  = 0;		//reset TriggerZoom
+ActKey(DX1);				//just in case DX1 lingers from trigger activation
+//Lights_ALL(0);				//Says Init Complete
+	DeferCall(LED_Delay,&Lights_RLED2,0);	//Number changed in 1.28
+//	if (WarthogThrottle > 0) DeferCall(2*LED_Delay,&Lights_LLED1,0);
+	DeferCall(3*LED_Delay,&Lights_RLED1,0);
+	if ((Adjust_Backlighting > 0) & (ParkBrake_EngSt_M2000C > 0) & (MFD_Count > 1)) DeferCall(4*LED_Delay,&D_MFDWHT_Pwr,MFD_Default_Setting);	// ParkBrake_EngSt_M2000C added in 1.65, MFD_Count added in 2.43
+	else DeferCall(4*LED_Delay,&Backlight_Max_Init,0);
+	if (WarthogThrottle > 0)
+		{
+		DeferCall(7*LED_Delay,&Lights_WHT1,0);
+		//DeferCall(7*LED_Delay,&Lights_WHT1,0);
+		DeferCall(8*LED_Delay,&M2k_WHT_PRF_LED,1);	//M2k_PRF_Cur);
+		}
+
+if (Init_Run == 0) Gear_Ind_Init(GearDn_Ind_Default,FixedGear,Helicopter,AirBrkFlash);
+//S3_NWS(GearDn_Ind_Default);		//re-enable when IFF implemented on M2000C (and then only if IFF requires sustained S3)
+
+if (GearDn_Ind_Default > 0) Map_Cougar_ToeBrakes(ToeBrakesAvailable);//added in 1.40;
+else	Map_Cougar_ToeBrakes(0);
+
+printf(" M-2000C Config Complete!\xa");	
+Set_Acft_Array_Cur(ProfID);
+}
+
+int M2000C_HCS_Init(int prof = 2520, int force = 0)	//force added in 1.69 as passthru to allow for initial TGZ_MapGearDn if TGZ disabled. 
+{
+//		if (Script_Debug) printf("         Hat2 (TMS)...");	
+			MapKey	(&HCougar,	H2U,	DX7);	
+			//if (Radar_Export_M2000C > 0) 	
+					MapKeyIO(&HCougar,	H2D,	TEMPO(DX9, M2k_VTB_On_Export,DefTempo),	DX9);
+			if (WarthogThrottle > 0)
+				{
+				MapKeyIO(&HCougar,	H2R,	TEMPO(CHAIN(USB_LEFTSHIFT,D(ModDelay),M2k_Radar_Rng_Incr),	CHAIN(USB_LEFTSHIFT,D(ModDelay),REXEC(8, KBDelay, "ActKey(KEYON+PULSE+M2k_Radar_Rng_Incr);")),	DefTempo),	//LSHF for APAlt
+											TEMPO(CHAIN(DX30,D(ModDelay),DX7),	CHAIN(DX30,USB_RIGHTSHIFT,D(ModDelay),REXEC(8, Switch_Delay, "ActKey(KEYON+PULSE+M2k_Radar_Rng_Incr);")),	DefTempo)	);			//RSHF for Bingo											
+				MapKeyIO(&HCougar,	H2L,	TEMPO(CHAIN(USB_LEFTSHIFT,D(ModDelay),M2k_Radar_Rng_Decr),	CHAIN(USB_LEFTSHIFT,D(ModDelay),REXEC(8, KBDelay, "ActKey(KEYON+PULSE+M2k_Radar_Rng_Decr);")),	DefTempo),
+											TEMPO(CHAIN(DX30,D(ModDelay),DX7),	CHAIN(DX30,USB_RIGHTSHIFT,D(ModDelay),REXEC(8, Switch_Delay, "ActKey(KEYON+PULSE+M2k_Radar_Rng_Decr);")),	DefTempo)	);
+				MapKeyR	(&HCougar,	H2R,	EXEC("StopAutoRepeat(8);"));
+				MapKeyR	(&HCougar,	H2L,	EXEC("StopAutoRepeat(8);"));
+				}
+			else
+				{
+				MapKeyIO(&HCougar,	H2R,	TEMPO(CHAIN(USB_RIGHTCONTROL,D(ModDelay),M2k_Radar_Rng_Incr),	CHAIN(USB_LEFTSHIFT,D(ModDelay),REXEC(8, Switch_Delay, "ActKey(KEYON+PULSE+M2k_Radar_Rng_Incr);")),	DefTempo),
+											CHAIN(DX30,TEMPO(DX7,	M2k_TDC_Rt,	DefTempo))	);	//RCTL for Range while shifted, DX30+DX7 for TWS/STT
+				MapKeyIO(&HCougar,	H2L,	TEMPO(CHAIN(USB_RIGHTCONTROL,D(ModDelay),M2k_Radar_Rng_Decr),	CHAIN(USB_LEFTSHIFT,D(ModDelay),REXEC(8, Switch_Delay, "ActKey(KEYON+PULSE+M2k_Radar_Rng_Decr);")),	DefTempo),
+											CHAIN(DX30,TEMPO(DX7,	M2k_TDC_Lt,	DefTempo))		);
+//				MapKey	(&HCougar,	H2R,	DX8);											
+//				MapKey	(&HCougar,	H2L,	DX10);
+				MapKeyR	(&HCougar,	H2R,	0);											
+				MapKeyR	(&HCougar,	H2L,	0);
+				}
+//		if (Script_Debug) printf("Done!\xa");	
+//		if (Script_Debug) printf("         Hat3 (");
+			//MapKeyIO(&HCougar,	H3D,	Std_SnapView2,	DX13);
+			if (TrackIR < 2)
+				{
+//				if (Script_Debug) printf("SnapViews)...");
+				MapKeyIO(&HCougar, 	H3U,	TEMPO(M2k_Hide_Stick,	Gear_Up,	GearUpTempo),	Shift_SnapView5);	
+				MapKeyIO(&HCougar, 	H3R,	Std_SnapView6,	Shift_SnapView3);		//A10C_SnapView3);		//SnapView3 is INS Direct Entry
+				MapKeyIO(&HCougar, 	H3L,	Std_SnapView4,	Shift_SnapView1);
+				}	
+			else
+				{
+				if ((WarthogThrottle > 0))	//radar scan/scope already on throttle, so lights can be primary
+					{
+//					if (Script_Debug) printf("VR - Ext Lights)...");
+					MapKeyIO(&HCougar, 	H3U,	TEMPO(M2k_FuelLts_Off,	M2k_Hide_Stick,		DefTempo),
+												TEMPO(M2k_FuelLts_Off,	M2k_FuelLts_On,		DefTempo));	//unshifted long for night, short for off (shifted, else day)
+					MapKeyIO(&HCougar, 	H3R,	M2k_NavLts_Off,			TEMPO(M2k_NavLts_Dim,M2k_NavLts_On,DefTempo)	);
+					MapKeyIO(&HCougar, 	H3L,	M2k_FormLts_Off,		TEMPO(M2k_FormLts_Dim,M2k_FormLts_On,DefTempo)	);	
+					MapKeyIO(&HCougar, 	H3D,	TEMPO(M2k_AntiColl_Off,	M2k_Hide_Throttle,	DefTempo),
+												TEMPO(M2k_AntiColl_Dim,	M2k_AntiColl_On,	DefTempo));
+					}
+				else
+					{
+//					if (Script_Debug) printf("VR - Radar/Ext Lights)...");
+					MapKeyIO(&HCougar, 	H3U,	TEMPO(M2k_Hide_Stick,	Gear_Up,	GearUpTempo),		TEMPO(EXEC("M2k_PRF_Cycle(3,1);"), 			EXEC("M2k_PRF_Cycle(0);"), 			DefTempo)	);	//Long HPRF
+					MapKeyIO(&HCougar, 	H3L,	TEMPO(M2k_FormLts_Toggle,M2k_FormLts_Off,DefTempo),		TEMPO(EXEC("M2k_Scan_Bars_Cycle(3,1);"),	EXEC("M2k_Scan_Bars_Cycle(Scan_Bar_Set_M2000C);"), 		DefTempo)	);	//Long Max width
+					MapKeyIO(&HCougar, 	H3R,	TEMPO(M2k_NavLts_Toggle,M2k_NavLts_On,DefTempo),		TEMPO(EXEC("M2k_Scan_Width_Cycle(3,1);"),	EXEC("M2k_Scan_Width_Cycle(Scan_Width_Set_M2000C);"), 	DefTempo)	);	//Long Max Bars
+					//MapKeyIO(&HCougar, 	H3D,	TEMPO(M2k_AntiColl_Toggle,M2k_AntiColl_On,DefTempo),	EXEC("M2k_Scope_Cycle(2,1);")		);
+					}
+				}			
+			TriggerZoom_MapGearDn(TriggerZoom_state, prof, 0, force);
+//		if (Script_Debug) printf("Done!\xa");	
+//		if (Script_Debug) printf("         Hat4 (Special Modes)...");				
+			MapKeyIO(&HCougar,	H4U,	TEMPO(DX15,EXEC("M2k_CMProg_Set(CMProg_H4UL_M2000C);"),DefTempo),	DX15);
+//			MapKeyR	(&HCougar,	H4U, 	0);			//added to cancel helo trim
+			MapKeyIO(&HCougar,	H4D,	TEMPO(DX17,EXEC("M2k_CMProg_Set(CMProg_H4DL_M2000C);"),DefTempo),	DX17);
+//			MapKeyR	(&HCougar,	H4D,	0);			//added to cancel helo trim
+			MapKeyIO(&HCougar,	H4R,	TEMPO(M2k_Decoy_Prog_Incr,EXEC("M2k_CMProg_Set(CMProg_H4R_M2000C);"),DefTempo),	TEMPO(M2k_Wpt_Next,M2k_ECM_Norm,DefTempo));	//replaced altimeter with decoy program in 2.13, added jammer in 2.42
+			MapKeyIO(&HCougar,	H4L,	TEMPO(M2k_Decoy_Prog_Decr,EXEC("M2k_CMProg_Set(CMProg_H4L_M2000C);"),DefTempo),	TEMPO(M2k_Wpt_Prev,M2k_ECM_Stby,DefTempo));
+//		if (Script_Debug) printf("Done!\xa");	
+}
+int M2000C_WHS_Init(int prof = 2520, int force = 0)	//force added in 1.69 as passthru to allow for initial TGZ_MapGearDn if TGZ disabled. must force if no wh throttle
+{
+//		if (Script_Debug) printf("         Hat2 (TMS)...");	
+			MapKey	(&Joystick,	H2U,	DX7);	
+			//if (Radar_Export_M2000C > 0) 	
+					MapKeyIO(&Joystick,	H2D,	TEMPO(DX9, M2k_VTB_On_Export,DefTempo),	DX9);
+			//else	MapKeyIO(&Joystick,	H2D,	TEMPO(DX9, M2k_VTB_On, DefTempo),	DX9);			
+			if (WarthogThrottle > 0)
+				{
+				MapKeyIO(&Joystick,	H2R,	TEMPO(CHAIN(USB_LEFTSHIFT,D(ModDelay),M2k_Radar_Rng_Incr),	CHAIN(USB_LEFTSHIFT,D(ModDelay),REXEC(8, KBDelay, "ActKey(KEYON+PULSE+M2k_Radar_Rng_Incr);")),	DefTempo),	//LSHF for APAlt
+											TEMPO(CHAIN(DX30,D(ModDelay),DX7),	CHAIN(DX30,USB_RIGHTSHIFT,D(ModDelay),REXEC(8, Switch_Delay, "ActKey(KEYON+PULSE+M2k_Radar_Rng_Incr);")),	DefTempo)	);			//RSHF for Bingo											
+				MapKeyIO(&Joystick,	H2L,	TEMPO(CHAIN(USB_LEFTSHIFT,D(ModDelay),M2k_Radar_Rng_Decr),	CHAIN(USB_LEFTSHIFT,D(ModDelay),REXEC(8, KBDelay, "ActKey(KEYON+PULSE+M2k_Radar_Rng_Decr);")),	DefTempo),
+											TEMPO(CHAIN(DX30,D(ModDelay),DX7),	CHAIN(DX30,USB_RIGHTSHIFT,D(ModDelay),REXEC(8, Switch_Delay, "ActKey(KEYON+PULSE+M2k_Radar_Rng_Decr);")),	DefTempo)	);
+//				MapKeyIO(&Joystick,	H2R,	REXEC(8, Switch_Delay, "ActKey(KEYON+PULSE+M2k_APAlt_Incr);"),DX8);											
+//				MapKeyIO(&Joystick,	H2L,	REXEC(8, Switch_Delay, "ActKey(KEYON+PULSE+M2k_APAlt_Decr);"),DX10);
+				MapKeyRIO(&Joystick,H2R,	EXEC("StopAutoRepeat(8);"),0);
+				MapKeyRIO(&Joystick,H2L,	EXEC("StopAutoRepeat(8);"),0);
+				}
+			else
+				{
+				MapKeyIO(&HCougar,	H2R,	TEMPO(CHAIN(USB_RIGHTCONTROL,D(ModDelay),M2k_Radar_Rng_Incr),	CHAIN(USB_LEFTSHIFT,D(ModDelay),REXEC(8, Switch_Delay, "ActKey(KEYON+PULSE+M2k_Radar_Rng_Incr);")),	DefTempo),
+											CHAIN(DX30,TEMPO(DX7,	M2k_TDC_Lt,	DefTempo))		);	//RCTL for Range while shifted, DX30+DX7 for TWS/STT
+				MapKeyIO(&HCougar,	H2L,	TEMPO(CHAIN(USB_RIGHTCONTROL,D(ModDelay),M2k_Radar_Rng_Decr),	CHAIN(USB_LEFTSHIFT,D(ModDelay),REXEC(8, Switch_Delay, "ActKey(KEYON+PULSE+M2k_Radar_Rng_Decr);")),	DefTempo),
+											CHAIN(DX30,TEMPO(DX7,	M2k_TDC_Lt,	DefTempo))		);
+//				MapKeyIO(&Joystick,	H2R,	CHAIN(USB_RIGHTCONTROL,D(ModDelay),M2k_Radar_Rng_Incr),	CHAIN(DX30,D(ModDelay),DX7)	);	//RCTL for radar rng while shifte, DX30+DX7 for TWS/STT
+//				MapKeyIO(&Joystick,	H2L,	CHAIN(USB_RIGHTCONTROL,D(ModDelay),M2k_Radar_Rng_Decr),	CHAIN(DX30,D(ModDelay),DX7)	);
+//				MapKey	(&Joystick,	H2R,	DX8);											
+//				MapKey	(&Joystick,	H2L,	DX10);
+				MapKeyR	(&Joystick,	H2R,	0);											
+				MapKeyR	(&Joystick,	H2L,	0);
+				}
+//		if (Script_Debug) printf("Done!\xa");	
+//		if (Script_Debug) printf("         Hat3 (");
+			if (TrackIR < 2)
+				
+				{
+//				if (Script_Debug) printf("SnapViews)...");
+				if ((WarthogThrottle > 0))
+					{
+					MapKeyIO(&Joystick, 	H3U,	M2k_Hide_Throttle,	M2k_Hide_Stick);	//change to key
+					MapKeyIO(&Joystick,		H3D,	Std_SnapView2,	Shift_SnapView5);		
+					}
+				else
+					{
+					MapKeyIO(&Joystick, 	H3U,	TEMPO(M2k_Hide_Stick,	Gear_Up,	GearUpTempo),	Shift_SnapView5);	
+					//MapKeyIO(&Joystick,		H3D,	Std_SnapView2,	Shift_SnapView5);		
+					}
+				
+				MapKeyIO(&Joystick, 	H3R,	Std_SnapView6,	Shift_SnapView3);	//A10C_SnapView3);		//SnapView3 is INS Direct Entry
+				MapKeyIO(&Joystick, 	H3L,	Std_SnapView4,	Shift_SnapView1);	
+				}	
+			else
+				{
+				
+				if ((WarthogThrottle > 0))	//radar scan/scope already on throttle, so lights can be primary
+					{
+//					if (Script_Debug) printf("VR - Ext Lights)...");
+					MapKeyIO(&Joystick, 	H3U,	TEMPO(M2k_FuelLts_Off,	M2k_Hide_Stick,		DefTempo),
+													TEMPO(M2k_FuelLts_Off,	M2k_FuelLts_On,		DefTempo));	//unshifted long for night, short for off (shifted, else day)
+					MapKeyIO(&Joystick, 	H3R,	M2k_NavLts_Off,			TEMPO(M2k_NavLts_Dim,M2k_NavLts_On,DefTempo)	);
+					MapKeyIO(&Joystick, 	H3L,	M2k_FormLts_Off,		TEMPO(M2k_FormLts_Dim,M2k_FormLts_On,DefTempo)	);	
+					MapKeyIO(&Joystick, 	H3D,	TEMPO(M2k_AntiColl_Off,	M2k_Hide_Throttle,	DefTempo),
+													TEMPO(M2k_AntiColl_Dim,	M2k_AntiColl_On,	DefTempo));
+					}
+				else
+					{
+//					if (Script_Debug) printf("VR - Radar/Ext Lights)...");
+					MapKeyIO(&Joystick, 	H3U,	TEMPO(M2k_Hide_Stick,	Gear_Up,	GearUpTempo),		TEMPO(EXEC("M2k_PRF_Cycle(3,1);"), 			EXEC("M2k_PRF_Cycle(0);"), 								DefTempo)	);	//Long HPRF
+					MapKeyIO(&Joystick, 	H3L,	TEMPO(M2k_FormLts_Toggle,M2k_FormLts_Off,DefTempo),		TEMPO(EXEC("M2k_Scan_Bars_Cycle(3,1);"),	EXEC("M2k_Scan_Bars_Cycle(Scan_Bar_Set_M2000C);"), 		DefTempo)	);	//Long Max width
+					MapKeyIO(&Joystick, 	H3R,	TEMPO(M2k_NavLts_Toggle,M2k_NavLts_On,DefTempo),		TEMPO(EXEC("M2k_Scan_Width_Cycle(3,1);"),	EXEC("M2k_Scan_Width_Cycle(Scan_Width_Set_M2000C);"), 	DefTempo)	);	//Long Max Bars
+					//MapKeyIO(&Joystick, 	H3D,	TEMPO(M2k_AntiColl_Toggle,M2k_AntiColl_On,DefTempo),	EXEC("M2k_Scope_Cycle(2,1);")		);
+					}
+
+
+				}		
+			TriggerZoom_MapGearDn_WH(TriggerZoom_state, prof, 0, force);	
+//		if (Script_Debug) printf("Done!\xa");	
+//		if (Script_Debug) printf("         Hat4 (Special Modes)...");				
+			MapKeyIO(&Joystick,	H4U,	TEMPO(EXEC("M2k_CMProg_Set(CMProg_H4US_M2000C);"),EXEC("M2k_CMProg_Set(CMProg_H4UL_M2000C);"),DefTempo),	DX15);
+//			MapKeyR	(&Joystick,	H4U, 	0);			//added to cancel helo trim
+			MapKeyIO(&Joystick,	H4D,	TEMPO(EXEC("M2k_CMProg_Set(CMProg_H4DS_M2000C);"),EXEC("M2k_CMProg_Set(CMProg_H4DL_M2000C);"),DefTempo),	DX17);
+//			MapKeyR	(&Joystick,	H4D,	0);			//added to cancel helo trim
+			MapKeyIO(&Joystick,	H4P,	DX9,	CHAIN(DX30,D(ModDelay),DX15));		
+			MapKeyIO(&Joystick,	H4R,	TEMPO(M2k_Decoy_Prog_Incr,EXEC("M2k_CMProg_Set(CMProg_H4R_M2000C);"),DefTempo),	TEMPO(M2k_Wpt_Next,M2k_ECM_Norm,DefTempo));	//replaced altimeter with decoy program in 2.13, added jammer in 2.42.
+			MapKeyIO(&Joystick,	H4L,	TEMPO(M2k_Decoy_Prog_Decr,EXEC("M2k_CMProg_Set(CMProg_H4L_M2000C);"),DefTempo),	TEMPO(M2k_Wpt_Prev,M2k_ECM_Stby,DefTempo));
+//		if (Script_Debug) printf("Done!\xa");	
+}
+
+int M2000C_DF_Init(int wh)
+{
+if (wh > 0)
+	{
+	MapKey	(&Throttle, BSF,	DX11);	//0,PULSE+M2k_Cannon_Sel);
+	MapKey	(&Throttle, BSB,	DX12);	//0,PULSE+M2k_Magic_Sel);
+	MapKey	(&Throttle, BSM,	0);		//0,TEMPO(0,M2k_PCA_Sel, DoubleTap)	);	
+
+//	MapKeyIO(&Throttle, BSF,	0,EXEC("M2k_Scan_Width_Cycle(2);"));
+//	MapKeyIO(&Throttle, BSB,	0,EXEC("M2k_Scan_Width_Cycle(0);"));
+//	MapKeyIO(&Throttle, BSM,	0,TEMPO(0,EXEC("M2k_Scan_Width_Cycle(1);"), DoubleTap)	);	
+	
+	MapKeyR	(&Throttle,	BSF,	0);
+	MapKeyR	(&Throttle,	BSB,	0);
+	}
+else
+	{
+//	MapKeyIO(&HCougar, T7,	EXEC("M2k_PRF_Cycle(0);"),	EXEC("M2k_Scan_Width_Cycle(0);"));
+//	MapKeyIO(&HCougar, T8,	EXEC("M2k_PRF_Cycle(2);"),		EXEC("M2k_Scan_Width_Cycle(2);"));
+//	MapKeyIO(&HCougar, DFM,	TEMPO(0,EXEC("M2k_PRF_Cycle(1);"),DoubleTap),TEMPO(0,EXEC("M2k_Scan_Width_Cycle(1);"), DoubleTap));	
+
+	MapKey	(&HCougar, T7,	DX11);	//0,	PULSE+M2k_Cannon_Sel);
+	MapKey	(&HCougar, T8,	DX12);		//0,	PULSE+M2k_Magic_Sel);
+	MapKey	(&HCougar, DFM,	0);	//0,	TEMPO(0,PULSE+M2k_PCA_Sel,DoubleTap));	
+	
+	MapKeyR	(&HCougar, T7,	0);
+	MapKeyR	(&HCougar, T8,	0);
+	}
+}
+
+int	M2k_PS_Set(int gear)
+{
+if (WarthogThrottle > 0)
+	{
+	if (gear > 0) 
+		{
+		MapKeyIO(&Throttle,	PSF,	0,	PULSE+M2k_LdgLts_Land);
+		MapKeyIO(&Throttle,	PSB,	0,	PULSE+M2k_LdgLts_Off);
+		MapKeyIO(&Throttle,	PSM,	0,	TEMPO(0, PULSE+M2k_LdgLts_Taxi, DoubleTap)	);
+		
+		MapKeyIO(&Throttle,	APUON,		EXEC("M2k_RMFD_BottomRow_Set(1,GearState);"),	CHAIN(PULSE+M2k_Park_Brake_On,	EXEC("M2k_RMFD_BottomRow_Set(1,GearState);"))	);	// /I forces engstart on
+		MapKeyIO(&Throttle,	APUOFF,		EXEC("M2k_RMFD_BottomRow_Set(0,GearState);"),	CHAIN(PULSE+M2k_Park_Brake_Off,	EXEC("M2k_RMFD_BottomRow_Set(0,GearState);"))	);
+
+		}
+	else
+		{
+//		MapKeyIO(&Throttle,	PSF,	0,	EXEC("M2k_PRF_Cycle(0);"));
+//		MapKeyIO(&Throttle,	PSB,	0,	EXEC("M2k_PRF_Cycle(2);"));
+//		MapKeyIO(&Throttle,	PSM,	0,	TEMPO(0, EXEC("M2k_PRF_Cycle(1);"), DoubleTap)	);
+//		MapKeyIO(&Throttle,	PSF,	PULSE+M2k_PoliceLts_On,	EXEC("M2k_PRF_Cycle(0);"));
+//		MapKeyIO(&Throttle,	PSB,	PULSE+M2k_PoliceLts_Off,	EXEC("M2k_PRF_Cycle(2);"));
+//		MapKeyIO(&Throttle,	PSM,	0,	TEMPO(0, EXEC("M2k_PRF_Cycle(1);"), DoubleTap)	);
+		MapKeyIO(&Throttle,	PSF,	0,	EXEC("M2k_PRF_Cycle(0);"));
+		MapKeyIO(&Throttle,	PSB,	0,	EXEC("M2k_PRF_Cycle(2);"));
+		MapKeyIO(&Throttle,	PSM,	0,	TEMPO(0, EXEC("M2k_PRF_Cycle(1);"), DoubleTap)	);
+		
+		MapKeyIO(&Throttle,	APUON,		EXEC("M2k_RMFD_BottomRow_Set(1,GearState);"),	CHAIN(PULSE+M2k_Inflight_Start_On,	EXEC("M2k_RMFD_BottomRow_Set(1,GearState);"))	);	// forces engstart on
+		MapKeyIO(&Throttle,	APUOFF,		EXEC("M2k_RMFD_BottomRow_Set(0,GearState);"),	CHAIN(PULSE+M2k_Inflight_Start_Off,	EXEC("M2k_RMFD_BottomRow_Set(0,GearState);"))	);
+
+		}
+	}
+}
+
+int M2000C_MFD_Init(int gear = 1)	//argument added in 1.66 for RMFD bottom row
+{
+int rosb20i;
+int lbrtuo;
+int lbrtui;
+int lbrtdo;
+int lbrtdi;
+
+//===================================
+//		Standard MFD Buttons
+//===================================
+
+	printf("   Map Cougar Left  MFD (DX31)...");	
+//LOSB 1 in Init
+					MapKeyIO(&LMFD, OSB02,	TEMPO(DX_LOSB02,M2k_HUD_Pwr_On,DefTempo),			TEMPO(DX_LOSB02,PULSE+M2k_Visor_Toggle,DefTempo)	);
+					MapKeyIO(&LMFD, OSB03,	M2k_NVG_Stow,										TEMPO(DX_LOSB03,M2k_NVG_Mount,DefTempo)	);
+					MapKeyIO(&LMFD,	OSB04,	M2k_HUD_Decl_Off, DX_LOSB04);	//TEMPO(M2k_HUD_Decl_Off,M2k_HUD_Decl_On,	 DefTempo),	DX_LOSB04);
+//					MapKeyR	(&LMFD,	OSB04,	0);	//for A-10C and F-5E					
+					MapKeyIO(&LMFD, OSB05,	TEMPO(M2k_Aux_Sight_Off,M2k_Aux_Sight_On,DefTempo),	DX_LOSB05);
+//					MapKeyR	(&LMFD,	OSB05,	0);	//For F-5E
+//LOSB 6-10
+					MapKeyIO(&LMFD,	OSB06,	TEMPO(DX_LOSB06,CHAIN(USB_LEFTSHIFT,D(ModDelay),REXEC(8, KBDelay, "ActKey(KEYON+PULSE+M2k_Radar_Rng_Incr);")),DefTempo),DX_LOSB06);
+					MapKey	(&LMFD,	OSB07,	TEMPO(DX_LOSB07,CHAIN(USB_LEFTSHIFT,D(ModDelay),REXEC(8, KBDelay, "ActKey(KEYON+PULSE+M2k_Radar_Rng_Decr);")),DefTempo),DX_LOSB07);
+//					MapKeyR	(&LMFD,	OSB07,	0);	//for Bf109
+					MapKey	(&LMFD,	OSB08,	KB_LOSB08);
+					MapKey	(&LMFD,	OSB09,	DX_LOSB09);
+					
+					if (FBW_Discrete_M2k > 0)
+						MapKeyIO(&LMFD,	OSB10,	TEMPO(DOWN+DX16,UP+DX16,LongTempo),TEMPO(UP+DX10,DOWN+DX10,DefTempo)	);	//DX_LOSB10);	//M2k_FBW_Spin_Sw);
+					else
+						MapKeyIO(&LMFD,	OSB10,	TEMPO(0,M2k_FBW_Spin_Sw,LongTempo),M2k_FBW_Limiter_Toggle);
+
+//LOSB 11-15, 16
+					MapKeyIO(&LMFD,	OSB11,	EXEC("M2k_LCON_Set(4,250);"),	TEMPO(M2k_Stores5, EXEC("M2k_LCON_Set(4);"), DefTempo)	);	//M2k_LCON_Set for VTB functions added in 2.46 (4 is M/T)
+					MapKeyIO(&LMFD,	OSB12,	EXEC("M2k_LCON_Set(3,250);"),	TEMPO(M2k_Stores4, EXEC("M2k_LCON_Set(3);"), DefTempo)	);	//3 is C/Z
+					MapKeyIO(&LMFD,	OSB13,	EXEC("M2k_LCON_Set(2,250);"),	TEMPO(M2k_Stores3, EXEC("M2k_LCON_Set(2);"), DefTempo)	);	//2 is Rho/Theta
+					MapKeyIO(&LMFD,	OSB14,	EXEC("M2k_LCON_Set(1,250);"),	TEMPO(M2k_Stores2, EXEC("M2k_LCON_Set(1);"), DefTempo)	);	//1 is N
+					MapKeyIO(&LMFD,	OSB15,	M2k_Gun_Sel_AA_AG,	TEMPO(M2k_Stores1,M2k_Gun_Sel_AA_AG,DefTempo));
+
+
+//LOSB 17-19, BRT
+	if ((WarthogThrottle > 0))	// & (MFD_ExtLts_Pri_M2000C > 0))	//radar scan/scope already on throttle, so lights can be primary, option removed in 1.71
+					{
+					MapKeyIO(&LMFD,	OSB16,	M2k_FuelLts_Off,		TEMPO(M2k_FuelLts_Off,M2k_FuelLts_On,DefTempo)	);	//unshifted long for night, short for day (shifted off)
+					MapKeyIO(&LMFD,	OSB17,	M2k_FormLts_Off,		TEMPO(M2k_FormLts_Dim,M2k_FormLts_On,DefTempo)	);
+					MapKeyIO(&LMFD,	OSB18,	M2k_NavLts_Off,			TEMPO(M2k_NavLts_Dim,M2k_NavLts_On,DefTempo)	);
+					MapKeyIO(&LMFD,	OSB19,	M2k_AntiColl_Off,		TEMPO(M2k_AntiColl_Dim,M2k_AntiColl_On,DefTempo));
+				//BRT			
+					if (Combined_SelJett_M2000C > 0)
+						{
+						lbrtuo = TEMPO(M2k_SelJett_On, 	CHAIN(PULSE+M2k_SelJett_Cover_Open,	D(Switch_Delay),	PULSE+M2k_SelJett_On));	//master arm/gun arm on throttle base
+						lbrtdo = TEMPO(M2k_SelJett_Off, CHAIN(PULSE+M2k_SelJett_Off,		D(Switch_Delay),	PULSE+M2k_SelJett_Cover_Close));		
+						}					
+					else
+						{
+						lbrtuo = TEMPO(M2k_SelJett_On,  M2k_SelJett_Cover_Open,  DefTempo);	//master arm/gun arm on throttle base
+						lbrtdo = TEMPO(M2k_SelJett_Off, M2k_SelJett_Cover_Close, DefTempo);		
+						}
+					lbrtui = M2k_SelJett_Cover_Open;
+					lbrtdi = M2k_SelJett_Cover_Close;
+					}
+	else	//TQS
+					{
+					MapKeyIO(&LMFD,	OSB16,	TEMPO(M2k_FuelLts_Off,M2k_FuelLts_On,DefTempo),			TEMPO(EXEC("M2k_PRF_Cycle(3,1);"), 			EXEC("M2k_PRF_Cycle(0);"), 			DefTempo)	);	//fuel between off and night only; HPRF Long added in 2.43
+					MapKeyIO(&LMFD,	OSB17,	TEMPO(M2k_FormLts_Toggle,M2k_FormLts_On,DefTempo),		TEMPO(EXEC("M2k_Scan_Width_Cycle(3,1);"),	EXEC("M2k_Scan_Width_Cycle(Scan_Width_Set_M2000C);"), 	DefTempo)	);	//Long Max width added in 2.43
+					MapKeyIO(&LMFD,	OSB18,	TEMPO(M2k_NavLts_Toggle,M2k_NavLts_On,DefTempo),		TEMPO(EXEC("M2k_Scan_Bars_Cycle(3,1);"),	EXEC("M2k_Scan_Bars_Cycle(Scan_Bar_Set_M2000C);"), 	DefTempo)	);	//Long Max Bars added in 2.43
+					MapKeyIO(&LMFD,	OSB19,	TEMPO(M2k_AntiColl_Toggle,M2k_AntiColl_On,DefTempo),	TEMPO(EXEC("M2k_TDC_Mode_Cycle(2,1);"),		EXEC("M2k_Scope_Cycle(2,1);"),		DefTempo)	);
+				//BRT					
+					if (MasterArm_Both_M2000C)
+						{
+						lbrtuo = CHAIN(DOWN+DX25,D(ModDelay),	DOWN+DX26);
+						lbrtdo = CHAIN(UP+DX25,  D(ModDelay),	UP+DX26);
+						}					
+					else
+						{
+						lbrtuo = TEMPO(DOWN+DX25, 	DOWN+DX26,	DefTempo);
+						lbrtdo = TEMPO(UP+DX25, 	UP+DX26,	DefTempo);
+						}
+
+					if (Combined_SelJett_M2000C > 0)
+						{
+						lbrtui = CHAIN(PULSE+M2k_SelJett_Cover_Open,	D(Switch_Delay),	PULSE+M2k_SelJett_On);
+						lbrtdi = CHAIN(PULSE+M2k_SelJett_Off,			D(Switch_Delay),	PULSE+M2k_SelJett_Cover_Close);
+						}
+					else
+						{
+						lbrtui = TEMPO(M2k_SelJett_On,  M2k_SelJett_Cover_Open,  DefTempo);
+						lbrtdi = TEMPO(M2k_SelJett_Off, M2k_SelJett_Cover_Close, DefTempo);
+						}
+					}
+					
+		MapKeyIO(&LMFD,	BRTU,	lbrtui,	lbrtuo);
+		MapKeyIO(&LMFD,	BRTD,	lbrtdi, lbrtdo);
+
+//LMFD 20 in Init
+
+//Left Rocker Switches	*******Replace SYM when applying RMFD*******
+//SYM
+		MapKeyIO(&LMFD,	SYMU,	TEMPO(DOWN+DX8,	KB_LSYMU,	DefTempo),	KB_LSYMU);
+		MapKeyIO(&LMFD,	SYMD,	TEMPO(UP+DX8,	KB_LSYMD,	DefTempo),	TEMPO(KB_LSYMD,M2k_HUD_Altim_Low,DefTempo));
+
+//CON
+//		MapKeyIO(&LMFD,	CONU,	M2k_Altim_Incr,	TEMPO(KB_LCONU,	M2k_Altim_Incr,	DefTempo)	);	//moved altimeter setting from S3+H4L/R in 2.13
+//		MapKeyIO(&LMFD,	COND,	M2k_Altim_Decr,	TEMPO(KB_LCOND,	M2k_Altim_Decr,	DefTempo)	);
+//		MapKeyIO(&LMFD,	CONU,	KB_LCONU,	TEMPO(KB_LCONU,	CHAIN(DX30,D(ModDelay),KB_LCONU),	DefTempo)	);	//moved altimeter setting from S3+H4L/R in 2.13
+//		MapKeyIO(&LMFD,	COND,	KB_LCOND,	TEMPO(KB_LCOND,	CHAIN(DX30,D(ModDelay),KB_LCOND),	DefTempo)	);
+M2k_LCON_Set(0,0);
+
+
+//BRT in 17-19 above		
+//GAIN in Init
+
+	printf("Done!\xa");
+
+	printf("   Map Cougar Right MFD (DX32)...");
+
+//ROSB 1-10 in Init
+		MapKeyIO(&RMFD,	OSB01,	TEMPO(M2k_ILS_Off,M2k_ILS_On,DefTempo),	TEMPO(EXEC("M2k_530_Sw_Cycle(-1);"),EXEC("M2k_530_Sw_Cycle(2);"),DefTempo)	);	//CHAIN(DX32,D(ModDelay),DX1));
+		MapKeyIO(&RMFD,	OSB02,	TEMPO(DX_ROSB02,CHAIN(DX32,D(ModDelay),REXEC(6,Switch_Delay,"ActKey(KEYON+PULSE+DX2);")),DefTempo),	DX_ROSB02);
+		MapKeyIO(&RMFD,	OSB03,	TEMPO(DX_ROSB03,CHAIN(DX32,D(ModDelay),REXEC(6,Switch_Delay,"ActKey(KEYON+PULSE+DX3);")),DefTempo),	DX_ROSB03);
+		MapKeyIO(&RMFD,	OSB04,	TEMPO(CHAIN(USB_RIGHTALT,D(ModDelay),M2k_Radar_Rng_Decr),CHAIN(USB_RIGHTALT,D(ModDelay),REXEC(6,KBDelay,"ActKey(KEYON+PULSE+M2k_Radar_Rng_Decr);")),DefTempo),	DX_ROSB04T);	//RALT for ILS kHz
+		MapKeyIO(&RMFD,	OSB05,	TEMPO(CHAIN(USB_RIGHTALT,D(ModDelay),M2k_Radar_Rng_Incr),CHAIN(USB_RIGHTALT,D(ModDelay),REXEC(6,KBDelay,"ActKey(KEYON+PULSE+M2k_Radar_Rng_Incr);")),DefTempo),	M2k_INS_PREP);	//set to keystrokes in 1.66, DEST remapped to OSB6 in 2.42, /I 0 to prevent INS Nav Mode on shifted press
+		MapKeyIO(&RMFD,	OSB06,	TEMPO(DX_ROSB06,CHAIN(DX32,D(ModDelay),REXEC(6,KBDelay,"ActKey(KEYON+PULSE+DX6);")),DefTempo),	DX_ROSB06);
+		MapKeyIO(&RMFD,	OSB07,	TEMPO(DX_ROSB07,CHAIN(DX32,D(ModDelay),REXEC(6,KBDelay,"ActKey(KEYON+PULSE+DX7);")),DefTempo),	DX_ROSB07);
+		MapKeyRIO(&RMFD,OSB04,	EXEC("StopAutoRepeat(6);"),	0);
+		MapKeyRIO(&RMFD,OSB05,	EXEC("StopAutoRepeat(6);"),	0);
+		MapKeyRIO(&RMFD,OSB06,	EXEC("StopAutoRepeat(6);"),	0);
+		MapKeyRIO(&RMFD,OSB07,	EXEC("StopAutoRepeat(6);"),	0);
+		MapKey	(&RMFD,	OSB08,	KB_ROSB08);
+		MapKey	(&RMFD,	OSB09,	DX_ROSB09);
+		MapKey	(&RMFD,	OSB10,	KB_ROSB10);	
+//ROSB 11-15
+		if ((WarthogThrottle > 0) & (Throttle[APUON])) M2k_RMFD_BottomRow_Set(1,gear);
+		else M2k_RMFD_BottomRow_Set(0,gear);
+//		MapKeyR	(&RMFD,	OSB13,	0);	//for Spitfire Engine Start	
+//		MapKeyR	(&RMFD,	OSB14,	0);	//for Spitfire Engine Start		
+//ROSB 16-20
+		MapKey	(&RMFD,	OSB16,	EXEC("M2k_HSI_Mode_Cycle(6);"));
+		MapKeyIO(&RMFD,	OSB17,	EXEC("M2k_HSI_Mode_Cycle(5);"),
+								TEMPO(EXEC("M2k_HSI_Mode_Cycle(4);"),EXEC("M2k_HSI_Mode_Cycle(5);"),DefTempo));
+		MapKey	(&RMFD,	OSB18,	EXEC("M2k_HSI_Mode_Cycle(3);"));
+		MapKey	(&RMFD,	OSB19,	EXEC("M2k_HSI_Mode_Cycle(2);"));
+		
+		if ((TARS > 0) & (Overlay_Enable_SRS > 0))
+				MapKeyIO(&RMFD,	OSB20,	TEMPO(EXEC("M2k_HSI_Mode_Cycle(0);"),Rdo_Ovly,DefTempo),
+										TEMPO(EXEC("M2k_HSI_Mode_Cycle(1);"),EXEC("M2k_HSI_Mode_Cycle(0);"),DefTempo));		
+		else	MapKeyIO(&RMFD,	OSB20,	EXEC("M2k_HSI_Mode_Cycle(0);"),
+										TEMPO(EXEC("M2k_HSI_Mode_Cycle(1);"),EXEC("M2k_HSI_Mode_Cycle(0);"),DefTempo));
+
+//Right Rocker Switches
+//SYM
+		MapKeyIO(&RMFD,	SYMU,	TEMPO(M2k_Radar_Rng_Incr, REXEC(6, Switch_Delay, "ActKey(KEYON+PULSE+M2k_Radar_Rng_Incr);"), DefTempo),	TEMPO(M2k_Salvo_Incr, CHAIN(DX30,REXEC(6, KBDelay, "ActKey(KEYON+PULSE+M2k_Radar_Rng_Incr);")), DefTempo));	//Tempo Long fast speed /I tempo long 200ms speed (for intervalometer).  Intervalometer uses DX30 for modifier.
+		MapKeyIO(&RMFD,	SYMD,	TEMPO(M2k_Radar_Rng_Decr, REXEC(6, Switch_Delay, "ActKey(KEYON+PULSE+M2k_Radar_Rng_Decr);"), DefTempo),	TEMPO(M2k_Salvo_Decr, CHAIN(DX30,REXEC(6, KBDelay, "ActKey(KEYON+PULSE+M2k_Radar_Rng_Decr);")), DefTempo));	
+		MapKeyR	(&RMFD, SYMU,	EXEC("StopAutoRepeat(6);"));
+		MapKeyR	(&RMFD, SYMD,	EXEC("StopAutoRepeat(6);"));
+	
+//CON	MapKeyIO in M2k_RMFD_BottomRow_Set() as of 2.10
+//		MapKeyIO(&RMFD,	CONU,	0,	M2k_Seat_Up);
+//		MapKeyIO(&RMFD,	COND,	0,	M2k_Seat_Dn);
+		
+		MapKeyRIO(&RMFD,CONU,	EXEC("if (GraceFlag) {M2k_RMFD_BottomRow_Set(1,GearState); GraceFlag = 0;}"),	0);	//added in 1.24 to account for context sensitive R in UH-1
+		MapKeyRIO(&RMFD,COND,	EXEC("if (GraceFlag) {M2k_RMFD_BottomRow_Set(0,GearState); GraceFlag = 0;}"),	0);
+
+//BRT in M2k_RMFD_BottomRow_Set()
+//GAIN
+	MapKeyIO(&RMFD,	GAINU,	TEMPO(CHAIN(USB_RIGHTSHIFT,D(ModDelay),M2k_Radar_Rng_Incr), CHAIN(USB_RIGHTSHIFT,D(ModDelay),REXEC(8, KBDelay, "ActKey(KEYON+PULSE+M2k_Radar_Rng_Incr);")), DefTempo),		KB_RGAINU);	//bingo shifted
+	MapKeyIO(&RMFD,	GAIND,	TEMPO(CHAIN(USB_RIGHTSHIFT,D(ModDelay),M2k_Radar_Rng_Decr), CHAIN(USB_RIGHTSHIFT,D(ModDelay),REXEC(8, KBDelay, "ActKey(KEYON+PULSE+M2k_Radar_Rng_Decr);")), DefTempo),		TEMPO(KB_RGAIND,CHAIN(DX30,KB_RGAIND),DefTempo));
+	MapKeyRIO(&RMFD,GAINU,	EXEC("StopAutoRepeat(8);"),0);
+	MapKeyRIO(&RMFD,GAIND,	EXEC("StopAutoRepeat(8);"),0);
+	printf("Done!\xa");	
+}
+int	M2k_RMFD_BottomRow_Set(int brake, int gear = 0)	
+{
+	if ((brake > 0) & (ParkBrake_EngSt_M2000C > 0))	//removed & (gear > 0)  in 2.56
+		{
+		MapKeyIO(&RMFD,	OSB11,	CHAIN(PULSE+M2k_Emer_Fuel_Cutoff_Sw_Cover_Open, D(Switch_Delay), PULSE+M2k_Emer_Fuel_Cutoff_Sw_Off),
+								TEMPO(M2k_Emer_Fuel_Cutoff_Sw_Cover_Close, CHAIN(PULSE+M2k_Emer_Fuel_Cutoff_Sw_Cover_Open, D(Switch_Delay), PULSE+M2k_Emer_Fuel_Cutoff_Sw_Off),	LongTempo)	);
+		MapKeyIO(&RMFD,	OSB12,	M2k_R_Boost_Pump_On,	TEMPO(M2k_R_Boost_Pump_On,	CHAIN(DX30, D(ModDelay), M2k_R_Boost_Pump_On),	DefTempo)	);	//shifted boost pump off
+		MapKeyIO(&RMFD,	OSB13,	M2k_L_Boost_Pump_On,	TEMPO(M2k_L_Boost_Pump_On,	CHAIN(DX30, D(ModDelay), M2k_L_Boost_Pump_On),	DefTempo)	);	//shifted boost pump off
+		MapKeyIO(&RMFD,	OSB14,	CHAIN(PULSE+M2k_Starter_Cover_Open, D(Switch_Delay), PULSE+M2k_Starter_Pump_Off),
+								TEMPO(M2k_Starter_Cover_Open, CHAIN(DX30,D(ModDelay), PULSE+M2k_Starter_Cover_Open, D(Switch_Delay), PULSE+M2k_Starter_Pump_Off),	DefTempo)	);	//shifted for starter cover close
+		MapKeyIO(&RMFD,	OSB15,	Engines_Stop,	Engines_Start);
+		
+//		MapKeyIO(&RMFD,	BRTU,	TEMPO(EXEC("M2k_INS_PSM_Cycle(9);"),EXEC("M2k_Vent_Sw_Cycle(-1);"),DefTempo),	
+//								TEMPO(EXEC("M2k_INS_PCN_Cycle(-1);"),CHAIN(M2k_Battery_On, EXEC("if (Adjust_Backlighting > 0) MFD_WHT_Power(2);")),LongTempo));	// /I PSM/Vent /O PCN/Batt
+//		MapKeyIO(&RMFD,	BRTD,	TEMPO(EXEC("M2k_INS_PSM_Cycle(-1);"), EXEC("M2k_Vent_Sw_Cycle(3);"), DefTempo),	//changed PSM orientation in 2.45
+//								TEMPO(EXEC("M2k_INS_PCN_Cycle(11);"),CHAIN(M2k_Battery_Off,EXEC("if (Adjust_Backlighting > 0) MFD_WHT_Power(0);")),LongTempo));	// /I PSM/Vent /O PCN/Batt
+//		MapKeyIO(&RMFD,	BRTU,	TEMPO(M2k_INS_PSM_CW,	EXEC("M2k_Vent_Sw_Cycle(-1);"),DefTempo),	
+//								TEMPO(M2k_INS_PCN_CW,	CHAIN(M2k_Battery_On, EXEC("if (Adjust_Backlighting > 0) MFD_WHT_Power(2);")),LongTempo));	// /I PSM/Vent /O PCN/Batt
+//		MapKeyIO(&RMFD,	BRTD,	TEMPO(M2k_INS_PSM_CCW,	EXEC("M2k_Vent_Sw_Cycle(3);"), DefTempo),	//changed PSM orientation in 2.45
+//								TEMPO(M2k_INS_PCN_CCW,	CHAIN(M2k_Battery_Off,EXEC("if (Adjust_Backlighting > 0) MFD_WHT_Power(0);")),LongTempo));	// /I PSM/Vent /O PCN/Batt
+		
+		if (AirBrkFlash >= 0)
+			{
+			if (WarthogThrottle > 0) Lights_WHT5(1);
+			else Lights_LLED1(1);
+			}
+		}
+	else
+		{
+			
+//		MapKeyIO(&RMFD,	OSB11,	EXEC("M2k_INS_PCN_Cycle(0);"),	TEMPO(EXEC("M2k_INS_PCN_Cycle(5);"),EXEC("M2k_INS_PCN_Cycle(0);"),DefTempo)	);	//	TR/VS		RD/TD
+//		MapKeyIO(&RMFD,	OSB12,	EXEC("M2k_INS_PCN_Cycle(6);"),	TEMPO(EXEC("M2k_INS_PCN_Cycle(4);"),EXEC("M2k_INS_PCN_Cycle(6);"),DefTempo)	);	//	D/RLT		DV/FV	
+//		MapKeyIO(&RMFD,	OSB13,	EXEC("M2k_INS_PCN_Cycle(8);"),	TEMPO(EXEC("M2k_INS_PCN_Cycle(3);"),EXEC("M2k_INS_PCN_Cycle(8);"),DefTempo)	);	//	BUT CP/DP	BAD Polar
+//		MapKeyIO(&RMFD,	OSB14,	EXEC("M2k_INS_PCN_Cycle(9);"),	TEMPO(EXEC("M2k_INS_PCN_Cycle(2);"),EXEC("M2k_INS_PCN_Cycle(9);"),DefTempo)	);	//	BUT ALT		BAD ALT
+//		MapKeyIO(&RMFD,	OSB15,	EXEC("M2k_INS_PCN_Cycle(10);"),	TEMPO(EXEC("M2k_INS_PCN_Cycle(1);"),EXEC("M2k_INS_PCN_Cycle(10);"),DefTempo));	//	BUT L/G		BAD L/G
+
+		MapKeyIO(&RMFD,	OSB11,	M2k_INS_PCN_RDTD,		TEMPO(M2k_INS_PCN_TRVS,		M2k_INS_PCN_RDTD,		DefTempo)	);	//	TR/VS		RD/TD
+		MapKeyIO(&RMFD,	OSB12,	M2k_INS_PCN_DVFV,		TEMPO(M2k_INS_PCN_DRLT,		M2k_INS_PCN_DVFV,		DefTempo)	);	//	D/RLT		DV/FV	
+		MapKeyIO(&RMFD,	OSB13,	M2k_INS_PCN_BAD_POLAR,	TEMPO(M2k_INS_PCN_BUT_CPDP,	M2k_INS_PCN_BAD_POLAR,	DefTempo)	);	//	BUT CP/DP	BAD Polar
+		MapKeyIO(&RMFD,	OSB14,	M2k_INS_PCN_BAD_ALT,	TEMPO(M2k_INS_PCN_BUT_ALT,	M2k_INS_PCN_BAD_ALT,	DefTempo)	);	//	BUT ALT		BAD ALT
+		MapKeyIO(&RMFD,	OSB15,	M2k_INS_PCN_BAD_LG,		TEMPO(M2k_INS_PCN_BUT_LG,	M2k_INS_PCN_BAD_LG,		DefTempo)	);	//	BUT L/G		BAD L/G
+
+		if (gear > 0)	//gear is down brake is off
+			{
+			if (ParkBrake_EngSt_M2000C > 0)
+				{
+//				MapKeyIO(&RMFD,	BRTU,	TEMPO(EXEC("M2k_INS_PSM_Cycle(9);"),USB_PAGEUP,DefTempo),		//PAGEUP for STS mode (not macro'd because S3 already pressed)
+//										TEMPO(EXEC("M2k_INS_PCN_Cycle(-1);"),CHAIN(M2k_Battery_On, EXEC("if (Adjust_Backlighting > 0) MFD_WHT_Power(2);")),LongTempo));	// /I SEC Gyro /O Cycle PCN mode
+//				MapKeyIO(&RMFD,	BRTD,	TEMPO(EXEC("M2k_INS_PSM_Cycle(-1);"), USB_PAGEDOWN,DefTempo),	//PAGEDOWN for N mode (not macro'd because S3 already pressed)
+//										TEMPO(EXEC("M2k_INS_PCN_Cycle(11);"),CHAIN(M2k_Battery_Off,EXEC("if (Adjust_Backlighting > 0) MFD_WHT_Power(0);")),LongTempo));	// /I NAV Gyro /O Cycle PCN mode
+//				MapKeyIO(&RMFD,	BRTU,	TEMPO(M2k_INS_PSM_CW,USB_PAGEUP,DefTempo),		//PAGEUP for STS mode (not macro'd because S3 already pressed)
+//										TEMPO(M2k_INS_PCN_CW,CHAIN(M2k_Battery_On, EXEC("if (Adjust_Backlighting > 0) MFD_WHT_Power(2);")),LongTempo));	// /I SEC Gyro /O Cycle PCN mode
+//				MapKeyIO(&RMFD,	BRTD,	TEMPO(M2k_INS_PSM_CCW,USB_PAGEDOWN,DefTempo),	//PAGEDOWN for N mode (not macro'd because S3 already pressed)
+//										TEMPO(M2k_INS_PCN_CCW,CHAIN(M2k_Battery_Off,EXEC("if (Adjust_Backlighting > 0) MFD_WHT_Power(0);")),LongTempo));	// /I NAV Gyro /O Cycle PCN mode
+
+				
+				if (AirBrkFlash >= 0)
+					{
+					if (WarthogThrottle > 0) Lights_WHT5(0);
+					else Lights_LLED1(0);
+					}
+				}
+//			else	//default gear down behavior
+//				{
+//				MapKeyIO(&RMFD,	BRTU,	TEMPO(M2k_INS_PSM_CW, CHAIN(M2k_Battery_On, EXEC("if (Adjust_Backlighting > 0) MFD_WHT_Power(2);"))),	M2k_INS_PCN_CW	);	// /I SEC Gyro /O Cycle PCN mode
+//				MapKeyIO(&RMFD,	BRTD,	TEMPO(M2k_INS_PSM_CCW,CHAIN(M2k_Battery_Off,EXEC("if (Adjust_Backlighting > 0) MFD_WHT_Power(0);"))),	M2k_INS_PCN_CCW	);	// /I NAV Gyro /O Cycle PCN mode
+//				}
+			}
+		else	//universal gear up behavior
+			{
+//			MapKeyIO(&RMFD,	BRTU,	TEMPO(0,M2k_INS_PSM_SEC,LongTempo),	M2k_INS_PCN_CW	);	// /I SEC Gyro /O Cycle PCN mode
+//			MapKeyIO(&RMFD,	BRTD,	M2k_INS_PSM_NAV,					M2k_INS_PCN_CCW	);	// /I NAV Gyro /O Cycle PCN mode
+			if ((AirBrkFlash >= 0) & (ParkBrake_EngSt_M2000C > 0))
+				{
+				if (WarthogThrottle > 0) Lights_WHT5(0);
+				else Lights_LLED1(0);
+				}
+			}
+		}
+if (gear > 0)	
+	{
+	MapKeyIO(&RMFD,	BRTU,	TEMPO(M2k_INS_PSM_CW, CHAIN(M2k_Battery_On, EXEC("if (Adjust_Backlighting > 0) MFD_WHT_Power(2);")),DefTempo),	
+							TEMPO(M2k_INS_PCN_CW, CHAIN(DX30,D(ModDelay),USB_PAGEUP),DefTempo));	//PAGEUP for STS mode
+	MapKeyIO(&RMFD,	BRTD,	TEMPO(M2k_INS_PSM_CCW,CHAIN(M2k_Battery_Off,EXEC("if (Adjust_Backlighting > 0) MFD_WHT_Power(0);")),DefTempo),	
+							TEMPO(M2k_INS_PCN_CCW,CHAIN(DX30,D(ModDelay),USB_PAGEDOWN),DefTempo));	//PAGEDOWN for N mode
+
+	MapKeyIO(&RMFD,	CONU,	TEMPO(EXEC("M2k_Vent_Sw_Cycle(-1);"),CHAIN(M2k_Park_Brake_On, EXEC("GraceFlag = 1;")), DefTempo),	M2k_Seat_Up);
+	MapKeyIO(&RMFD,	COND,	TEMPO(EXEC("M2k_Vent_Sw_Cycle(3);"), CHAIN(M2k_Park_Brake_Off,EXEC("GraceFlag = 1;")), DefTempo),	M2k_Seat_Dn);
+	}
+else
+	{
+	MapKeyIO(&RMFD,	BRTU,	TEMPO(0,M2k_INS_PSM_SEC,LongTempo),	M2k_INS_PCN_CW	);	// /I SEC Gyro /O Cycle PCN mode
+	MapKeyIO(&RMFD,	BRTD,	M2k_INS_PSM_NAV,					M2k_INS_PCN_CCW	);	// /I NAV Gyro /O Cycle PCN mode	
+	
+	MapKeyIO(&RMFD,	CONU,	CHAIN(M2k_Inflight_Start_On,	EXEC("GraceFlag = 1;")),	M2k_Seat_Up);
+	MapKeyIO(&RMFD,	COND,	CHAIN(M2k_Inflight_Start_Off,	EXEC("GraceFlag = 1;")),	M2k_Seat_Dn);
+	}
+if (Script_Debug > 0) printf("RMFD Bottom Row Set\xa ParkBrake_EngSt_M2000C: %i\xa GearState: %i\xa Parking Brake: %i\xa",ParkBrake_EngSt_M2000C,gear,brake);
+}
+int M2k_S1_Set(int wh, int gear)
+{
+if (gear)	//Ap Disc mapped to S1 since not avail on S4
+	{
+	if (wh > 0)	MapKeyIO(&Joystick, S1,	TEMPO(UP+DX5,DOWN+DX5,DefTempo),	TEMPO(DX4,	DX5,	DefTempo));	//DX4 inst AP disc, S1 long for hold S3 for force on/releaes
+	else		MapKeyIO(&HCougar,  S1,	TEMPO(UP+DX5,DOWN+DX5,DefTempo),	TEMPO(DX5,	DX5,	DefTempo));	
+	}
+else		//gear up, ap disc on S4.  S1 exclusively override
+	{
+	if (wh > 0)	MapKeyIO(&Joystick, S1,	DOWN+DX5,	DX5);	//DX5 hold override, shifted to force on
+	else		MapKeyIO(&HCougar,  S1,	DOWN+DX5,	DX5);	
+	}
+}
+
+int M2k_Array_Init(int gear)
+{
+M2k_Scan_Width_Cur = 0;	//set to 60
+M2k_Scan_Bars_Cur = 0;	//set to 4
+M2k_Scope_Cur = 0;		//set to PPI
+M2k_PRF_Cur = 0;		//set to INT
+	M2k_WHT_PRF_LED(M2k_PRF_Cur);
+M2k_HSI_Mode_Cur = 1;	//Set to Nav (Mag)
+M2k_530_Sw_Cur = 2;		//Set to Auto
+M2k_Vent_Sw_Cur = 1;	//Set to Left
+M2k_Rdr_Cur	= 3;		//Set to Off
+//M2k_INS_PCN_Cur = 1;	//Set to BUT L/G
+M2k_LCON = VTB_Sw_M2k;	//Set VTB Switch to default
+//if (gear) M2k_INS_PSM_Cur = 0;	//cold start INS in AR
+//else M2k_INS_PSM_Cur = 7;	//INS aligned
+
+
+M2k_S1_Set(WarthogStick, gear);
+M2k_PS_Set(gear);
+M2k_LCON_Set(0,0);
+
+if ((WarthogThrottle > 0) & (Throttle[APUON])) M2k_RMFD_BottomRow_Set(1,gear);
+else M2k_RMFD_BottomRow_Set(0,gear);	//added in 2.45 (bug fix)
+
+if (FBW_Discrete_M2k > 0) ActKey(KEYON+DX16);	//sets FBW Spin switch to Norm, added in 2.65
+}
+
+int	M2k_Scan_Width_Cycle(int posit, int loop = 0, int index = 3)		//posit is array position, index is max array size(starting with 1)
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)	M2k_Scan_Width_Cur = (M2k_Scan_Width_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)		M2k_Scan_Width_Cur = (M2k_Scan_Width_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (M2k_Scan_Width_Cur < index-1))	M2k_Scan_Width_Cur = (M2k_Scan_Width_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (M2k_Scan_Width_Cur > 0))		M2k_Scan_Width_Cur = (M2k_Scan_Width_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				M2k_Scan_Width_Cur = posit;										//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(M2k_Scan_Width_Array,M2k_Scan_Width_Cur));
+}
+
+
+int	M2k_Scan_Bars_Cycle(int posit, int loop = 0, int index = 3)		//posit is array position, index is max array size(starting with 1)
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)	M2k_Scan_Bars_Cur = (M2k_Scan_Bars_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)		M2k_Scan_Bars_Cur = (M2k_Scan_Bars_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (M2k_Scan_Bars_Cur < index-1))	M2k_Scan_Bars_Cur = (M2k_Scan_Bars_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (M2k_Scan_Bars_Cur > 0))			M2k_Scan_Bars_Cur = (M2k_Scan_Bars_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				M2k_Scan_Bars_Cur = posit;										//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(M2k_Scan_Bars_Array,M2k_Scan_Bars_Cur));
+}
+
+int	M2k_Scope_Cycle(int posit, int loop = 0, int index = 2)		//posit is array position, index is max array size(starting with 1)
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)	M2k_Scope_Cur = (M2k_Scope_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)		M2k_Scope_Cur = (M2k_Scope_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (M2k_Scope_Cur < index-1))	M2k_Scope_Cur = (M2k_Scope_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (M2k_Scope_Cur > 0))			M2k_Scope_Cur = (M2k_Scope_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				M2k_Scope_Cur = posit;										//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(M2k_Scope_Array,M2k_Scope_Cur));
+}
+int	M2k_TDC_Mode_Cycle(int posit, int loop = 0, int index = 2)		//posit is array position, index is max array size(starting with 1)
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)	M2k_TDC_Mode_Cur = (M2k_TDC_Mode_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)		M2k_TDC_Mode_Cur = (M2k_TDC_Mode_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (M2k_TDC_Mode_Cur < index-1))	M2k_TDC_Mode_Cur = (M2k_TDC_Mode_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (M2k_TDC_Mode_Cur > 0))			M2k_TDC_Mode_Cur = (M2k_TDC_Mode_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				M2k_TDC_Mode_Cur = posit;										//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(M2k_TDC_Mode_Array,M2k_TDC_Mode_Cur));
+}
+
+
+int	M2k_PRF_Cycle(int posit, int loop = 0, int index = 3)
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)	M2k_PRF_Cur = (M2k_PRF_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)		M2k_PRF_Cur = (M2k_PRF_Cur+index-1)%index;	//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (M2k_PRF_Cur < index-1))	M2k_PRF_Cur = (M2k_PRF_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (M2k_PRF_Cur > 0))			M2k_PRF_Cur = (M2k_PRF_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				M2k_PRF_Cur = posit;										//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(M2k_PRF_Array,M2k_PRF_Cur));
+M2k_WHT_PRF_LED(M2k_PRF_Cur);
+}
+int M2k_WHT_PRF_LED(int state)
+{
+if (	(WarthogThrottle > 0) & (AirBrkFlash >= 0)	)
+	{
+	if (state == 2)	//low
+		{
+		Lights_WHT2(0);
+		DeferCall(LED_Delay,&Lights_WHT3,0);
+		DeferCall(2*LED_Delay,&Lights_WHT4,1);
+		}
+	else if (state == 1)	//INT
+		{
+		Lights_WHT2(0);
+		DeferCall(LED_Delay,&Lights_WHT3,1);
+		DeferCall(2*LED_Delay,&Lights_WHT4,0);
+		}	
+	else		//high
+		{
+		Lights_WHT2(1);
+		DeferCall(LED_Delay,&Lights_WHT3,0);
+		DeferCall(2*LED_Delay,&Lights_WHT4,0);
+		}
+	}		
+}
+
+int	M2k_HSI_Mode_Cycle(int posit, int loop = 0, int index = 7)
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)	M2k_HSI_Mode_Cur = (M2k_HSI_Mode_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)		M2k_HSI_Mode_Cur = (M2k_HSI_Mode_Cur+index-1)%index;	//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (M2k_HSI_Mode_Cur < index-1))	M2k_HSI_Mode_Cur = (M2k_HSI_Mode_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (M2k_HSI_Mode_Cur > 0))			M2k_HSI_Mode_Cur = (M2k_HSI_Mode_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				M2k_HSI_Mode_Cur = posit;										//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(M2k_HSI_Mode_Array,M2k_HSI_Mode_Cur));
+}
+
+
+int	M2k_530_Sw_Cycle(int posit, int index = 3)	//routine different because it toggles b/t 0 and 1 with 2 as discrete
+{
+if (	(posit > index-1) | (posit < 0)	)	M2k_530_Sw_Cur = abs(M2k_530_Sw_Cur-1)%index;			//posit toggle
+else				M2k_530_Sw_Cur = posit;										//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(M2k_530_Sw_Array,M2k_530_Sw_Cur));
+}
+
+int	M2k_Vent_Sw_Cycle(int posit, int loop = 0, int index = 3)
+{
+if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)	M2k_Vent_Sw_Cur = (M2k_Vent_Sw_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)		M2k_Vent_Sw_Cur = (M2k_Vent_Sw_Cur+index-1)%index;	//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (M2k_Vent_Sw_Cur < index-1))	M2k_Vent_Sw_Cur = (M2k_Vent_Sw_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (M2k_Vent_Sw_Cur > 0))			M2k_Vent_Sw_Cur = (M2k_Vent_Sw_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else				M2k_Vent_Sw_Cur = posit;										//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(M2k_Vent_Sw_Array,M2k_Vent_Sw_Cur));
+}
+
+int M2k_Rdr_Cycle(int posit, int index = 4)	//no loop
+{
+if (	(posit > index-1) | (posit < -1)	)	// < -1 for cycle, -1 for toggle 0/1
+	{
+	if (posit > index-1)	M2k_Rdr_Cur = (M2k_Rdr_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < -1)	M2k_Rdr_Cur = (M2k_Rdr_Cur+index-1)%index;	//posit < 0 will cycle by -1 	
+	}
+else if (posit == -1)		M2k_Rdr_Cur = abs(M2k_Rdr_Cur - 1);			//forces toggle b/t 0/1
+else						M2k_Rdr_Cur = posit;						//posit in bounds will be discrete function call
+
+//ActKey(KEYON+PULSE+CHAIN(DOWN+DX30,D(ModDelay),X(M2k_Rdr_Array,M2k_Rdr_Cur),D(KBDelay+ModDelay),UP+DX30);
+if (	((WarthogStick > 0) & (Joystick[S3]))	|	((WarthogStick <= 0) & (HCougar[S3]))	)
+		ActKey(KEYON+PULSE+X(M2k_Rdr_Array,M2k_Rdr_Cur)	);	//DX30 covered in switch mapping;
+else	ActKey(KEYON+PULSE+CHAIN(DX30,D(ModDelay),X(M2k_Rdr_Array,M2k_Rdr_Cur))	);	//DX30 added here in 1.62
+}
+
+
+//int	M2k_INS_PCN_Cycle(int posit, int loop = 1, int index = 11)		//added in 1.65 for INS PCN mode selector switch, INS routines obsolete in 2.55
+//{
+//if (		(loop) & ((posit > index-1) | (posit < 0))	)
+//	{
+//	if (posit > index-1)	M2k_INS_PCN_Cur = (M2k_INS_PCN_Cur+1)%index;		//posit > index will cycle by +1
+//	else if (posit < 0)		M2k_INS_PCN_Cur = (M2k_INS_PCN_Cur+index-1)%index;	//posit < 0 will cycle by -1 
+//	}
+//else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+//	{
+//	if ((posit > index-1) & (M2k_INS_PCN_Cur < index-1))	M2k_INS_PCN_Cur = (M2k_INS_PCN_Cur+1)%index;		//posit > index will cycle by +1
+//	else if ((posit < 0) & (M2k_INS_PCN_Cur > 0))			M2k_INS_PCN_Cur = (M2k_INS_PCN_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+//	}
+//else				M2k_INS_PCN_Cur = posit;										//posit in bounds will be discrete function call
+//ActKey(KEYON+PULSE+X(M2k_INS_PCN_Array,M2k_INS_PCN_Cur));
+//}
+
+//int	M2k_INS_PSM_Cycle(int posit, int loop = 0, int index = 8)		//added in 1.65 for INS PCN mode selector switch
+//{
+//if (		(loop) & ((posit > index-1) | (posit < 0))	)
+//	{
+//	if (posit > index-1)	M2k_INS_PSM_Cur = (M2k_INS_PSM_Cur+1)%index;		//posit > index will cycle by +1
+//	else if (posit < 0)		M2k_INS_PSM_Cur = (M2k_INS_PSM_Cur+index-1)%index;	//posit < 0 will cycle by -1 
+//	}
+//else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+//	{
+//	if ((posit > index-1) & (M2k_INS_PSM_Cur < index-1))	M2k_INS_PSM_Cur = (M2k_INS_PSM_Cur+1)%index;		//posit > index will cycle by +1
+//	else if ((posit < 0) & (M2k_INS_PSM_Cur > 0))			M2k_INS_PSM_Cur = (M2k_INS_PSM_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+//	}
+//else				M2k_INS_PSM_Cur = posit;										//posit in bounds will be discrete function call
+//ActKey(KEYON+PULSE+X(M2k_INS_PSM_Array,M2k_INS_PSM_Cur));
+//}
+
+int M2k_CMProg_Set(int posit, int index = 17)
+{
+if (posit < 0) posit = 0;
+else if (posit > index) posit = index;
+
+ActKey(KEYON+PULSE+X(M2k_CMProg_Array,posit));
+printf("CM Program %i set.\xa",posit);
+}
+
+int M2k_LCON_Set(int sw, int led = 500)	//led is the amount of time in ms RLED1 illuminates (0 to disable)
+{
+int cu;
+int cd;
+
+if (sw < 1)
+	{
+	MapKeyIO(&LMFD,	CONU,	TEMPO(M2k_VTB_RhoTheta_Up,	KB_LCONU,	LongTempo),	TEMPO(M2k_VTB_N_Up, M2k_VTB_Deb, DefTempo)	);	//S3+LCON for VTB Power
+	MapKeyIO(&LMFD,	COND,	TEMPO(M2k_VTB_RhoTheta_Dn,	KB_LCOND,	LongTempo),	TEMPO(M2k_VTB_N_Dn, M2k_VTB_Fin, DefTempo)	);
+	}
+else
+	{
+	if (sw > 3)
+		{
+		cu	=	M2k_VTB_MT_Up;
+		cd	=	M2k_VTB_MT_Dn;
+		}
+	else if (sw == 3)
+		{
+		cu	=	M2k_VTB_CZ_Up;
+		cd	=	M2k_VTB_CZ_Dn;
+		}
+	else if (sw == 2)
+		{
+		cu	=	M2k_VTB_RhoTheta_Up;
+		cd	=	M2k_VTB_RhoTheta_Dn;
+		}
+	else
+		{
+		cu	=	M2k_VTB_N_Up;
+		cd	=	M2k_VTB_N_Dn;
+		}
+	
+	MapKeyIO(&LMFD,	CONU,	cu,	TEMPO(cu, M2k_VTB_Deb, DefTempo));
+	MapKeyIO(&LMFD,	COND,	cd,	TEMPO(cd, M2k_VTB_Fin, DefTempo));
+	M2k_LCON = sw;	
+	printf("VTB Switch set to %i\xa",M2k_LCON);
+	}
+MapKeyRIO(&LMFD,CONU,	0,EXEC("if (GraceFlag) M2k_LCON_Set(M2k_LCON);	GraceFlag = 0;")	);
+MapKeyRIO(&LMFD,COND,	0,EXEC("if (GraceFlag) M2k_LCON_Set(0);			GraceFlag = 0;")	);	
+
+if (led > 0)
+	{
+	Lights_RLED1(1);
+	DeferCall(led,&Lights_RLED1,0);
+	}
+}

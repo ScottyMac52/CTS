@@ -1,0 +1,943 @@
+//===========================================================================
+//		DCS World SA342M Gazelle for HOTAS Cougar/Warthog and Cougar MFDs
+//					by Don "Home Fries" Heumphreus
+//						last updated: 11JUN2023
+//
+//	Change Log:
+//	1.51	Initial Release
+//	1.53	Adjusted for new 2.0 module selection
+//	1.60	Enabled WAV files for aircraft selection
+//	1.61	Added SA342L
+//	1.62	Added Adjustable Backlighting
+//	1.64	Incorporated Multicrew and fixed salvo/autopilot assignment
+//			Added CenterPositRudder for TCPTM
+//			Applied full MFD mapping
+//	1.66	Moved SA342 CommState_Off routines here
+//			Added MapKeyR for ROSB13-14 for compatibilty with Spitfire
+//	1.69	Updated CommState_Off() call
+//			Added discrete autopilot channels and set displaced DX buttons to macro
+//			HC: changed H4L/R to autopilot mode switch
+//	1.73	Added Camera Mode Select to /I H2U/D and /I H4L/R (WH)
+//	2.00	TEMPO added to RSYM
+//	2.02	Set FkeyPress=1 on init to prevent Commswitch activation on profile load
+//	2.10	Improved VAICOM/SRS Compatibility
+//	2.21	Added NS430 compatibility
+//	2.25	Added WH Left Throttle analog option and swapped PS/FLAP to accomodate
+//	2.26	Added Pause_TrackIR() function call to SA342M for when the feature becomes useful.
+//	2.28	Added DX5 to TG1 for Minigun
+//	2.29	Added MFDisplay module selection
+//			Replaced 4 MFD Led functions with Lights_Four()
+//	2.30	Replaced L_SHIFT+USB_3 with CrewStation3LS macro (for gunner station)
+//			Added CurrentStation() to Init (force, no key)
+//	2.32	Changed StationChangeModifier to 2	
+//	2.34a	Added HOTAS Module Selection to S3+SPDB/T9 Long
+//	2.43	Removed SnapViews for VR
+//			Increased Dim for lmvar to 2 for end/null
+//	2.44	Added VR and Spyglass Zoom to VR
+//			Set Brake Cycle time (dummy value) to 1 to prevent poss DBZ
+//	2.46	Added SRS Overlay to ROSB20
+//	2.50b	Removed duplicate MapKeyR(0) mappings to free stack space.
+//	2.66	Added Helo_Throttle_PS_Init() for error trap
+//	2.67	Updated S2 for DCS 2.8.6 (request control)
+//
+//
+//===========================================================================
+
+//To Do:
+//determine which functions if any need to be shifted between pilot/commander seats
+//poss DX5 free
+
+//Note: Once Right Weapon Sw Cover keyboard command is fixed, make adjustments on REOP and H2R (both CommState files)
+
+int	SA342_AP_Mode_Cur;
+int	SA342_Nav_Lts_Cur;
+int	SA342_Strobe_Lts_Cur;
+int	SA342_Weps_Stn_Cur;
+int	SA342_Weps_Stn_Array;
+int	SA342L_WpnPwr_Sw_Cur;
+
+
+
+
+int DCS_SA342(int led, int sp, int prof = 1542)
+{
+if (prof == 1541)	printf("DCS SA342L Gazelle\xa");
+else				printf("DCS SA342M Gazelle\xa");
+
+if (WarthogStick > 0)
+	{
+	if (prof == 1541) MapKeyR(&Joystick, S2, EXEC("DCS_SA342_Init(1541);"));
+	else MapKeyR(&Joystick, S2, EXEC("DCS_SA342_Init(1542);"));
+	}
+else
+	{
+	if (prof == 1541) MapKeyR(&HCougar, S2, EXEC("DCS_SA342_Init(1541);"));
+	else MapKeyR(&HCougar, S2, EXEC("DCS_SA342_Init(1542);"));
+	}
+if (sp > 0)
+	{
+	if (prof == 1541)	PlayWav("sa342l.wav");
+	else				PlayWav("sa342m.wav");
+	}
+if (led > 0)
+	{
+	//should see * * 0 * to indicate that SA342 has been selected.
+//	DeferCall(ProfileSwapDelay+3*LED_Delay,&Lights_LLED1,1);
+//	DeferCall(ProfileSwapDelay+4*LED_Delay,&Lights_LLED2,1);
+	
+	if (prof == 1541)
+		{
+		Lights_Four(1,1,0,1,	ProfileSwapDelay+LED_Delay);
+//		DeferCall(ProfileSwapDelay+LED_Delay,&Lights_RLED1,0);
+//		DeferCall(ProfileSwapDelay+2*LED_Delay,&Lights_RLED2,1);
+		}
+	else
+		{
+		Lights_Four(1,1,1,0,	ProfileSwapDelay+LED_Delay);
+//		DeferCall(ProfileSwapDelay+LED_Delay,&Lights_RLED1,1);
+//		DeferCall(ProfileSwapDelay+2*LED_Delay,&Lights_RLED2,0);
+		}	
+	}
+}
+
+int	SetMenu_SA342M()
+{
+Set_Acft_Array_Cur(1542);
+}
+int SetMenu_SA342L()
+{
+Set_Acft_Array_Cur(1541);
+}
+
+int	DCS_SA342M_Init()
+{
+DCS_SA342_Init(1542);
+}
+int	DCS_SA342L_Init()
+{
+DCS_SA342_Init(1541);
+}
+
+int SA342_Switch_Posit_Init()
+{
+SA342_AP_Mode_Cur = 1;
+SA342_Nav_Lts_Cur = 1;
+SA342_Strobe_Lts_Cur = 1;
+SA342_Weps_Stn_Cur = 5;		//out of range because it starts off station
+if (Script_Debug) printf("SA342_Weps_Stn_Cur = %i\xa",SA342_Weps_Stn_Cur);	//for test purposes
+SA342L_WpnPwr_Sw_Cur = 2;
+}
+
+int DCS_SA342_Init(int prof = 1542)
+{
+char lmvar;Dim(&lmvar,2);
+if (prof == 1541)
+	{
+	sprintf(&lmvar,"L");
+	NS430_Enabled		=	NS430_Installed*NS430_Enabled_SA342L;	//added in 2.21
+	}
+else 
+	{
+	sprintf(&lmvar,"M");
+	NS430_Enabled		=	NS430_Installed*NS430_Enabled_SA342M;	//added in 2.21
+	}
+
+Helo_Throttle_PS_Init(WH_LT_Throttle_SA342);
+Determine_Differential_Braking(0);
+
+FkeyPress				=	1;	//added in 2.02 to prevent Commswitch key activation on profile load.
+GraceFlag				=	0;
+Eng_Start_x				=	0;
+Eng_Stop_x				=	0;
+Starter_Ind_x			=	0;
+MFD_Eng_Start			=	0;
+ProfID					=	prof;
+FixedGear				=	1;
+//Helicopter				=	1+WH_LT_Throttle_SA342;	//now a function for helos
+	HeloRotateMicrostick=	1;
+	CenterPositRudder	=	CenterPositRudder_SA342;	//added in 1.64
+	HeloHatTrim			=	1;
+T6WheelBrake			=	0;
+TriggerZoomEnabled		=	0;
+ICS_Current				=	UH1_ICS_Start;	//0, may be obsolete
+UH1_XM60_Current		=	0;
+BrakeOnCycleTime		=	1;	//min value to prevent DBZ
+BrakeOffCycleTime		=	1;
+Searchlight_Current		=	0;
+BrakeOnCycleTime		=	1;	//min value to prevent DBZ
+BrakeOffCycleTime		=	1;
+FlapState=0;				//for future implementation
+TriggerZoom_state  		=	0;	//reset TriggerZoom
+S4AnalogBrake			=	0;					//added in 1.33; N/A in SA342
+AnalogParkingBrake		=	0;					//added in 1.33; JoyY Parking Brake N/A for SA342
+S4asNWS					=	0;					//added in 1.33
+S3holdNWS 				= 	0;	//added in 2.05
+XYAxisTrim				=	0;	//added in 1.34
+DMS_SnapView			=	0;	//added in 1.34
+ToeBrakesAvailable		=	0;	//added in 1.40
+NVG_Capable				=	1;	//added in 1.40
+AB_Capable				=	0;	//added in 1.61
+Adjust_Backlighting		=	Adjust_Backlight_SA342*WarthogThrottle;	//added in 1.62
+CrewCount				=	2;	//Minigunner treated separately
+StationChangeModifier	=	2;	//1 for DX30, 2 for LSHIFT
+WH_Use_TQS				=	0;	//added in 2.43
+Analog_TDC				=	1;	//added in 2.43
+EngineCount				=	Helicopter;	//doesn't matter for helo, so just match Helicopter value
+CommInitType			=	2;	//0 for none/custom, 1 for single channel (P-51), 2 for simple (dual channel), 3 for complex (3 channel).  added in 2.43
+StnCheckDisabled		=	0;	//added in 2.43.  Force enabled (0) for helicopter
+CurrentStation 			=	1;	//moved here in 2.43
+
+//Free DX15
+
+SA342_Weps_Stn_Array = SEQ(	SA342_Weps_Stn1,
+							SA342_Weps_Stn2,
+							SA342_Weps_Stn3,
+							SA342_Weps_Stn4);
+
+SA342_Switch_Posit_Init();			
+
+
+printf("Done\xa Execute DCS SA342%s Gazelle Config (Profile v%i.%i):\xa",&lmvar,MajorVersion,MinorVersion);
+PlayWavSel(ProfID,abs(Init_Run - 1),DCSFP_Enabled,MFDisplayEnabled);	//added in 1.61, DCSFP added in 2.05, MFDisplay added in 2.29
+if (WarthogThrottle > 0) DeferCall(Flap_PS_Check_Delay+1000,&PSM_FLAPM_Check,ProfID); 	//added in 1.61
+Pause_TrackIR(0);
+AnalogBrakePoll(0);	//added in 1.23
+TriggerZoom_toggle(0,TriggerZoom_state);		//no triggerzoom for SA-342; will bypass LED check if state is off
+MFD_Init(ProfID);
+	printf("   Map HOTAS for DCS SA342%s Gazelle Config:\xa",&lmvar);
+	DCS_Axis_Init(ProfID,EngineCount,Analog_TDC);
+
+		printf("      Button Mapping:\xa");
+			printf("         Shift Commands: S3  momentary...");
+			if (WarthogStick > 0)
+				{
+				if (WarthogThrottle > 0) SetShiftButton (&Joystick, S3, &Throttle, 0, 0);
+				else SetShiftButton (&Joystick, S3, &HCougar, 0, 0);
+				MapKey	(&Joystick, S3, CHAIN(DX30,TEMPO(DX3, 	EXEC("S3S4Shifted(ProfID,RudderPedals,GearState,Helicopter);"), ModTempo)));		//DX3 short, long(er) for modifier and eject check, moved here in 0.53, removed S4 and changed argument to "RudderPedals"
+				MapKeyR	(&Joystick, S3, 						EXEC("S3Release(ProfID,RudderPedals,GearState,RevANTRudder,Helicopter);"));		//added in 0.53 to release "RudderPedals" argument in S3Shifted
+				}
+			else
+				{
+				SetShiftButton(&HCougar, S3, &HCougar, 0, 0);
+				MapKey	(&HCougar, S3, CHAIN(DX30,TEMPO(DX3, 	EXEC("S3S4Shifted(ProfID,RudderPedals,GearState,Helicopter);"), ModTempo)));		//DX3 short, long(er) for modifier and eject check, moved here in 0.53, removed S4 and changed argument to "RudderPedals"
+				MapKeyR	(&HCougar, S3, 							EXEC("S3Release(ProfID,RudderPedals,GearState,RevANTRudder,Helicopter);"));		//added in 0.53 to release "RudderPedals" argument in S3Shifted
+				}
+			printf("...Done!\xa");	
+			printf("         Stick Buttons...");	
+				
+
+				if (WarthogStick > 0)
+					{
+					if (prof == 1541)
+						{
+						MapKeyIO(&Joystick,TG1,	SA342L_Pilot_Sight_Toggle,0);
+						MapKey	(&Joystick,TG2,	SA342L_Fire_DX);
+						MapKeyIO(&Joystick,	S1,	SA342_AP_Master_Stick, TEMPO(SA342L_Salvo_Sw, DX3, DefTempo));
+						MapKeyIO(&Joystick, S2, TEMPO(UH1_RequestControl, CHAIN(CrewStation3LS,EXEC("Pause_TrackIR(1,PauseTIRGunner*PauseTIRGunner_SA342);")), DefTempo), DX2);	//keyboard for gunner until available in DX.  Pause_TrackIR added in 2.25d
+						//MapKeyIO(&Joystick, S2, UH1_RequestControl, DX2);
+						}
+					else
+						{
+						MapKeyIO(&Joystick,TG1,	DX1, CHAIN(DX1,DX5)	);	//DX5 added in 2.28 for Minigun trigger
+						MapKey	(&Joystick,TG2,	DX6);
+						MapKeyIO(&Joystick,	S1,	SA342_AP_Master_Stick, DX3);
+						MapKeyIO(&Joystick, S2, UH1_RequestControl, DX2);
+						}
+//					MapKeyR (&Joystick,TG1, 0);
+					
+//					MapKeyR	(&Joystick, S1, 0);
+					
+					//MapKey	(&Joystick, S2, DX2);	//relocated to if/else above until gunner station available with DX
+					MapKeyR	(&Joystick,	S2, 0);
+					MapKeyIO(&Joystick, S4, EXEC("S3S4Shifted(ProfID);"), DX4);	//Chain allows DX4 and wheelbrakes; diffbraking added in 0.24, DX30 removed, DX4 moved to Diffbraking in 0.32
+//					MapKeyR	(&Joystick, S4, 0);
+					}
+				else
+					{
+					if (prof == 1541)
+						{
+						MapKeyIO(&HCougar,TG1,	SA342L_Pilot_Sight_Toggle,0);
+						MapKey	(&HCougar,TG2,	SA342L_Fire_DX);
+						MapKeyIO(&HCougar,	S1,	SA342_AP_Master_Stick, TEMPO(SA342L_Salvo_Sw, DX3, DefTempo));
+						MapKeyIO(&HCougar,	S2, TEMPO(UH1_RequestControl, CHAIN(CrewStation3LS,EXEC("Pause_TrackIR(1,PauseTIRGunner*PauseTIRGunner_SA342);")), DefTempo), DX2);	//keyboard for gunner, /I DX2 for take control multicrew until available in DX.  Pause_TrackIR added in 2.25d
+						//MapKeyIO(&HCougar,	S2, UH1_RequestControl,	DX2);	
+						}
+					else
+						{
+						MapKeyIO(&HCougar, TG1,	DX1, CHAIN(DX1,DX5)	);	//DX5 added in 2.28 for Minigun trigger
+						MapKey	(&HCougar, TG2,	DX6);
+						MapKeyIO(&HCougar,	S1,	SA342_AP_Master_Stick, DX3);
+						MapKeyIO(&HCougar,	S2, UH1_RequestControl,	DX2);	
+						}
+//					MapKeyR	(&HCougar, TG1,	0);
+					
+					
+					//MapKey	(&HCougar,	S2, DX2);	//relocated to if/else above until gunner station available with DX
+					MapKeyR	(&HCougar,	S2, 0);
+					MapKeyIO(&HCougar,	S4, EXEC("S3S4Shifted(ProfID);"), DX4);	//Chain allows DX4 and wheelbrakes; diffbraking added in 0.24, DX30 removed, DX4 moved to Diffbraking in 0.32
+//					MapKeyR	(&HCougar,	S4, 0);
+					}
+			printf("...Done!\xa");	
+			
+			H1_Init(TrackIR, PadlockEnabled, ProfID);	//moved to individual routines in 1.27 for trim reset removal on helos
+			CommState_Off(1,ProfID,1,0,1);		//sets hats 2-4 to DX functions
+			SA342_Throttle_Init();			//maps throttle (WH or TQS) in separate routine
+			SA342_Switch_Sync(ProfID);
+	printf("   HOTAS Cougar Mapping Complete.\xa");			
+
+//UH1_MFD_Init();
+
+ActKey(DX1);				//just in case DX1 lingers from trigger activation
+//Lights_ALL(0);				//Says Init Complete
+
+if ((Adjust_Backlighting > 0) & (WarthogThrottle > 0))
+	{
+	DeferCall(LED_Delay,&D_MFDWHT_Pwr,Throttle[APUON]+1);	//+1 because it's min or max, no off  may set to slider later
+	DeferCall(3*LED_Delay,&Lights_LLED1,0);
+	DeferCall(4*LED_Delay,&Lights_LLED2,0);
+	DeferCall(5*LED_Delay,&Lights_RLED1,0);
+	DeferCall(6*LED_Delay,&WHT_Lights_Dn_D,0);
+	}
+else
+	{
+	Backlight_Max_Init(0);
+	DeferCall(4*LED_Delay,&Lights_LLED1,0);
+	DeferCall(5*LED_Delay,&Lights_LLED2,0);
+	DeferCall(6*LED_Delay,&Lights_RLED1,0);
+	if (WarthogThrottle > 0) DeferCall(7*LED_Delay,&WHT_Lights_Dn_D,0);
+	}
+
+if (Init_Run == 0) Gear_Ind_Init(GearDn_Ind_Default,FixedGear,Helicopter,AirBrkFlash);
+
+StationCheck(ProfID, CurrentStation,1,0);
+
+
+Map_Cougar_ToeBrakes(0);	//added in 1.40
+
+printf(" SA342%s Gazelle Config Complete!\xa",&lmvar);	
+Set_Acft_Array_Cur(ProfID);	//this allows flexibility if the profile evolves into variations later
+}
+
+
+int	SA342_Throttle_Init()
+{
+if (WarthogThrottle > 0)
+	{
+				printf("         Warthog Throttle Buttons...");	
+				if (ProfID == 1542)
+					{
+					MapKeyIO(&Throttle, CSR,	EXEC("SA342_Weps_Stn_Cycle(2);"),	Searchlight_Right_DX);	//works for slew				
+					MapKeyIO(&Throttle, CSL,	EXEC("SA342_Weps_Stn_Cycle(0);"),	Searchlight_Left_DX);
+					MapKeyIO(&Throttle,	CSU,	EXEC("SA342_Weps_Stn_Cycle(1);"),	Searchlight_Extend_DX);
+					MapKeyIO(&Throttle,	CSD,	EXEC("SA342_Weps_Stn_Cycle(3);"),	Searchlight_Retract_DX);
+					}
+				else
+					{
+					MapKey	(&Throttle, CSR,	Searchlight_Right_DX);	//works for slew				
+					MapKey	(&Throttle, CSL,	Searchlight_Left_DX);
+					MapKey	(&Throttle,	CSU,	Searchlight_Extend_DX);
+					MapKey	(&Throttle,	CSD,	Searchlight_Retract_DX);
+					}
+				//	Boat Switch = Landing Light 3 way sw
+
+
+				if ((TrackIR > 1) | (MFD_Count < 1))		//TIR/MFD added in 2.34a 
+						MapKeyIO(&Throttle,	SPDB, 	TEMPO(0, EXEC("DCS_AcftSel(1);"),	SwapTempo),		PULSE+SA342_Collective_Hold);
+				else	MapKey	(&Throttle, SPDB,	PULSE+SA342_Collective_Hold);	//collective hold toggle
+				MapKeyR	(&Throttle,	SPDB,	0);
+				MapKey	(&Throttle, SPDF,	PULSE+SA342_Collective_Hold);	
+				MapKeyR	(&Throttle,	SPDF,	PULSE+SA342_Collective_Hold);	
+
+				MapKey	(&Throttle, CHF,	DX25);	//Set for landing light deploy/retract
+				MapKey	(&Throttle, CHB, 	DX26);
+//				MapKeyR	(&Throttle,	CHF,	0);	//Added for F-86 in 1.69
+//				MapKeyR	(&Throttle,	CHB,	0);	//Added for F-86 in 1.69				
+
+				
+				//	Left Throttle Button = Flare
+				MapKey	(&Throttle,	LTB,	DX24);	//set for flare, /I for cover toggle
+				
+				//	Slew Button = Starter
+				MapKeyIO(&Throttle,	SC,		TEMPO(0,DX19,DefTempo),	DX19);	// IR/Norm View /I Long Recenter
+//				MapKeyR	(&Throttle,	SC,		0);
+				
+		printf("Throttle Base Switches...");
+				MapKeyIO(&Throttle,	EFLNORM,	0,		PULSE+SA342_Pitot_Heat_Sw);
+//				MapKeyR	(&Throttle,	EFLNORM,	0);
+				MapKeyIO(&Throttle,	EFLOVER,	0,		PULSE+SA342_Pitot_Heat_Sw);
+				MapKeyIO(&Throttle,	EFRNORM,	0,		PULSE+SA342_Form_Lts);
+//				MapKeyR	(&Throttle,	EFRNORM,	0);
+				MapKeyIO(&Throttle,	EFROVER,	0,		PULSE+SA342_Form_Lts);
+				
+//				MapKey	(&Throttle,	IDLERON,	0);
+//				MapKey	(&Throttle,	IDLEROFF,	0);
+//				MapKey	(&Throttle,	IDLELON,	0);
+//				MapKey	(&Throttle,	IDLELOFF,	0);
+				
+				MapKeyIO(&Throttle,	EACON,	EXEC("SA342_EOPMap(ProfID,1,Armament_EOP_SA342);"),CHAIN(PULSE+SA342_Master_Arm,EXEC("SA342_EOPMap(ProfID,1,Armament_EOP_SA342);"))	);
+				MapKeyIO(&Throttle,	EACOFF,	EXEC("SA342_EOPMap(ProfID,0,Armament_EOP_SA342);"),CHAIN(PULSE+SA342_Master_Arm,EXEC("SA342_EOPMap(ProfID,0,Armament_EOP_SA342);"))	);
+				
+				if (ProfID == 1541)
+					{
+					MapKeyIO(&Throttle,	RDRNRM,	0,PULSE+SA342L_Salvo_Sw);
+					MapKeyIO(&Throttle,	RDRDIS,	0,PULSE+SA342L_Salvo_Sw);
+					}
+				else if (Discrete_AP_SA342 > 0)
+					{
+					MapKey	(&Throttle,	RDRNRM,	DOWN+DX18);	//Autopilot Master
+					MapKey	(&Throttle,	RDRDIS,	UP+DX18);
+					}
+				else
+					{
+					MapKeyIO(&Throttle,	RDRNRM,	0,PULSE+SA342_AP_Master_Sw);	//Autopilot Master
+					MapKeyIO(&Throttle,	RDRDIS,	0,PULSE+SA342_AP_Master_Sw);
+					}	
+				//	FLAP changed to PS and moved to UH1_Throttle_Set() in 2.25 (MapKeyR for FLAP stays 0)
+				//MapKeyIO(&Throttle,	PSF,	CHAIN(SA342_Brake_Fwd,EXEC("flashLLED1(1,500);")),
+				//							CHAIN(UH1_Throttle_Up,EXEC("flashLLED1(1,500);"))	);	//duplicates fuel lever
+				//MapKey	(&Throttle,	PSM,	EXEC("flashLLED1(0,500);"));
+				//MapKeyIO(&Throttle,	PSB,	CHAIN(SA342_Brake_Aft,EXEC("flashLLED1(1,500);")),			
+				//							CHAIN(UH1_Throttle_Dn,EXEC("flashLLED1(1,500);"))	);
+//				MapKeyR	(&Throttle,	FLAPU,	0);
+//				MapKeyR	(&Throttle,	FLAPD,	0);
+
+				MapKeyIO(&Throttle,	APPAT,	0,EXEC("SA342_AP_Mode_Set(2,Switch_Delay);"));
+				MapKeyIO(&Throttle,	APALT,	0,EXEC("SA342_AP_Mode_Set(0,Switch_Delay);"));
+				MapKeyIO(&Throttle,	APAH,	0,TEMPO(0,EXEC("SA342_AP_Mode_Set(1,Switch_Delay);"),DoubleTap));
+				
+				
+				
+				//MapKey	(&Throttle,	APENG,	SA342_Lts_Test);
+				MapKeyIO(&Throttle,	LDGH,	TEMPO(0,EXEC("EjectCheckLDGH(ProfID);"),DefTempo),	SA342_Warn_Lts_Test);
+				
+				SA342_EOPMap(ProfID,0);
+				if (Adjust_Backlighting > 0)
+					{
+					MapKeyIO(&Throttle,	APUON,	EXEC("MFD_WHT_Power(2,LED_Delay);"),	CHAIN(PULSE+SA342_Panel_Lts,EXEC("MFD_WHT_Power(2,LED_Delay);"))	);
+					MapKeyIO(&Throttle,	APUOFF,	EXEC("MFD_WHT_Power(1,LED_Delay);"),	CHAIN(PULSE+SA342_Panel_Lts,EXEC("MFD_WHT_Power(1,LED_Delay);"))	);
+					}
+				else
+					{
+					MapKey	(&Throttle,	APUON,	PULSE+SA342_Panel_Lts);
+					MapKey	(&Throttle,	APUOFF,	PULSE+SA342_Panel_Lts);
+					
+					}
+		Simple_Comm_Init(ProfID,1,0);			//Set Comms routine (DX21, PTTLED, and simple commmenu (\).  Note that Cougar bypasses simple comm for complex.
+		UH1_Throttle_Set(HeloThrottle, ProfID);
+		printf("Done!\xa");
+				
+
+	}
+	
+else
+	{
+				printf("         TQS Buttons...");	
+
+				MapKeyIO(&HCougar,	T1,	TEMPO(0,DX19, DefTempo),	DX19);	//IR/norm /I recenter
+				//T2-T5 in Complex Comm Init
+				Complex_A10C_Comm_Init(TS3_DX,1,ProfID);	//moved to complex in 2.11
+
+				MapKey	(&HCougar,	T6,	DX24);
+//				MapKeyR(&HCougar,	T6,	0);
+				if ((TrackIR > 1) | (MFD_Count < 1))		//TIR/MFD added in 2.34a 
+						MapKeyIO(&HCougar,	T9, TEMPO(0, EXEC("DCS_AcftSel(1);"),	SwapTempo),		DX25);	
+				else	MapKey	(&HCougar, 	T9, DX25);
+//				MapKeyR	(&HCougar,	T9, 0);
+				MapKey	(&HCougar, 	T10,DX26);
+//				MapKeyR	(&HCougar,	T10,0);	
+			}
+SA342_DF_Init(WarthogThrottle);
+
+
+printf("...Done!\xa");
+}
+
+int	SA342_Switch_Sync(int prof = 1542)
+{
+	if	( (WarthogThrottle > 0) & (Discrete_AP_SA342 > 0) & (prof == 1542) & (Throttle[RDRNRM])	)	ActKey(KEYON+DX10);
+	//poss 25/26 
+}
+
+int SA342_HCS_Init(int stn, int prof)
+{
+		if (Script_Debug) printf("         Hat2 (Armament)...");	
+			if (prof == 1541)
+				{
+				MapKeyIO(&HCougar, H2U,	TEMPO(SA342L_WpnPnl_Pwr_Up, SA342_Cam_Mode_Incr, DefTempo),	DisplayZoom_In);	//doesn't use function because there is no absolute switch w/ cougar
+				MapKeyIO(&HCougar, H2D,	TEMPO(SA342L_WpnPnl_Pwr_Dn, SA342_Cam_Mode_Decr, DefTempo),	DisplayZoom_Out);
+
+				MapKeyIO(&HCougar,	H2L,	TEMPO(SA342L_WpnSw_Left, SA342L_WpnSw_Left_Cover,DefTempo),		DX8);		//DX8  for Rkt Pair Incr, Shifted Gun Selector
+				MapKeyIO(&HCougar,	H2R,	TEMPO(SA342L_WpnSw_Right,CHAIN(DX31,D(ModDelay),DX12),DefTempo),	DX10);			//SA342L_WpnSw_Right_Cover (replace DX when fixed by Polychop)																								//DX10 or Rkt Pair Decr, Shifted Gun Selector
+				}
+			else
+				{
+				MapKeyIO(&HCougar, H2U,	SA342_Cam_Mode_Incr,	DisplayZoom_In);
+				MapKeyIO(&HCougar, H2D,	SA342_Cam_Mode_Decr,	DisplayZoom_Out);
+
+				MapKeyIO(&HCougar,	H2R,	EXEC("SA342_Weps_Stn_Cycle(4);"),	DX8);
+				MapKeyIO(&HCougar,	H2L,	EXEC("SA342_Weps_Stn_Cycle(-1);"),	DX10);
+				}
+		if (Script_Debug) printf("...Done!\xa");	
+		if (Script_Debug) printf("         Hat3 (Sights)...");
+			if (TrackIR < 2)
+				{			
+				MapKeyIO(&HCougar, 	H3U,	SnapView6,		DX11);	//momentary snapview for VNE chart
+				MapKeyIO(&HCougar,	H3R,	Std_SnapView3,	DX12);
+				MapKeyIO(&HCougar,	H3D,	Std_SnapView2,	DX13);
+				MapKeyIO(&HCougar,	H3L,	Std_SnapView1,	DX14);
+				}
+			else
+				{			
+				MapKeyIO(&HCougar, 	H3U,	VR_Zoom_kb,		DX11);
+				MapKey	(&HCougar,	H3R,	DX12);
+				MapKeyIO(&HCougar,	H3D,	VR_Spyglass,	DX13);
+				MapKey	(&HCougar,	H3L,	DX14);
+				}
+		if (Script_Debug) printf("...Done!\xa");	
+		if (Script_Debug) printf("         Hat4 (Trim)...");	
+			H4UD_CPTM(prof);	
+			MapKeyIO(&HCougar,	H4R,	EXEC("SA342_AP_Mode_Set(1,Switch_Delay);"),	EXEC("SA342_AP_Mode_Set(2,Switch_Delay);"));	//changed in 1.69
+			MapKeyIO(&HCougar,	H4L,	EXEC("SA342_AP_Mode_Set(1,Switch_Delay);"),	EXEC("SA342_AP_Mode_Set(0,Switch_Delay);"));
+		if (Script_Debug) printf("...Done!\xa");
+
+}
+int SA342_WHS_Init(int stn, int prof)
+{
+		if (Script_Debug) printf("         Hat2 (Armament)...");	
+			if (prof == 1541)
+				{
+				MapKeyIO(&Joystick, H2U,	TEMPO(EXEC("SA342L_WpnPwr_Sw_Set( 3,Switch_Delay);"),	SA342_Cam_Mode_Incr,DefTempo),	DisplayZoom_In);
+				MapKeyIO(&Joystick, H2D,	TEMPO(EXEC("SA342L_WpnPwr_Sw_Set(-1,Switch_Delay);"),	SA342_Cam_Mode_Decr,DefTempo),	DisplayZoom_Out);
+
+				MapKeyIO(&Joystick,	H2L,	TEMPO(SA342L_WpnSw_Left,SA342L_WpnSw_Left_Cover,DefTempo),		DX8);		//DX8  for Rkt Pair Incr, Shifted Gun Selector
+				MapKeyIO(&Joystick,	H2R,	TEMPO(SA342L_WpnSw_Right,CHAIN(DX31,D(ModDelay),DX12),DefTempo),	DX10);			//SA342L_WpnSw_Right_Cover (replace DX when fixed by Polychop)															//DX10 or Rkt Pair Decr, Shifted Gun Selector
+				}
+			else
+				{
+				MapKeyIO(&Joystick, H2U,	SA342_Cam_Mode_Incr,	DisplayZoom_In);
+				MapKeyIO(&Joystick, H2D,	SA342_Cam_Mode_Decr,	DisplayZoom_Out);
+
+				MapKeyIO(&Joystick,	H2R,	EXEC("SA342_Weps_Stn_Cycle(4);"),	DX8);							//DX8  for Rkt Pair Incr, Shifted Gun Selector
+				MapKeyIO(&Joystick,	H2L,	EXEC("SA342_Weps_Stn_Cycle(-1);"),	DX10);							//DX10 or Rkt Pair Decr, Shifted Gun Selector
+				}
+		if (Script_Debug) printf("...Done!\xa");	
+		if (Script_Debug) printf("         Hat3 (Sights)...");	
+			if (TrackIR < 2)
+				{			
+				MapKeyIO(&Joystick, H3U,	SnapView6,		DX11);	//momentary snapview for VNE chart
+				MapKeyIO(&Joystick,	H3R,	Std_SnapView3,	DX12);
+				MapKeyIO(&Joystick,	H3D,	Std_SnapView2,	DX13);
+				MapKeyIO(&Joystick,	H3L,	Std_SnapView1,	DX14);
+				}
+			else
+				{			
+				MapKeyIO(&Joystick,	H3U,	VR_Zoom_kb,		DX11);
+				MapKey	(&Joystick,	H3R,	DX12);
+				MapKeyIO(&Joystick,	H3D,	VR_Spyglass,	DX13);
+				MapKey	(&Joystick,	H3L,	DX14);
+				}
+		if (Script_Debug) printf("         Hat4 (Trim)...");	
+			H4UD_CPTM(prof);
+		if (WarthogThrottle > 0)	//added in 1.69
+			{		
+			MapKeyIO(&Joystick,	H4R,	SA342_Cam_Mode_Incr,DisplayZoom_In);
+			MapKeyIO(&Joystick,	H4L,	SA342_Cam_Mode_Decr,DisplayZoom_Out);
+			}
+		else
+			{
+			MapKeyIO(&Joystick,	H4R,	EXEC("SA342_AP_Mode_Set(1,Switch_Delay);"),	EXEC("SA342_AP_Mode_Set(2,Switch_Delay);"));
+			MapKeyIO(&Joystick,	H4L,	EXEC("SA342_AP_Mode_Set(1,Switch_Delay);"),	EXEC("SA342_AP_Mode_Set(0,Switch_Delay);"));			
+			}
+		if (Script_Debug) printf("...Done!\xa");
+	
+}
+
+
+int	SA342_DF_Init(int wh)
+{
+if (wh > 0)
+	{
+	MapKey	(&Throttle, BSB,	PULSE+SA342_LdgLight_Off);
+	MapKeyR	(&Throttle,	BSB,	0);
+	MapKey	(&Throttle, BSM,	TEMPO(0,PULSE+SA342_LdgLight_Vario, DoubleTap));
+	MapKey	(&Throttle, BSF,	PULSE+SA342_LdgLight_On);
+	MapKeyR	(&Throttle,	BSF,	0);	
+	}
+else
+	{
+	MapKey	(&HCougar, 	T7,		PULSE+SA342_LdgLight_Off);
+	MapKeyR	(&HCougar,	T7, 	0);
+	MapKey	(&HCougar, 	DFM,	TEMPO(0,PULSE+SA342_LdgLight_Vario, DoubleTap));
+	MapKey	(&HCougar, 	T8, 	PULSE+SA342_LdgLight_On);
+	MapKeyR	(&HCougar,	T8, 	0);	
+	}
+}
+
+int SA342_EOPMap(int prof = 1542, int ma = 0, int allow = 1)	//PS changed to FLAP in 2.25
+{
+if ((prof == 1541) & (allow > 0) & (ma))	//SA342L with Master Arm On and option enabled
+	{
+	MapKeyIO(&Throttle,	EOLIGN,		EXEC("SA342_Nav_Lts_Set(3,Switch_Delay,1);"),	CHAIN(SA342L_WpnSw_Left,EXEC("GraceFlag = 1;"))	);
+	MapKeyIO(&Throttle,	EOLNORM,	0,												EXEC("if (!GraceFlag) ActKey(KEYON+PULSE+SA342L_WpnSw_Left_Cover);")	);
+	MapKeyIO(&Throttle,	EOLMOTOR,	0,												PULSE+SA342L_WpnSw_Left_Cover	);
+					
+	MapKeyIO(&Throttle,	EORIGN,		EXEC("SA342_Strobe_Lts_Set(3,Switch_Delay,1);"),CHAIN(SA342L_WpnSw_Right,EXEC("GraceFlag = 1;"))	);
+	MapKeyIO(&Throttle,	EORNORM,	0,												EXEC("if (!GraceFlag) ActKey(KEYON+PULSE+SA342L_WpnSw_Right_Cover_DX);")	);	//remove DX once fixed by Polychop
+	MapKeyIO(&Throttle,	EORMOTOR,	0,												PULSE+SA342L_WpnSw_Right_Cover_DX);
+	
+	MapKeyRIO(&Throttle,EOLIGN,		0,EXEC("DeferCall(2*KBDelay,&Grace_Flag,0);"));
+	MapKeyRIO(&Throttle,EORIGN,		0,EXEC("DeferCall(2*KBDelay,&Grace_Flag,0);"));
+	
+	MapKeyIO(&Throttle,	FLAPU,	0,	EXEC("SA342L_WpnPwr_Sw_Set(2,Switch_Delay);")	);
+	MapKeyIO(&Throttle,	FLAPD,	0,	EXEC("SA342L_WpnPwr_Sw_Set(0,Switch_Delay);")	);
+	MapKeyIO(&Throttle, FLAPM,	0,	TEMPO(0,EXEC("SA342L_WpnPwr_Sw_Set(1,Switch_Delay);"),DoubleTap)	);
+	}
+else	//switches just for lights
+	{
+	MapKeyIO(&Throttle,	EOLIGN,		PULSE+SA342_Nav_Lts_Sw_Up,		EXEC("SA342_Nav_Lts_Set(2,Switch_Delay);	if (!IgnLState){ Grace_Flag(1); IgnLState = 1;}")	);
+	MapKeyIO(&Throttle,	EOLNORM,	0,								EXEC("if (!IgnLState) SA342_Nav_Lts_Set(1,Switch_Delay);")	);
+	MapKeyIO(&Throttle,	EOLMOTOR,	PULSE+SA342_Nav_Lts_Sw_Dn,		EXEC("SA342_Nav_Lts_Set(0,Switch_Delay);	IgnLState = 0;")	);
+					
+	MapKeyIO(&Throttle,	EORIGN,		PULSE+SA342_Strobe_Lts_Sw_Up,	EXEC("SA342_Strobe_Lts_Set(2,Switch_Delay);		if (!IgnRState){ Grace_Flag(1); IgnRState = 1;}")	);
+	MapKeyIO(&Throttle,	EORNORM,	0,								EXEC("if (!IgnRState) SA342_Strobe_Lts_Set(1,Switch_Delay);")	);
+	MapKeyIO(&Throttle,	EORMOTOR,	PULSE+SA342_Strobe_Lts_Sw_Dn,	EXEC("SA342_Strobe_Lts_Set(0,Switch_Delay);		IgnRState = 0;")	);
+	
+	MapKeyRIO(&Throttle,EOLIGN,		EXEC("IgnLState = 1;"),	EXEC("if ((IgnLState) & (!GraceFlag)) IgnLState = 0; else Grace_Flag(0);")	);
+	MapKeyRIO(&Throttle,EORIGN,		EXEC("IgnRState = 1;"),	EXEC("if ((IgnRState) & (!GraceFlag)) IgnRState = 0; else Grace_Flag(0);")	);
+	
+	//	Pinky Switch = Roof Lamp
+	MapKeyIO(&Throttle,	FLAPU,	PULSE+SA342_Roof_Lamp_WhiteRed,	CHAIN(SA342_Roof_Lamp_Up,EXEC("flashRLED1(1,500);"))	);
+	MapKeyIO(&Throttle,	FLAPD,	PULSE+SA342_Roof_Lamp_LowNorm,	CHAIN(SA342_Roof_Lamp_Dn,EXEC("flashRLED1(1,500);"))	);
+	MapKeyIO(&Throttle, FLAPM,	0,EXEC("flashRLED1(0,500);"));
+	}
+
+if (ma) Lights_LLED2(1);
+else 	Lights_LLED2(0);
+if (Script_Debug) printf ("Master Arm = %i\xa",ma);	//for test purposes
+}
+
+int SA342_MFD_Init(int prof)
+{
+//===================================
+//		Standard MFD Buttons
+//===================================
+
+	printf("   Map Cougar Left  MFD (DX31)...");	
+//LOSB 1 in Init
+					MapKey	(&LMFD, OSB02,	CHAIN(DX31,D(ModDelay),DX2));
+					MapKey	(&LMFD, OSB03,	CHAIN(DX31,D(ModDelay),DX3));
+					MapKey	(&LMFD,	OSB04,	CHAIN(DX31,D(ModDelay),DX4));
+//					MapKeyR	(&LMFD,	OSB04,	0);	//for A-10C and F-5E
+					MapKey	(&LMFD, OSB05,	CHAIN(DX31,D(ModDelay),DX5));
+//					MapKeyR	(&LMFD,	OSB05,	0);	//For F-5E
+//LOSB 6-10
+					MapKeyIO(&LMFD,	OSB06,	CHAIN(DX31,D(ModDelay),DX6),	TEMPO(CHAIN(DX31,D(ModDelay),DX6),	CHAIN(DX30,DX31,D(ModDelay),DX6),	DefTempo));		
+					if (prof == 1542)
+						{
+						MapKey	(&LMFD,	OSB07,	EXEC("SA342_Weps_Stn_Cycle(0);"));	//CHAIN(DX31,D(ModDelay),DX7));
+						MapKey	(&LMFD,	OSB08,	EXEC("SA342_Weps_Stn_Cycle(1);"));	//CHAIN(DX31,D(ModDelay),DX8));					
+						MapKey	(&LMFD,	OSB09,	EXEC("SA342_Weps_Stn_Cycle(2);"));	//CHAIN(DX31,D(ModDelay),DX9));
+						MapKey	(&LMFD,	OSB10,	EXEC("SA342_Weps_Stn_Cycle(3);"));	//CHAIN(DX31,D(ModDelay),DX10));
+						}
+					else
+						{
+						MapKey	(&LMFD,	OSB07,	0);
+						MapKey	(&LMFD,	OSB08,	0);					
+						MapKey	(&LMFD,	OSB09,	0);
+						MapKey	(&LMFD,	OSB10,	0);
+						}
+					MapKeyR	(&LMFD,	OSB07,	0);	//for Bf109
+//LOSB 11-15
+					MapKey	(&LMFD,	OSB11,	CHAIN(DX31,D(ModDelay),DX11));
+					MapKeyIO(&LMFD,	OSB12,	CHAIN(DX31,D(ModDelay),DX12),	TEMPO(CHAIN(DX31,D(ModDelay),DX12),	CHAIN(DX30,DX31,D(ModDelay),DX12),	DefTempo));
+					MapKeyIO(&LMFD,	OSB13,	CHAIN(DX31,D(ModDelay),DX13),	TEMPO(CHAIN(DX31,D(ModDelay),DX13),	CHAIN(DX30,DX31,D(ModDelay),DX13),	DefTempo));
+
+					MapKeyIO(&LMFD,	OSB14,	CHAIN(DX31,D(ModDelay),DX14),	TEMPO(SA342_Sand_Filter_Sw,	CHAIN(DX30,DX31,D(ModDelay),DX14),	DefTempo));
+					MapKeyIO(&LMFD,	OSB15,	CHAIN(DX31,D(ModDelay),DX15),	TEMPO(SA342_Aux_Fuel_Sw,	CHAIN(DX30,DX31,D(ModDelay),DX15),	DefTempo));
+
+//LOSB 16-19
+					MapKey	(&LMFD,	OSB16,	CHAIN(DX32,D(ModDelay),DX6));	//Set to 6 because freed on RMFD
+					MapKey	(&LMFD,	OSB17,	CHAIN(DX31,D(ModDelay),DX17));
+					MapKey	(&LMFD,	OSB18,	CHAIN(DX32,D(ModDelay),DX8));	//Set to 8 because freed on RMFD
+					MapKey	(&LMFD,	OSB19,	CHAIN(DX31,D(ModDelay),DX19));	
+		
+//LMFD 20 in Init
+
+//Left Rocker Switches
+//SYM
+		MapKey	(&LMFD,	SYMU,	KB_LSYMU);
+		MapKey	(&LMFD,	SYMD,	KB_LSYMD);
+
+//CON
+//Master Arm (No EOP since it is WH only)
+if (prof == 1541)
+		{
+		MapKeyIO(&LMFD,	CONU,	KB_LCONU,	TEMPO(EXEC("SA342L_WpnPwr_Sw_Set( 3,Switch_Delay);"),	CHAIN(DX30,KB_LCONU),	DefTempo));	//,	EXEC("SA342_AP_Mode_Set( 3,Switch_Delay);")	);
+		MapKeyIO(&LMFD,	COND,	KB_LCOND,	TEMPO(EXEC("SA342L_WpnPwr_Sw_Set(-1,Switch_Delay);"),	CHAIN(DX30,KB_LCOND),	DefTempo));	//,	EXEC("SA342_AP_Mode_Set(-1,Switch_Delay);")	);
+		}
+else
+		{
+		MapKeyIO(&LMFD,	CONU,	KB_LCONU,	CHAIN(DX30,KB_LCONU));	//,	EXEC("SA342_AP_Mode_Set( 3,Switch_Delay);")	);
+		MapKeyIO(&LMFD,	COND,	KB_LCOND,	CHAIN(DX30,KB_LCOND));	//,	EXEC("SA342_AP_Mode_Set(-1,Switch_Delay);")	);
+		}
+	
+//BRT
+//NADIR
+		MapKeyIO(&LMFD,	BRTU,	KB_LBRTU,	TEMPO(KB_LBRTU,	CHAIN(DX30,KB_LBRTU),	DefTempo));
+		MapKeyIO(&LMFD,	BRTD,	KB_LBRTD,	TEMPO(KB_LBRTD,	CHAIN(DX30,KB_LBRTD),	DefTempo));
+
+//GAIN in Init
+
+	printf("Done!\xa");
+
+	printf("   Map Cougar Right MFD (DX32)...");
+
+//ROSB 1-5 at first part of routine
+		MapKey	(&RMFD,	OSB01,	CHAIN(DX32,D(ModDelay),DX1));
+		MapKey	(&RMFD,	OSB02,	CHAIN(DX32,D(ModDelay),DX2));
+		MapKey	(&RMFD,	OSB03,	CHAIN(DX32,D(ModDelay),DX3));
+		MapKey	(&RMFD,	OSB04,	CHAIN(DX32,D(ModDelay),DX4));
+		MapKey	(&RMFD,	OSB05,	CHAIN(DX32,D(ModDelay),DX5));
+//		MapKeyR	(&RMFD,	OSB05,	0);
+		
+//ROSB 6-10
+//UHF 6-0 + Enter (long)
+		MapKeyIO(&RMFD,	OSB06,	USB_RETURNORENTER,	TEMPO(CHAIN(DX30,D(ModDelay),USB_6),	CHAIN(DX30,D(ModDelay),USB_RETURNORENTER),	DefTempo));
+		MapKeyIO(&RMFD,	OSB07,	USB_RETURNORENTER,	TEMPO(CHAIN(DX30,D(ModDelay),USB_7),	CHAIN(DX30,D(ModDelay),USB_RETURNORENTER),	DefTempo));
+//		MapKeyR	(&RMFD,	OSB07,	0);
+		MapKeyIO(&RMFD,	OSB08,	USB_RETURNORENTER,	TEMPO(CHAIN(DX30,D(ModDelay),USB_8),	CHAIN(DX30,D(ModDelay),USB_RETURNORENTER),	DefTempo));
+		MapKeyIO(&RMFD,	OSB09,	USB_RETURNORENTER,	TEMPO(CHAIN(DX30,D(ModDelay),USB_9),	CHAIN(DX30,D(ModDelay),USB_RETURNORENTER),	DefTempo));
+		MapKeyIO(&RMFD,	OSB10,	USB_RETURNORENTER,	TEMPO(CHAIN(DX30,D(ModDelay),USB_0),	CHAIN(DX30,D(ModDelay),USB_RETURNORENTER),	DefTempo));
+
+//ROSB 11-15
+		if (Discrete_AP_SA342 > 0)
+			{
+			MapKeyIO(&RMFD,	OSB11,	DOWN+DX7,	TEMPO(UP+DX7,	DOWN+DX7,	DefTempo));	//SA342_AP_Yaw_Ch);
+			MapKeyIO(&RMFD,	OSB12,	DOWN+DX9,	TEMPO(UP+DX9,	DOWN+DX9,	DefTempo));	//SA342_AP_Roll_Ch);
+			MapKeyIO(&RMFD,	OSB13,	DOWN+DX16,	TEMPO(UP+DX16,	DOWN+DX16,	DefTempo));	//SA342_AP_Pitch_Ch);
+			MapKeyIO(&RMFD,	OSB14,	DOWN+DX18,	TEMPO(UP+DX18,	DOWN+DX18,	DefTempo));	//SA342_AP_Master_Sw);
+			}
+		else
+			{
+			MapKey	(&RMFD,	OSB11,	SA342_AP_Yaw_Ch);		//CHAIN(DX32,D(ModDelay),DX11));
+			MapKey	(&RMFD,	OSB12,	SA342_AP_Roll_Ch);		//CHAIN(DX32,D(ModDelay),DX12));
+			MapKey	(&RMFD,	OSB13,	SA342_AP_Pitch_Ch);		//CHAIN(DX32,D(ModDelay),DX13));
+			MapKey	(&RMFD,	OSB14,	SA342_AP_Master_Sw);	//CHAIN(DX32,D(ModDelay),DX14));
+			}	
+		MapKey	(&RMFD,	OSB15,	CHAIN(DX32,D(ModDelay),DX15));
+//		MapKeyR	(&RMFD,	OSB13,	0);	//for Spitfire Engine Start	
+//		MapKeyR	(&RMFD,	OSB14,	0);	//for Spitfire Engine Start										
+//ROSB 16-20
+//UHF 1-5 + Enter (long)		
+		MapKeyIO(&RMFD,	OSB16,	USB_RETURNORENTER,	TEMPO(CHAIN(DX30,D(ModDelay),USB_5),	CHAIN(DX30,D(ModDelay),USB_RETURNORENTER),	DefTempo));
+		MapKeyIO(&RMFD,	OSB17,	USB_RETURNORENTER,	TEMPO(CHAIN(DX30,D(ModDelay),USB_4),	CHAIN(DX30,D(ModDelay),USB_RETURNORENTER),	DefTempo));
+		MapKeyIO(&RMFD,	OSB18,	USB_RETURNORENTER,	TEMPO(CHAIN(DX30,D(ModDelay),USB_3),	CHAIN(DX30,D(ModDelay),USB_RETURNORENTER),	DefTempo));
+		MapKeyIO(&RMFD,	OSB19,	USB_RETURNORENTER,	TEMPO(CHAIN(DX30,D(ModDelay),USB_2),	CHAIN(DX30,D(ModDelay),USB_RETURNORENTER),	DefTempo));
+		
+		if ((TARS > 0) & (Overlay_Enable_SRS > 0))
+				MapKeyIO(&RMFD,	OSB20,	TEMPO(USB_RETURNORENTER,Rdo_Ovly,	DefTempo),	TEMPO(CHAIN(DX30,D(ModDelay),USB_1),	CHAIN(DX30,D(ModDelay),USB_RETURNORENTER),	DefTempo));
+		else	MapKeyIO(&RMFD,	OSB20,	USB_RETURNORENTER,	TEMPO(CHAIN(DX30,D(ModDelay),USB_1),	CHAIN(DX30,D(ModDelay),USB_RETURNORENTER),	DefTempo));
+
+								
+//Right Rocker Switches
+//SYM
+		MapKeyIO(&RMFD,	SYMU,	KB_RSYMU, 	TEMPO(KB_RSYMU,CHAIN(DX30,KB_RSYMU),DefTempo)	);
+		MapKeyIO(&RMFD,	SYMD,	KB_RSYMD,	TEMPO(KB_RSYMD,CHAIN(DX30,KB_RSYMD),DefTempo)	);
+//		MapKeyR	(&RMFD,	SYMU,	0);	//added in 1.61 to account for context sensitive R in M2000C
+//		MapKeyR	(&RMFD,	SYMD,	0);
+		
+//CON
+//Autopilot Mode Sw
+		MapKeyIO(&RMFD,	CONU,	DX27,	EXEC("SA342_AP_Mode_Set( 3,Switch_Delay);"));
+		MapKeyIO(&RMFD,	COND,	DX28,	EXEC("SA342_AP_Mode_Set(-1,Switch_Delay);"));
+//		MapKeyIO(&RMFD,	CONU,	CHAIN(PULSE+SA342_AP_Mode_Alt,EXEC("SA342_AP_Mode_Set(2,0);")),	TEMPO(EXEC("SA342_AP_Mode_Set( 3,Switch_Delay);"),CHAIN(PULSE+SA342_AP_Mode_Alt,EXEC("SA342_AP_Mode_Set(2,0);")),DefTempo)	);	//short for increment, long or /I for discrete
+//		MapKeyIO(&RMFD,	COND,	CHAIN(PULSE+SA342_AP_Mode_Spd,EXEC("SA342_AP_Mode_Set(0,0);")),	TEMPO(EXEC("SA342_AP_Mode_Set(-1,Switch_Delay);"),CHAIN(PULSE+SA342_AP_Mode_Spd,EXEC("SA342_AP_Mode_Set(0,0);")),DefTempo)	);
+//		MapKeyR	(&RMFD,	CONU,	0);	//added in 1.24 to account for context sensitive R in UH-1
+//		MapKeyR	(&RMFD,	COND,	0);
+	
+//BRT
+		MapKey	(&RMFD,	BRTU,	KB_RBRTU);
+		MapKey	(&RMFD,	BRTD,	KB_RBRTD);
+
+//GAIN
+		MapKey	(&RMFD,	GAINU,	KB_RGAINU);
+		MapKey	(&RMFD,	GAIND,	KB_RGAIND);
+
+	printf("Done!\xa");	
+
+}
+
+
+//Matrix Functions
+
+int	SA342_AP_Mode_Set(int posit, int delay = 200, int index=3, int time=0)
+{
+if (	(posit > index-1) | (posit < 0)	)
+	{
+	if (posit > index-1) 
+		{
+		posit = (SA342_AP_Mode_Cur+1);				//no out of bounds
+		if (posit > index-1) posit = index-1;
+		}
+	else if (posit < 0)
+		{
+		posit = (SA342_AP_Mode_Cur-1);				//no out of bounds
+		if (posit < 0) posit = 0;
+		}
+	}
+
+while (SA342_AP_Mode_Cur != posit)					//do loop with if/then based on </>
+	{
+	if (SA342_AP_Mode_Cur > posit)					
+		{
+		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+SA342_AP_Mode_Sw_Dn_DX);	
+		SA342_AP_Mode_Cur = (SA342_AP_Mode_Cur-1);
+		if (SA342_AP_Mode_Cur < 0) SA342_AP_Mode_Cur = 0;
+		}
+	else if (SA342_AP_Mode_Cur < posit)
+		{
+		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+SA342_AP_Mode_Sw_Up_DX);	
+		SA342_AP_Mode_Cur = (SA342_AP_Mode_Cur+1);
+		if (SA342_AP_Mode_Cur > index-1) SA342_AP_Mode_Cur = index-1;
+		}
+	time = time + delay;
+	}
+}
+
+int	SA342_Nav_Lts_Set(int posit, int delay = 200, int loop = 0, int index=3, int time=0)
+{
+if (Script_Debug) printf("SA342_Nav_Lts_Set(%i)\xa",posit);			//for test purposes
+if (	(posit > index-1) | (posit < 0)	)
+	{
+	if (posit > index-1) 
+		{
+		if (loop)	posit = (SA342_Nav_Lts_Cur+1)%index;
+		else		posit = (SA342_Nav_Lts_Cur+1);				//no out of bounds
+		if (posit > index-1) posit = index-1;
+		}
+	else if (posit < 0)
+		{
+		if (loop)	posit = (SA342_Nav_Lts_Cur+index-1)%index;
+		else		posit = (SA342_Nav_Lts_Cur-1);				//no out of bounds
+		if (posit < 0) posit = 0;
+		}
+	}
+while (SA342_Nav_Lts_Cur != posit)					//do loop with if/then based on </>
+	{
+	if (SA342_Nav_Lts_Cur > posit)					
+		{
+		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+SA342_Nav_Lts_Sw_Dn);	
+		SA342_Nav_Lts_Cur = (SA342_Nav_Lts_Cur-1);
+		if (SA342_Nav_Lts_Cur < 0) SA342_Nav_Lts_Cur = 0;
+		}
+	else if (SA342_Nav_Lts_Cur < posit)
+		{
+		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+SA342_Nav_Lts_Sw_Up);	
+		SA342_Nav_Lts_Cur = (SA342_Nav_Lts_Cur+1);
+		if (SA342_Nav_Lts_Cur > index-1) SA342_Nav_Lts_Cur = index-1;
+		}
+	time = time + delay;
+	}
+if (Script_Debug) printf("SA342_Nav_Lts_Cur = %i\xaIgnLState = %i\xa",SA342_Nav_Lts_Cur,IgnRState);	//for test purposes
+}
+
+int	SA342_Strobe_Lts_Set(int posit, int delay = 200, int loop = 0, int index=3, int time=0)
+{
+if (Script_Debug) printf("SA342_Strobe_Lts_Set(%i)\xa",posit);			//for test purposes
+if (	(posit > index-1) | (posit < 0)	)
+	{
+	if (posit > index-1) 
+		{
+		if (loop)	posit = (SA342_Strobe_Lts_Cur+1)%index;
+		else		posit = (SA342_Strobe_Lts_Cur+1);				//no out of bounds
+		if (posit > index-1) posit = index-1;
+		}
+	else if (posit < 0)
+		{
+		if (loop)	posit = (SA342_Strobe_Lts_Cur+index-1)%index;
+		else 		posit = (SA342_Strobe_Lts_Cur-1);				//no out of bounds
+		if (posit < 0) posit = 0;
+		}
+	}
+
+while (SA342_Strobe_Lts_Cur != posit)					//do loop with if/then based on </>
+	{
+	if (SA342_Strobe_Lts_Cur > posit)					
+		{
+		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+SA342_Strobe_Lts_Sw_Dn);	
+		SA342_Strobe_Lts_Cur = (SA342_Strobe_Lts_Cur-1);
+		if (SA342_Strobe_Lts_Cur < 0) SA342_Strobe_Lts_Cur = 0;
+		}
+	else if (SA342_Strobe_Lts_Cur < posit)
+		{
+		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+SA342_Strobe_Lts_Sw_Up);	
+		SA342_Strobe_Lts_Cur = (SA342_Strobe_Lts_Cur+1);
+		if (SA342_Strobe_Lts_Cur > index-1) SA342_Strobe_Lts_Cur = index-1;
+		}
+	time = time + delay;
+	}
+if (Script_Debug) printf("SA342_Strobe_Lts_Cur = %i\xaIgnRState = %i\xa",SA342_Strobe_Lts_Cur,IgnLState);	//for test purposes
+}
+
+
+int	SA342_Weps_Stn_Cycle(int posit, int loop = 0, int index = 4)		//posit is array position, index is max array size(starting with 1); not currently in use
+{
+if (Script_Debug) printf(" SA342_Weps_Stn_Cur = %i\xa",SA342_Weps_Stn_Cur);	//for test purposes
+if 	( ((posit > index-1) | (posit < 0)) & (SA342_Weps_Stn_Cur == 5)	)	//specific to this routine since knob starts between stations 2 and 3 so I chose a value out of range
+	{
+	if (posit > index-1) SA342_Weps_Stn_Cur = 3;
+	else SA342_Weps_Stn_Cur = 2;
+	}
+else if (		(loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if (posit > index-1)	SA342_Weps_Stn_Cur = (SA342_Weps_Stn_Cur+1)%index;		//posit > index will cycle by +1
+	else if (posit < 0)	SA342_Weps_Stn_Cur = (SA342_Weps_Stn_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+	}
+else if (	(!loop) & ((posit > index-1) | (posit < 0))	)
+	{
+	if ((posit > index-1) & (SA342_Weps_Stn_Cur < index-1)) SA342_Weps_Stn_Cur = (SA342_Weps_Stn_Cur+1)%index;		//posit > index will cycle by +1
+	else if ((posit < 0) & (SA342_Weps_Stn_Cur > 0))		SA342_Weps_Stn_Cur = (SA342_Weps_Stn_Cur+index-1)%index;			//posit < 0 will cycle by -1 
+//	else SA342_Weps_Stn_Cur = 0;	//for initial error check since it starts at -1 (just to put it on a weapons station)
+	}
+else				SA342_Weps_Stn_Cur = posit;										//posit in bounds will be discrete function call
+ActKey(KEYON+PULSE+X(SA342_Weps_Stn_Array,SA342_Weps_Stn_Cur));
+if (Script_Debug) printf(" posit = %i \xa SA342_Weps_Stn_Cur = %i \xa",posit,SA342_Weps_Stn_Cur);	//for test purposes
+}
+
+int	SA342L_WpnPwr_Sw_Set(int posit, int delay = 200, int index=3, int time=0)
+{
+if (	(posit > index-1) | (posit < 0)	)
+	{
+	if (posit > index-1) 
+		{
+		posit = (SA342L_WpnPwr_Sw_Cur+1);					//no out of bounds
+		if (posit > index-1) posit = index-1;
+		//ActKey(KEYON+PULSE+Mi8_Salvo_Sel_Sw_Up_DX);
+		}
+	else if (posit < 0)
+		{
+		posit = (SA342L_WpnPwr_Sw_Cur-1);				//no out of bounds
+		if (posit < 0) posit = 0;
+		//ActKey(KEYON+PULSE+Mi8_Salvo_Sel_Sw_Dn_DX);
+		}
+	//Mi8_Salvo_Sel_Cur = posit;						//sets equality for LED and next press
+	}
+
+while (SA342L_WpnPwr_Sw_Cur != posit)					//do loop with if/then based on </>
+	{
+	if (SA342L_WpnPwr_Sw_Cur > posit)					
+		{
+		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+SA342L_WpnPnl_Pwr_Dn);	
+		SA342L_WpnPwr_Sw_Cur = (SA342L_WpnPwr_Sw_Cur-1);
+		if (SA342L_WpnPwr_Sw_Cur < 0) SA342L_WpnPwr_Sw_Cur = 0;
+		}
+	else if (SA342L_WpnPwr_Sw_Cur < posit)
+		{
+		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+SA342L_WpnPnl_Pwr_Up);	
+		SA342L_WpnPwr_Sw_Cur = (SA342L_WpnPwr_Sw_Cur+1);
+		if (SA342L_WpnPwr_Sw_Cur > index-1) SA342L_WpnPwr_Sw_Cur = index-1;
+		}
+	time = time + delay;
+	}
+}
+

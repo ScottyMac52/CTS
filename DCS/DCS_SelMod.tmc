@@ -1,0 +1,2624 @@
+//==========================================================================================
+//		DCS World Module Selection Subroutines for HOTAS Cougar/Warthog and Cougar MFDs
+//						by Don "Home Fries" Heumphreus
+//							last updated: 18AUG2023
+//
+//	Change Log:
+//	1.53	Changed profile selection routine to array based selection; put all in this file
+//	1.55	Set LEDs to 0 0 0 0 at first part of selection routine so person knows that they are selecting
+//	1.56	Added PlayWav() to enable WAV files for aircraft selection
+//	1.62	Fixed Aircraft selection with Warthog Throttle
+//	1.63	Added F-5, Hawk, and C-101
+//	1.64	Added Backlight_Max_Init() to max backlighting on non-backlit profiles (only if some backlighting is enabled)
+//	1.66	Increased PlayWav buffer size to static value based on user input (default 200)
+//	1.68	Added WH LED cancellation on profile mode init
+//	1.69	Fixed reversed Boat Switch DX25/26
+//	1.72	Added Su-33 Standalone profile to arguments
+//	1.73	Updated PlayWav() to call EXE directly instead of Batch file
+//			Added F-5E to MFD_Init()
+//	2.00	Added AV-8B
+//	2.05	Added C-101EB
+//	2.10	Remapped RMFD to SRS/VAICOM/CommState/PTT when in hotswap mode
+//	2.13	Fixed !PTTState() to properly reassign PTT_Common
+//	2.20	Added J-11A and F/A-18C
+//	2.21	Fixed J-11A and Su-27 preset assignments
+//	2.25	Added LockAxis to DCS_AcftSel() to free up left throttle if locked
+//	2.26	Additional PS check for UH1/Gazelle in PSM_FLAPM_Check()
+//			Added MapKeyR(&RMFD,CONU/D,0) and prepped other MFD MapKeyR()
+//			Added NWS to MiG-29 in Global_S3_Init()
+//			Added A-4E-C
+//	2.27	Added MapKeyR for H2U for F/A-18C TDC Hold
+//			Added Combined Arms
+//	2.28	Added C-101 to Global_DF_Init()
+//			Added MapKeyR for S1 in DCS_AcftSel()
+//	2.29	Implemented MFDisplay functionality
+//			Moved DCSFP aliases here from DCS_World.tmc constants.  Commented out all DCSFP values and functions UFN.
+//			Added SuppressWavInit to TARSActive() and CommStateActive() to allow init awacs passthrough.
+//	2.29a	Incremented numbers by 1 in Set_Acft_Array_Cur() to account for AWACS mode (bug fix)
+//			Moved Hawk to end of BlueJet_Array
+//	2.31	Added F-14
+//	2.34	Added MFDisplay_Submod_Sel() and MFDisplay_Launch_Delta() (for DeferCall) and modified MFDisplay_Launch() for MFDisplay -submod parameter
+//			Added HOTAS-based aircraft selection to DCS_AcftSel()
+//	2.35	Added IL-2 Great Battles hooks
+//	2.40	Added Elite Dangerous
+//			Added OtherGame matrix/category for expansion
+//			Added Fw190A8
+//			Changed sound folder from DCS\\Sound to Common\\Sound
+//			Added MapKeyR(0) to sanitize HOTAS release between profile selections
+//	2.41	Added F-16C
+//	2.42	Added hooks for IL-2 1946.  Added MiG-19 and I-16.
+//			Fixed not passing over uninstalled selections for non-DCS games
+//			Added CTSProf function and profile to display MFD overlay in HotSwap mode
+//			Added Commstate_Off() to profile S3 cancel now that the stick is mapped.
+//	2.43	Added MB-339 and JF-17
+//			Added H1_Set() to cycle H1 between POV, TIR and VR (with VR = 0 and 1) during hotswap
+//	2.43b	Fixed typo preventing MiG-21 from loading
+//	2.44	Added Lights_WHT3(0) and flashWHT3(0) to DCS_AcftSel() for JF-17
+//	2.45	Fixed blue prop selection routine
+//			Removed Hawk support
+//			Added Low Volume wav option to PlayWav()
+//	2.46	Added hooks for MFD3 for F-16, JF-17, and M-2000C (awaiting implementation in MFDisplay)
+//			Fixed red aircraft being added to blue matrix if CA or AWACS mode not enabled.
+//	2.47	Added P-47D
+//	2.50b	Removed duplicate MapKeyR(0) mappings to free stack space.
+//	2.55	Added MapKey(0) to throttle switches on init.
+//	2.57	Added hooks for VNAO T-45, removed MB339
+//	2.60	Added Mi-24
+//			Added MapKeyR to Global_S2_Init()
+//	2.61	Added Mosquito FB VI
+//			Added HiVis MFDisp for Spitfire, Bf-109, FW-190A8/D9.
+//			Updated MFDisplay_Launch(), MFDisplay_Launch_ProfSel() and MFDisplay_Submod_Sel() for use with MFDMF (supersedes MFDisplay)
+//	2.64	Added AH-64D
+//			Added Mi-24 Gunner select to Global_S2_Init()
+//	2.68	Added F-15E
+//	2.70	Added F-15E to Global_DF_Init()
+//	2.71	Removed Mi-8 from Global_S2_Init()
+//
+//
+//==========================================================================================
+
+//Things to do:
+//	Put all MapKeyR(0) commands here instead of individual modules as clearing house.  MapKeyR for individual functions remain in place (including 0) - Done
+//	Clear individual module MapKeyR(0) functions except for context-sensitive (i.e. non-init) functions
+
+
+
+//Process for adding aircraft
+//	 1) Add to Matrix
+//	 2) Add to Set_Acft_Array_Cur() and AcftArrayInit() (increment index in AcftArrayInit()	)
+//	 3) Verify Global_S2_Init()
+//	 4) Verify Global_S3_Init()
+//	 5) Add xx_MFD_Init() to MFD_Init() and check for ROSB20
+//		Add xx_HCS_Init() to CommState_Off()
+//		Add xx_WHS_Init() to CommState_Off_WH()
+//	 **6)	Update TriggerZoom_MapGearDn() and TriggerZoom_MapGearDn_WH() as required
+//	 7) Update Select routine in module tmc, e.g. DCS_F14()
+// 	 8) Add SetMenu routine to module tmc, e.g. SetMenu_A10C()
+//	 8) Update GearStateInd() in DCS_Global_Subs
+//	10) Update Eject_Init() in DCS_Global_Subs
+//	11) Update StationCheck() as required
+//	12) If Direct Entry with KB buttons instead of DX, add ProfID to SetSnapViewT() (Global)
+//	-13) Cougar: add engine idle ops to EngineStartSingle() or EngineStartLR() and EngineShutDownSingle() or EngineShutDownLR() in DCS_Global_Subs.tmc as required
+//	14) If applicable, add Adjust_Backlighting_xxx to Backlight_Max_Init()
+//	15) Add xxx_Installed variable, SetMenu_xxx() and DCS_xxx_Init() and any other parameters to DCS World.tmc
+//	16) Add wav file to Speech folder and PlayWavSel().
+//		16 bit PCM
+//		amplify copy 13db
+//	17) Add char MFDisp_xxx to AcftArrayInit() and apply MFDisplay to PlayWavSel()
+
+
+
+
+//****************************************************
+//	CONOPS for 2.0 with more than 15 aircraft slots:
+//****************************************************
+//	Dogfight Switch/Boat Switch for 3 categories (but not UMD, rather logic, e.g. if (HCougar[T7])	)
+//		T7/BSB for Helos
+//		T8/BSF for Warbirds/props
+//		DFM/BSM for Jets
+//
+//	Use LMFD and RMFD 1-20 slots.  Rockers to cycle.
+//
+//	To keep things simple, we need a standard "swap login", i.e. a single S3+MFD for 2s combo.  Then move DF/BS (code would maybe remove mappings and restore them on cnx) and then press MFD button for selection.
+//	Remap so that S2 commits, S3 cancels.  This way "zeroing" the MapKeyR is no big deal .
+//
+//	redfor/bluefor matrices for jets, helos, props in numerical order (e.g. F-5, A-6, A-7, F-8) cycled by rockers.  Individual buttons for matching airframe such as X(jets,15)
+//
+//
+//	2501	C101EB
+//	2503	MirageIII
+//	2504	F-4E
+//	2604	A-4E-C
+//	2505	F-5
+//	2506	A-6E
+//	2507	A-7
+//	2508	AV-8B
+//	2509	A-10A
+//	2510	A-10C
+//	2511	F-111 (hopefully)
+//	2512	Hawk
+//	2513	Typhoon
+//	2514	F-14A/B
+//	2614	F-14D (hopefully)
+//	2515	F-15C
+//	2615	F-15E
+//	2516	F-16C
+//	2517	F-117 (hopefully)
+//	2518	F/A-18C
+//	2520	M2000C
+//	2537	AJS-37
+//	2539	MB-339
+//	2586	F-86
+//	2601	C101CC (tentative)
+//	2608	F-8 Crusader (hopefully)
+//
+//	2011	J-11A (FC3)
+//	2117	JF-17
+//	2017	MiG-17 (TBD)
+//	2019	MiG-19P
+//	2021	MiG-21
+//	2025	Su-25 A/T
+//	2027	Su-27
+//	2033	Su-33
+//	2029	MiG-29
+//	2015	MiG-15
+//	2039	L-39C
+//	2040	L-39ZA
+//
+//	Helos
+//	1501	UH-1
+//	1541	SA342L Gazelle
+//	1542	SA342M Gazelle
+//	1564	AH-64D Block II
+//	1558	OH-58 Kiowa
+//
+//	1050	Ka-50
+//	1024	Mi-24P
+//	1505	PA-105
+//	1008	Mi-8
+//
+//	Warbirds/Props/Heavies
+//	3502	Christen Eagle II
+//	3504	F4U Corsair
+//	3507	La-7
+//	3551	P-51
+//	3509	Spitfire LF Mk.IXc
+//	3516	I-16
+//	3540	P-40
+//	3547	P-47
+//	3606	Mosquito FB Mk.VI
+//	3530	C-130
+//
+//	3009	Bf109
+//	3090	Fw190D9
+//	3190	Fw190A8
+//	3052	Yak52 (TBI)
+//
+//	2000	DX
+//	999		CA
+//	998		AWACS
+//
+//	<End CONOPS>
+//
+//
+
+  
+//int	OtherGame_Enabled;	//sum of all non-dcs games installed.  nonzero enables LBRT and H2U/D.
+
+//Initializes analog axes and Cougar MFD buttons, then calls the default HOTAS Cougar button configuration
+int RedJet_Array;
+int	RedHelo_Array;
+int	RedProp_Array;
+int	BlueJet_Array;
+int BlueHelo_Array;
+int	BlueProp_Array;
+//int	OtherGame_Array;
+
+int RedJet_Cur;
+int	RedHelo_Cur;
+int	RedProp_Cur;
+int	BlueJet_Cur;
+int BlueHelo_Cur;
+int	BlueProp_Cur;
+//int	OtherGame_Cur;
+
+int RedJet_Index;
+int	RedHelo_Index;
+int	RedProp_Index;
+int	BlueJet_Index;
+int BlueHelo_Index;
+int	BlueProp_Index;
+//int	OtherGame_Index;
+
+int Acft_Cycle_Dir;	//determines direction of cycle when selecting aircraft (so "missing" acft are skipped in the right direction)
+int LastSel_Helo_Blue;	//tracks whether the last aircraft selected was red or blue
+int	LastSel_Jet_Blue;
+int	LastSel_Prop_Blue;
+
+int	LastSel_Helo_Red_Init;	//used as alias for matrixed init to allow DeferCall
+int	LastSel_Helo_Blue_Init;
+int	LastSel_Jet_Red_Init;
+int	LastSel_Jet_Blue_Init;
+int	LastSel_Prop_Red_Init;
+int	LastSel_Prop_Blue_Init;
+
+int	MiG15;
+int MiG19;
+int	MiG21;
+int	Su25;
+int	Su27;
+int	Su33;
+int	MiG29;
+int	J11A;
+int JF17;
+int L39C;
+int L39ZA;
+
+int A4E;
+int	F5E;
+int	A10A;
+int	A10C;
+int F14AB;
+int	F15C;
+int F15E;
+int	F16C;
+int FA18C;
+int	F86;
+int	C101EB;
+int	C101CC;	//left in due to legacy database entry.
+//int	Hawk;
+int	M2000C;
+int	AJS37;
+int	AV8B;
+int	Mi8;
+int Mi24;
+int	Ka50;
+int	UH1;
+int	SA342L;
+int	SA342M;
+int	Bf109;
+int	Fw190;
+int	Fw190A8;
+int	Fw190D9;
+int	P51D;
+int P47D;
+int	SpitLFIX;
+int MosFBVI;
+int I16;
+int AH64D;
+int MB339;
+int T45;
+//int	Yak52;
+//int CEII;
+int	DCSDX;
+int	CA;
+int AWACS;
+//int	IL2BoS;
+//int IL2TC;
+//int	IL2_1946;
+//int Elite;
+
+
+int Flap_PS_Check_Delay = 2000;	//largest of the wavdelay values in PlayWavSel()
+int	DX_Resettable_Buttons;		//added in 1.69
+int	CommStateVAC;				//added in 2.10
+
+
+//MFDisplay
+char mfdispfile[20];			//added in 2.28 for MFDisplay, moved to global variable in 2.29
+char MFDispSub[10];				//added in 2.34 for F-14 RIO CAP drum, increased to 10 in 2.51 for dual overlays
+char MFDisp_FC3[15];
+char MFDisp_CA[6];
+char MFDisp_Mi8[8];
+char MFDisp_Mi24C[12];
+char MFDisp_Mi24G[12];
+char MFDisp_Ka50[10];
+char MFDisp_UH1[8];
+char MFDisp_SA342[10];
+char MFDisp_MiG15[10];
+char MFDisp_MiG19[10];
+char MFDisp_MiG21[10];
+char MFDisp_L39C[8];
+char MFDisp_L39ZA[10];
+char MFDisp_A4EC[8];
+char MFDisp_F5E[8];
+char MFDisp_A10C[10];
+char MFDisp_F14P[15];
+char MFDisp_F14R[15];
+char MFDisp_F15EP[27];	
+char MFDisp_F15ER[25];
+char MFDisp_F16C[10];
+char MFDisp_F18C[15];
+char MFDisp_AJS37[12];
+char MFDisp_F86[8];
+char MFDisp_C101EB[12];
+//char MFDisp_C101CC[12];
+char MFDisp_M2000C[15];
+char MFDisp_AV8B[10];
+char MFDisp_Bf109[10];
+char MFDisp_Fw190[12];
+char MFDisp_Fw190A8[12];
+char MFDisp_P51D[12];
+char MFDisp_SpitLFIX[20];
+char MFDisp_I16[7];
+char MFDisp_JF17[8];
+char MFDisp_MB339[8];
+char MFDisp_T45[6];
+char MFDisp_AWACS[8];
+char MFDisp_P47D[9];
+//char MFDisp_CE2[8];
+//char MFDisp_Yak52[8];
+char MFDisp_MosFBVI[18];
+char MFDisp_AH64D[11];
+
+int	MFDisplay_Submod_Cur;			//added in 2.34 for MFDisplay Inserts
+int	MFDisplay_Submod_Delta;			//added in 2.34 to inhibit display update if called with no change
+
+//DCS FlightPanels
+//alias DCSFP__Default="DCSTest.bindings";
+//alias DCSFP_MiG15=&DCSFP__Default;
+//alias DCSFP_MiG21=&DCSFP__Default;
+//alias DCSFP_Su25=&DCSFP__Default;
+//alias DCSFP_Su27=&DCSFP__Default;
+//alias DCSFP_Su33=&DCSFP__Default;
+//alias DCSFP_MiG29=&DCSFP__Default;
+//alias DCSFP_L39C=&DCSFP__Default;
+//alias DCSFP_L39ZA=&DCSFP_L39C;
+//alias DCSFP_F5E=&DCSFP__Default;
+//alias DCSFP_A10A=&DCSFP__Default;
+//alias DCSFP_A10C=&DCSFP__Default;
+//alias DCSFP_F15C=&DCSFP__Default;
+//alias DCSFP_F86=&DCSFP__Default;
+//alias DCSFP_Hawk=&DCSFP__Default;
+//alias DCSFP_M2000C=&DCSFP__Default;
+//alias DCSFP_AJS37=&DCSFP__Default;
+//alias DCSFP_AV8B=&DCSFP__Default;
+//alias DCSFP_Mi8=&DCSFP__Default;
+//alias DCSFP_Ka50=&DCSFP__Default;
+//alias DCSFP_UH1=&DCSFP__Default;
+//alias DCSFP_SA342M=&DCSFP__Default;
+//alias DCSFP_SA342L=&DCSFP_SA342M;
+//alias DCSFP_Bf109=&DCSFP__Default;
+//alias DCSFP_Fw190=&DCSFP__Default;
+//alias DCSFP_P51D=&DCSFP__Default;
+//alias DCSFP_SpitLFIX=&DCSFP__Default;
+//alias DCSFP_DCSDX=&DCSFP__Default;
+//alias DCSFP_C101EB=&DCSFP__Default;
+////alias DCSFP_C101CC=&DCSFP_C101EB;
+//alias DCSFP_FA18C=&DCSFP__Default;
+//alias DCSFP_A4EC=&DCSFP__Default;
+//alias DCSFP_CA=&DCSFP__Default;
+
+
+int Set_Acft_Array_Cur(int prof = 0)
+{
+if (Script_Debug) printf("Set_Acft_Array_Cur(%i)\xa",prof);	//for test purposes
+//Red Helos
+if		((prof >= 1000) & (prof < 1100))
+	{
+	LastSel_Helo_Blue = 0;	//assigns last selected color for each type of acft.  All start with 2 to make room for DCS_DX (0) and CA (1)
+	if 		(prof == 1008) 	RedHelo_Cur 	= 3;	//Mi-8
+	else if (prof == 1024)	RedHelo_Cur		= 4;	//Mi-24
+	else if	(prof == 1050)	RedHelo_Cur		= 5;	//Ka-50
+	
+	if (Script_Debug) printf("  Last Selected Helo: %i \xa  Is Blue: %i \xa",RedHelo_Cur,LastSel_Helo_Blue);	//for test purposes
+	}
+
+//Blue Helos
+else if ((prof >= 1500) & (prof < 2000))
+	{
+	LastSel_Helo_Blue = 1;
+	if		(prof == 1501)	BlueHelo_Cur	= 3;	//UH-1
+	else if	(prof == 1541)	BlueHelo_Cur	= 4;	//SA342L
+	else if	(prof == 1542)	BlueHelo_Cur	= 5;	//SA342M
+	else if (prof == 1564)	BlueHelo_Cur	= 6;	//AH-64D
+	
+	if (Script_Debug) printf("  Last Selected Helo: %i \xa  Is Blue: %i \xa",BlueHelo_Cur,LastSel_Helo_Blue);	//for test purposes
+	}
+	
+//Red Jets
+else if	((prof > 2000) & (prof < 2500))		//made > 2000 instead of >= 2000 in 2.27 because 2000 is DCSDX
+	{
+	LastSel_Jet_Blue = 0;
+	if		(prof == 2015)	RedJet_Cur		= 3;	//MiG-15
+	else if	(prof == 2019)	RedJet_Cur		= 4;	//MiG-19P
+	else if	(prof == 2021)	RedJet_Cur		= 5;	//MiG-21
+	else if	(prof == 2025)	RedJet_Cur		= 6;	//Su-25
+	else if	(prof == 2027)	RedJet_Cur		= 7;	//Su-27
+	else if	(prof == 2033)	RedJet_Cur		= 8;	//Su-33
+	else if	(prof == 2029)	RedJet_Cur		= 9;	//MiG-29
+	else if (prof == 2011)	RedJet_Cur		= 10;	//J-11A
+	else if (prof == 2117)	RedJet_Cur		= 11;	//JF-17
+	else if	(prof == 2039)	RedJet_Cur		= 12;	//L-39C
+	else if	(prof == 2040)	RedJet_Cur		= 13;	//L-39ZA
+
+	if (Script_Debug) printf("  Last Selected Jet: %i \xa  Is Blue: %i \xa",RedJet_Cur,LastSel_Jet_Blue);	//for test purposes
+	}
+
+//Blue Jets
+else if ((prof >= 2500) & (prof < 3000))
+	{
+	LastSel_Jet_Blue = 1;
+	if		(prof == 2604)	BlueJet_Cur		= 3;	//A-4E-C
+	if		(prof == 2505)	BlueJet_Cur		= 4;	//F-5E
+	else if (prof == 2508)	BlueJet_Cur		= 5;	//AV-8B	
+	else if	(prof == 2509)	BlueJet_Cur		= 6;	//A-10A
+	else if	(prof == 2510)	BlueJet_Cur		= 7;	//A-10C
+	else if	(prof == 2514)	BlueJet_Cur		= 8;	//F-14
+	else if	(prof == 2515)	BlueJet_Cur		= 9;	//F-15C
+	else if (prof == 2615)	BlueJet_Cur		= 10;	//F-15E
+	else if (prof == 2516)	BlueJet_Cur		= 11;	//F-16C
+	else if	(prof == 2518)	BlueJet_Cur		= 12;	//F/A-18C
+	else if (prof == 2537)	BlueJet_Cur 	= 13;	//AJS-37
+	else if (prof == 2545)	BlueJet_Cur 	= 14;	//T-45
+	else if	(prof == 2586)	BlueJet_Cur		= 15;	//F-86
+	else if (prof == 2501)	BlueJet_Cur  	= 16;	//C-101EB
+//	else if (prof == 2601)	BlueJet_Cur		= 17;	//C-101CC and renumber sequentials	
+	else if	(prof == 2520)	BlueJet_Cur		= 17;	//M2000C
+	else if (prof == 2539)	BlueJet_Cur 	= 18;	//MB-339	
+	
+//	else if	(prof == 2512)	BlueJet_Cur		= 19;	//Hawk	***Keep as last***
+	if (Script_Debug) printf("  Last Selected Jet: %i \xa  Is Blue: %i \xa",BlueJet_Cur,LastSel_Jet_Blue);	//for test purposes
+	}
+
+//Red Props
+else if	((prof >= 3000) & (prof < 3500))
+	{
+	LastSel_Prop_Blue = 0;
+	if		(prof == 3009)	RedProp_Cur		= 3;	//Bf109
+	else if (prof == 3190)	RedProp_Cur		= 4;	//Fw190A8
+	else if	(prof == 3090)	RedProp_Cur		= 5;	//Fw190D9
+//	else if	(prof == 3052)	RedProp_Cur		= 6;	//Yak52
+
+	if (Script_Debug) printf("  Last Selected Prop: %i \xa  Is Blue: %i \xa",RedProp_Cur,LastSel_Prop_Blue);	//for test purposes
+	}
+	
+//Blue Props
+
+else if ((prof >= 3500) & (prof < 4000))
+	{
+	LastSel_Prop_Blue = 1;
+	if		(prof == 3551)	BlueProp_Cur	= 3;	//P-51D
+	else if (prof == 3547)	BlueProp_Cur	= 4;	//P-47D
+	else if (prof == 3509)	BlueProp_Cur	= 5;	//Spitfire LF Mk.IXc
+	else if (prof == 3606)	BlueProp_Cur	= 6;	//Mosquito FB VI
+	else if (prof == 3516)	BlueProp_Cur	= 7;	//I-16
+//	else if (prof == 3502)	BlueProp_Cur	= 8;	//Christen Eagle II
+	
+	if (Script_Debug) printf("  Last Selected Prop: %i \xa  Is Blue: %i \xa",BlueProp_Cur,LastSel_Prop_Blue);	//for test purposes
+	}
+else if (prof == 998)	//AWACS; no LastSel updates
+	{
+	RedHelo_Cur 	= 1;
+	BlueHelo_Cur	= 1;
+	RedJet_Cur	 	= 1;
+	BlueJet_Cur		= 1;
+	RedProp_Cur 	= 1;
+	BlueProp_Cur	= 1;
+	}
+else if (prof == 999)	//CA; no LastSel updates
+	{
+	RedHelo_Cur 	= 2;
+	BlueHelo_Cur	= 2;
+	RedJet_Cur	 	= 2;
+	BlueJet_Cur		= 2;
+	RedProp_Cur 	= 2;
+	BlueProp_Cur	= 2;
+	}
+	
+//else if (prof > 3999)	//Non-DCS games
+//	{
+//	if 	(prof == 5000)		OtherGame_Cur = 2;	//Elite
+//	else if (prof == 4001)	OtherGame_Cur = 1;	//IL-2 TC
+//	else 					OtherGame_Cur = 0;	//IL-2 anywhere else b/t 4000-4999
+//	}
+else	//DCS_DX; no LastSel updates
+	{
+	RedHelo_Cur 	= 0;
+	BlueHelo_Cur	= 0;
+	RedJet_Cur	 	= 0;
+	BlueJet_Cur		= 0;
+	RedProp_Cur 	= 0;
+	BlueProp_Cur	= 0;
+	}
+//Acft_Sel_LBRT(LastSel_Jet_Blue);				//added in 2.40 for dynamic LBRT if OtherGame_Enabled
+}
+
+
+
+int	AcftArrayInit()
+{
+//OtherGame_Enabled	=	IL2BoS_Installed	+	//sum of all non-dcs games installed.  nonzero enables LCON and H2U/D.
+//						IL21946_Installed	+
+//						EliteD_Installed	+
+//						F4BMS_Installed		+
+//						0;						//placeholder to allow uniformity in entries
+						
+if (MFDisplay_HV > 0)
+	{
+	sprintf(&MFDisp_FC3,		"FC3_Su25THV");	
+	sprintf(&MFDisp_CA,			"CAHV");	
+	sprintf(&MFDisp_Mi8,		"Mi-8HV");
+	sprintf(&MFDisp_Mi24C,		"Mi-24PltHV");
+	sprintf(&MFDisp_Mi24G,		"Mi-24CPGHV");
+	sprintf(&MFDisp_Ka50,		"Ka-50HV");
+	sprintf(&MFDisp_UH1,		"UH-1HV");
+	sprintf(&MFDisp_SA342,		"SA-342HV");
+	sprintf(&MFDisp_MiG15,		"Mig-15HV");
+	sprintf(&MFDisp_MiG19,		"Mig-19HV");
+	sprintf(&MFDisp_MiG21,		"Mig-21HV");	
+	sprintf(&MFDisp_L39C,		"L-39C");
+	sprintf(&MFDisp_L39ZA,		"L-39ZA");
+	sprintf(&MFDisp_A4EC,		"A-4EHV");
+	sprintf(&MFDisp_F5E,		"F-5EHV");
+	sprintf(&MFDisp_A10C,		"A-10CHV");
+	sprintf(&MFDisp_F14P,		"F-14PHV");
+	sprintf(&MFDisp_F14R,		"F-14RHV");	
+
+	if (MFD_Count > 2)
+		{
+		sprintf(&MFDisp_F15EP,	"F-15EPHV3");
+		if (MFD_Count > 3)
+			sprintf(&MFDisp_F15ER,	"F-15ERHV3");	//"F-15ERHV4");  once created
+		else
+			sprintf(&MFDisp_F15ER,	"F-15ERHV3");
+					
+		sprintf(&MFDisp_F18C,	"FA-18CHV3");
+		sprintf(&MFDisp_F16C,	"F-16CHV");
+		sprintf(&MFDisp_JF17,	"JF-17HV");
+		sprintf(&MFDisp_AH64D,	"AH-64DHV");
+		}
+	else
+		{
+		sprintf(&MFDisp_F15EP,	"F-15EPHV");
+		sprintf(&MFDisp_F15ER,	"F-15ERHV");
+		sprintf(&MFDisp_F18C,	"FA-18CHV");
+		sprintf(&MFDisp_F16C,	"F-16CHV");
+		sprintf(&MFDisp_JF17,	"JF-17HV");
+		sprintf(&MFDisp_AH64D,	"AH-64DHV");
+		}
+	sprintf(&MFDisp_AJS37,		"AJS-37HV");
+	sprintf(&MFDisp_F86,		"F-86HV");
+	sprintf(&MFDisp_C101EB,		"C-101EBHV");
+	//sprintf(&MFDisp_C101CC[12];
+	if (WarthogThrottle > 0)	sprintf(&MFDisp_M2000C, "M-2000CWHV");
+	else						sprintf(&MFDisp_M2000C, "M-2000CHV");
+	sprintf(&MFDisp_AV8B, 		"AV-8BHV");
+	sprintf(&MFDisp_Bf109, 		"Bf-109HV");
+	sprintf(&MFDisp_Fw190, 		"Fw-190D9HV");
+	sprintf(&MFDisp_Fw190A8,	"Fw-190A8HV");
+	sprintf(&MFDisp_P51D, 		"P_TF-51DHV");
+	sprintf(&MFDisp_SpitLFIX, 	"Spitfire_LF_MkIXHV");
+	sprintf(&MFDisp_I16,		"I-16HV");
+	sprintf(&MFDisp_P47D,		"P-47DHV");
+	sprintf(&MFDisp_MosFBVI, 	"Mosquito_FB_VIHV");	
+//	sprintf(&MFDisp_CE2,		"CEIIHV");
+//	sprintf(&MFDisp_Yak52,		"Yak52HV");
+	sprintf(&MFDisp_MB339,		"MB339HV");
+	sprintf(&MFDisp_T45,		"T45HV");
+	sprintf(&MFDisp_AWACS,		"AWACSHV");
+//	sprintf(&MFDisp_IL2GB,		"IL-2_BoSHV");
+//	sprintf(&MFDisp_IL2TC,		"IL-2_BoSHV");
+//	sprintf(&MFDisp_IL21946,	"IL-2_1946HV");
+//	sprintf(&MFDisp_EliteD,		"EliteHV");
+	}
+else
+	{
+	sprintf(&MFDisp_FC3, 		"FC3_Su25T");	
+	sprintf(&MFDisp_CA, 		"CA");	
+	sprintf(&MFDisp_Mi8,	 	"Mi-8");
+	sprintf(&MFDisp_Mi24C,		"Mi-24Plt");
+	sprintf(&MFDisp_Mi24G,		"Mi-24CPG");
+	sprintf(&MFDisp_Ka50, 		"Ka-50");
+	sprintf(&MFDisp_UH1, 		"UH-1");
+	sprintf(&MFDisp_SA342, 		"SA-342");
+	sprintf(&MFDisp_MiG15, 		"Mig-15");
+	sprintf(&MFDisp_MiG19,		"Mig-19");
+	sprintf(&MFDisp_MiG21, 		"Mig-21");
+	sprintf(&MFDisp_L39C, 		"L-39C");
+	sprintf(&MFDisp_L39ZA,		"L-39ZA");
+	sprintf(&MFDisp_A4EC, 		"A-4E");
+	sprintf(&MFDisp_F5E, 		"F-5E");
+	sprintf(&MFDisp_A10C, 		"A-10C");
+	sprintf(&MFDisp_F14P,		"F-14P");
+	sprintf(&MFDisp_F14R,		"F-14R");	
+	if (MFD_Count > 2)
+		{
+		sprintf(&MFDisp_F15EP,	"F-15EP3");
+		if (MFD_Count > 3)
+			sprintf(&MFDisp_F15ER,	"F-15ER3");	//"F-15ER4"); once created
+		else
+			sprintf(&MFDisp_F15ER,	"F-15ER3");
+			
+		sprintf(&MFDisp_F18C, 	"FA-18C3");
+		sprintf(&MFDisp_F16C,	"F-16C");	//F-16C3
+		sprintf(&MFDisp_JF17,	"JF-17");
+		sprintf(&MFDisp_AH64D,	"AH-64D");
+		if (WarthogThrottle > 0)	sprintf(&MFDisp_M2000C, "M-2000CWH");	//M-2000CWH3
+		else						sprintf(&MFDisp_M2000C, "M-2000C");		//M-2000C3
+		}
+	else						
+		{
+		sprintf(&MFDisp_F15EP,	"F-15EP");
+		sprintf(&MFDisp_F15ER,	"F-15ER");
+		sprintf(&MFDisp_F18C, 	"FA-18C");	
+		sprintf(&MFDisp_F16C,	"F-16C");
+		sprintf(&MFDisp_JF17,	"JF-17");
+		sprintf(&MFDisp_AH64D,	"AH-64D");
+		if (WarthogThrottle > 0)	sprintf(&MFDisp_M2000C, "M-2000CWH");
+		else						sprintf(&MFDisp_M2000C, "M-2000C");
+		}
+	sprintf(&MFDisp_AJS37, 		"AJS-37");
+	sprintf(&MFDisp_F86, 		"F-86");
+	sprintf(&MFDisp_C101EB, 	"C-101EB");
+	//sprintf(&MFDisp_C101CC[12];
+	sprintf(&MFDisp_AV8B, 		"AV-8B");
+	sprintf(&MFDisp_Bf109, 		"Bf-109");
+	sprintf(&MFDisp_Fw190, 		"Fw-190D9");
+	sprintf(&MFDisp_Fw190A8,	"Fw-190A8");
+	sprintf(&MFDisp_P51D, 		"P_TF-51D");
+	sprintf(&MFDisp_SpitLFIX, 	"Spitfire_LF_MkIX");
+	sprintf(&MFDisp_I16,		"I-16");
+	sprintf(&MFDisp_P47D,		"P-47D");
+	sprintf(&MFDisp_MosFBVI, 	"Mosquito_FB_VI");
+//	sprintf(&MFDisp_CE2,		"CEII");
+//	sprintf(&MFDisp_Yak52,		"Yak52");
+	sprintf(&MFDisp_MB339,		"MB339");
+	sprintf(&MFDisp_T45,		"T45");
+	sprintf(&MFDisp_AWACS,		"AWACS");
+	}
+
+
+//Set Arrays
+RedJet_Array 	=	SEQ(EXEC("											 DCS_DX(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(0);"																											 ),	//DX (0)
+						EXEC("if (TARS > 0) 							{DCS_AWACS(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(0);}								else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(0,-1); else DCS_Acft_Cycle(0,1);"),	//AWACS (1)
+						EXEC("if (CA_Installed) 						{DCS_CA(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(999);}								else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(0,-1); else DCS_Acft_Cycle(0,1);"),	//Combined Arms (2)
+						EXEC("if (MiG15_Installed) 						{DCS_MiG15(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(2015);}							else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(0,-1); else DCS_Acft_Cycle(0,1);"),	//Mig15 (3)
+						EXEC("if (MiG19_Installed) 						{DCS_MiG19(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(2019);}							else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(0,-1); else DCS_Acft_Cycle(0,1);"),	//MiG19 (4)		
+						EXEC("if (MiG21_Installed) 						{DCS_MiG21(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(2021);}							else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(0,-1); else DCS_Acft_Cycle(0,1);"),	//MiG21 (5)		
+						EXEC("											 DCS_FC3(LED_Enable_on_Cycle,Speech_on_Cycle,2025);SelMod_H4P_Map(2025);"																									 ),	//Su-25 (6) automatic
+						EXEC("if ((FC3_Installed) | (Su27_Installed)) 	{DCS_FC3(LED_Enable_on_Cycle,Speech_on_Cycle,2027);SelMod_H4P_Map(2027);}						else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(0,-1); else DCS_Acft_Cycle(0,1);"),	//Su27 (7)
+						EXEC("if ((FC3_Installed) | (Su33_Installed)) 	{DCS_FC3(LED_Enable_on_Cycle,Speech_on_Cycle,2033);SelMod_H4P_Map(2033);}						else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(0,-1); else DCS_Acft_Cycle(0,1);"),	//Su33 (8)
+						EXEC("if ((FC3_Installed) | (MiG29_Installed)) 	{DCS_FC3(LED_Enable_on_Cycle,Speech_on_Cycle,2029);SelMod_H4P_Map(2029);}						else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(0,-1); else DCS_Acft_Cycle(0,1);"),	//MiG29 (9)
+						EXEC("if ((FC3_Installed) | (Su27_Installed)) 	{DCS_FC3(LED_Enable_on_Cycle,Speech_on_Cycle,2011);SelMod_H4P_Map(2011);}						else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(0,-1); else DCS_Acft_Cycle(0,1);"),	//J-11A (10)
+						EXEC("if (JF17_Installed) 						{DCS_JF17(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(2117);}							else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(0,-1); else DCS_Acft_Cycle(0,1);"),	//JF-17 (11)		
+						EXEC("if (L39_Installed)						{DCS_L39(LED_Enable_on_Cycle,Speech_on_Cycle,2039,DefaultStation_L39);SelMod_H4P_Map(2039);}	else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(0,-1); else DCS_Acft_Cycle(0,2);"),	//L39C (12), automatically skips ZA
+						EXEC("if (L39_Installed)						{DCS_L39(LED_Enable_on_Cycle,Speech_on_Cycle,2040,DefaultStation_L39);SelMod_H4P_Map(2040);}	else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(0,-2); else DCS_Acft_Cycle(0,1);")	//L39ZA(13), automatically skips C 
+						);
+RedJet_Index 	=	14;	//index is actual size of array (starting at 1) so it should be 1+ last "number" in array
+						
+BlueJet_Array	=	SEQ(EXEC("											 DCS_DX(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(0);"																											 ),	//DX (0)
+						EXEC("if (TARS > 0) 							{DCS_AWACS(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(0);}								else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(1,-1); else DCS_Acft_Cycle(1,1);"),	//AWACS (1)
+						EXEC("if (CA_Installed)							{DCS_CA(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(999);}								else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(1,-1); else DCS_Acft_Cycle(1,1);"),	//Combined Arms (2)
+						EXEC("if (A4EC_Installed)						{DCS_A4EC(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(2504);}							else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(1,-1); else DCS_Acft_Cycle(1,1);"),	//A-4E-C (3)
+						EXEC("if (F5E_Installed)						{DCS_F5E(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(2505);}							else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(1,-1); else DCS_Acft_Cycle(1,1);"),	//F-5 (4)
+						EXEC("if (AV8B_Installed)						{DCS_AV8B(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(2508);}							else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(1,-1); else DCS_Acft_Cycle(1,1);"),	//AV8B(5)
+						EXEC("if ((FC3_Installed) | (A10A_Installed))	{DCS_FC3(LED_Enable_on_Cycle,Speech_on_Cycle,2509);SelMod_H4P_Map(2509);}						else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(1,-1); else DCS_Acft_Cycle(1,1);"),	//A10A (6)
+						EXEC("if (A10C_Installed)						{DCS_A10C(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(2510);}							else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(1,-1); else DCS_Acft_Cycle(1,1);"),	//A10C (7)
+						EXEC("if (F14_Installed)						{DCS_F14(LED_Enable_on_Cycle,Speech_on_Cycle,2514,DefaultStation_F14);SelMod_H4P_Map(2514);}	else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(1,-1); else DCS_Acft_Cycle(1,1);"),	//F-14A/B	(8) and seq next
+						EXEC("if ((FC3_Installed) | (F15C_Installed))	{DCS_FC3(LED_Enable_on_Cycle,Speech_on_Cycle,2515);SelMod_H4P_Map(2515);}						else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(1,-1); else DCS_Acft_Cycle(1,1);"),	//F15C	(9)
+						EXEC("if (F15E_Installed)						{DCS_F15E(LED_Enable_on_Cycle,Speech_on_Cycle,2615,DefaultStation_F15E);SelMod_H4P_Map(2615);}	else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(1,-1); else DCS_Acft_Cycle(1,1);"),	//F-15E	(10) and seq next
+						EXEC("if (F16C_Installed)						{DCS_F16C(LED_Enable_on_Cycle,Speech_on_Cycle,2516);SelMod_H4P_Map(2516);}						else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(1,-1); else DCS_Acft_Cycle(1,1);"),	//F-16C	(11)
+						EXEC("if (FA18C_Installed)						{DCS_FA18C(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(2518);}							else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(1,-1); else DCS_Acft_Cycle(1,1);"),	//F/A-18C	(12)
+						EXEC("if (AJS37_Installed)						{DCS_AJS37(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(2537);}							else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(1,-1); else DCS_Acft_Cycle(1,1);"),	//AJS-37(13)
+
+						EXEC("if (T45_Installed)						{DCS_T45(LED_Enable_on_Cycle,Speech_on_Cycle,2545,DefaultStation_T45);SelMod_H4P_Map(2545);}	else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(1,-1); else DCS_Acft_Cycle(1,1);"),	//VNAO T-45(14)
+						EXEC("if (F86_Installed)						{DCS_F86(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(2586);}  							else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(1,-1); else DCS_Acft_Cycle(1,1);"),	//F86	(15)
+						EXEC("if (C101_Installed)						{DCS_C101(LED_Enable_on_Cycle,Speech_on_Cycle,2501,DefaultStation_C101);SelMod_H4P_Map(2501);}	else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(1,-1); else DCS_Acft_Cycle(1,1);"),	//C-101EB (16)
+//						EXEC("if (C101_Installed)						{DCS_C101(LED_Enable_on_Cycle,Speech_on_Cycle,2601,DefaultStation_C101);SelMod_H4P_Map(2601);}	else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(1,-1); else DCS_Acft_Cycle(1,1);"),	//C-101CC (17) and seq next
+						EXEC("if (M2000C_Installed)						{DCS_M2000C(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(2520);}							else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(1,-1); else DCS_Acft_Cycle(1,1);"),	//M2000C(17)
+						EXEC("if (MB339_Installed)						{DCS_MB339(LED_Enable_on_Cycle,Speech_on_Cycle,2539,DefaultStation_MB339);SelMod_H4P_Map(2539);}else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(1,-1); else DCS_Acft_Cycle(1,1);")	//MB-339(18)
+
+//						EXEC("if (Hawk_Installed)						{DCS_Hawk(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(0);}								else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(1,-1); else DCS_Acft_Cycle(1,1);")	//Hawk	(19) ***keep as last***
+
+						);
+BlueJet_Index	=	19;	//hawk force-removed
+
+RedHelo_Array	=	SEQ(EXEC(						"DCS_DX(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(0);																						"),	//DX (0)
+						EXEC("if (TARS > 0)			{DCS_AWACS(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(0);}		else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(0,-1); else DCS_Acft_Cycle(0,1);"),	//AWACS (1)
+						EXEC("if (CA_Installed)		{DCS_CA(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(999);}		else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(0,-1); else DCS_Acft_Cycle(0,1);"),	//Combined Arms (2)
+						EXEC("if (Mi8_Installed)	{DCS_Mi8(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(1008);}	else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(0,-1); else DCS_Acft_Cycle(0,1);"),	//Mi8	(3)
+						EXEC("if (Mi24_Installed)	{DCS_Mi24(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(1024);}	else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(0,-1); else DCS_Acft_Cycle(0,1);"),	//Mi24	(4)
+						EXEC("if (Ka50_Installed)	{DCS_Ka50(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(1050);}	else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(0,-1); else DCS_Acft_Cycle(0,1);")	//Ka50(5)
+						);
+RedHelo_Index	=	6;
+
+BlueHelo_Array	=	SEQ(EXEC(						"DCS_DX(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(0);																							"),	//DX (0)
+						EXEC("if (TARS > 0)			{DCS_AWACS(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(0);}			else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(1,-1); else DCS_Acft_Cycle(1,1);"),	//AWACS (1)
+						EXEC("if (CA_Installed)		{DCS_CA(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(999);}			else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(1,-1); else DCS_Acft_Cycle(1,1);"),	//Combined Arms (2)
+						EXEC("if (UH1_Installed)	{DCS_UH1(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(1501);}		else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(1,-1); else DCS_Acft_Cycle(1,1);"),	//UH1	(3)
+						EXEC("if (SA342_Installed)	{DCS_SA342(LED_Enable_on_Cycle,Speech_on_Cycle,1541);SelMod_H4P_Map(1541);}	else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(1,-1); else DCS_Acft_Cycle(1,2);"),	//Sa342L(4), auto skip M
+						EXEC("if (SA342_Installed)	{DCS_SA342(LED_Enable_on_Cycle,Speech_on_Cycle,1542);SelMod_H4P_Map(1542);}	else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(1,-2); else DCS_Acft_Cycle(1,1);"),	//Sa342M(5), auto skip L
+						EXEC("if (AH64D_Installed)	{DCS_AH64(LED_Enable_on_Cycle,Speech_on_Cycle, 1564);SelMod_H4P_Map(1564);}	else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(1,-1); else DCS_Acft_Cycle(1,1);")	//AH-64D(6)
+						);
+BlueHelo_Index	=	7;
+
+RedProp_Array	=	SEQ(EXEC(												"DCS_DX(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(0);																							"),	//DX (0)
+						EXEC("if (TARS > 0)									{DCS_AWACS(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(0);}			else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(0,-1); else DCS_Acft_Cycle(0,1);"),	//AWACS (1)
+						EXEC("if (CA_Installed)								{DCS_CA(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(999);}			else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(0,-1); else DCS_Acft_Cycle(0,1);"),	//Combined Arms (2)
+						EXEC("if (Bf109_Installed)							{DCS_Bf109(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(3009);}		else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(0,-1); else DCS_Acft_Cycle(0,1);"),	//Bf109	(3)
+						EXEC("if ((Fw190_Installed) & (Fw190A8_Installed))	{DCS_Fw190(LED_Enable_on_Cycle,Speech_on_Cycle,3190);SelMod_H4P_Map(3190);}	else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(0,-1); else DCS_Acft_Cycle(0,1);"),	//Fw190A8(4), added both FW190 and FW190A8 conditions for conctenated database 
+						EXEC("if ((Fw190_Installed) & (Fw190D9_Installed))	{DCS_Fw190(LED_Enable_on_Cycle,Speech_on_Cycle,3090);SelMod_H4P_Map(3090);}	else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(0,-1); else DCS_Acft_Cycle(0,1);")	//Fw190D9(5)
+//						EXEC("if (Yak52_Installed)							{DCS_Yak52(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(3052);}		else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(0,-1); else DCS_Acft_Cycle(0,1);")	//Yak52(6), redprop_index+1 and add comma to Fw190
+						);
+RedProp_Index	=	6;	//7;
+
+
+BlueProp_Array	=	SEQ(EXEC(							"DCS_DX(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(0);																							"),	//DX (0)
+						EXEC("if (TARS > 0)				{DCS_AWACS(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(0);}				else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(1,-1); else DCS_Acft_Cycle(1,1);"),	//AWACS (1)
+						EXEC("if (CA_Installed)			{DCS_CA(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(999);}				else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(1,-1); else DCS_Acft_Cycle(1,1);"),	//Combined Arms (2)
+						EXEC(							"DCS_P51D(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(3551);																						"),	//P-51D(3) Automatic
+						EXEC("if (P47D_Installed)		{DCS_P47D(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(3547);}			else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(1,-1); else DCS_Acft_Cycle(1,1);"),	//P-47D(4)
+						EXEC("if (SpitLFIX_Installed)	{DCS_Spit(LED_Enable_on_Cycle,Speech_on_Cycle,3509);SelMod_H4P_Map(3509);}		else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(1,-1); else DCS_Acft_Cycle(1,1);"),	//Spitfire LF Mk.IXc(5)
+						EXEC("if (MosFBVI_Installed)	{DCS_Mosquito(LED_Enable_on_Cycle,Speech_on_Cycle,3606);SelMod_H4P_Map(3606);}	else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(1,-1); else DCS_Acft_Cycle(1,1);"),	//Mosquito FB VI(6)
+						EXEC("if (I16_Installed)		{DCS_I16(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(3516);}			else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(1,-1); else DCS_Acft_Cycle(1,1);")	//I-16(7)
+//						EXEC("if (CE2_Installed)		{DCS_CE2(LED_Enable_on_Cycle,Speech_on_Cycle);SelMod_H4P_Map(3502);}			else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(1,-1); else DCS_Acft_Cycle(1,1);")	//Christen Eagle II(8)
+						);
+BlueProp_Index	=	8;	//9;
+
+
+//OtherGame_Array	=	SEQ(EXEC("if (IL2BoS_Installed)		IL2GB(LED_Enable_on_Cycle,Speech_on_Cycle,4000);	else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(2,-1); else DCS_Acft_Cycle(2,1);	SelMod_H4P_Map(0);} "),	//IL-2 Great Battles (0)
+//						EXEC("if (IL2BoS_Installed)		IL2GB(LED_Enable_on_Cycle,Speech_on_Cycle,4001);	else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(2,-1); else DCS_Acft_Cycle(2,1);	SelMod_H4P_Map(0);} "),	//IL-2 Tank Crew (1)
+//						EXEC("if (IL21946_Installed)	IL2GB(LED_Enable_on_Cycle,Speech_on_Cycle,4100);	else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(2,-1); else DCS_Acft_Cycle(2,1);	SelMod_H4P_Map(0);} "),	//IL-2 1946 (2) then increment
+//						EXEC("if (EliteD_Installed)		EliteD(LED_Enable_on_Cycle,Speech_on_Cycle);		else if (Acft_Cycle_Dir < 0) DCS_Acft_Cycle(2,-1); else DCS_Acft_Cycle(2,1);	SelMod_H4P_Map(0);} ")	//Elite: Dangerous (2)
+//						);
+//OtherGame_Index	=	3;	//4;
+
+//Constants used for direct selection (forced LED).
+MiG15	=	EXEC("if (MiG15_Installed) {DCS_MiG15(1,1);SelMod_H4P_Map(2015);}");
+MiG19	=	EXEC("if (MiG19_Installed) {DCS_MiG19(1,1);SelMod_H4P_Map(2019);}");
+MiG21	=	EXEC("if (MiG21_Installed) {DCS_MiG21(1,1);SelMod_H4P_Map(2021);}");
+Su25	=	EXEC("DCS_FC3(1,1,2025);SelMod_H4P_Map(2025);}");	//Su-25 automatic
+Su27	=	EXEC("if ((FC3_Installed) | (Su27_Installed)) 	{DCS_FC3(1,1,2027);SelMod_H4P_Map(2027);}");
+Su33	=	EXEC("if ((FC3_Installed) | (Su33_Installed)) 	{DCS_FC3(1,1,2033);SelMod_H4P_Map(2033);}");
+MiG29	=	EXEC("if ((FC3_Installed) | (MiG29_Installed))	{DCS_FC3(1,1,2029);SelMod_H4P_Map(2029);}");
+J11A	=	EXEC("if ((FC3_Installed) | (Su27_Installed)) 	{DCS_FC3(1,1,2011);SelMod_H4P_Map(2011);}");
+L39C	=	TEMPO(EXEC("if (L39_Installed)	{DCS_L39(1,1,2039,1);SelMod_H4P_Map(2039);} "),EXEC("if (L39_Installed)	{DCS_L39(1,1,2039,2);SelMod_H4P_Map(2039);}"),DefTempo);
+L39ZA	=	TEMPO(EXEC("if (L39_Installed)	{DCS_L39(1,1,2040,1);SelMod_H4P_Map(2040);} "),EXEC("if (L39_Installed)	{DCS_L39(1,1,2040,2);SelMod_H4P_Map(2040);}"),DefTempo);
+
+A4E		=	EXEC("if (A4EC_Installed) {DCS_A4EC(1,1);SelMod_H4P_Map(2504);}");
+F5E		=	EXEC("if (F5E_Installed) {DCS_F5E(1,1);SelMod_H4P_Map(2505);}");
+A10A	=	EXEC("if ((FC3_Installed) | (A10A_Installed))	{DCS_FC3(1,1,2509);SelMod_H4P_Map(0);}");
+A10C	=	EXEC("if (A10C_Installed) {DCS_A10C(1,1);SelMod_H4P_Map(2510);}");
+F14AB	=	TEMPO(EXEC("if (F14_Installed) {DCS_F14(1,1,2514,1);SelMod_H4P_Map(2514);}"),EXEC("if (F14_Installed) {DCS_F14(1,1,2514,2);SelMod_H4P_Map(2514);}"),DefTempo);
+F15C	=	EXEC("if ((FC3_Installed) | (F15C_Installed))	{DCS_FC3(1,1,2515);SelMod_H4P_Map(2515);}");
+F15E	=	TEMPO(EXEC("if (F15E_Installed) {DCS_F15E(1,1,2615,1);SelMod_H4P_Map(2615);}"),EXEC("if (F15E_Installed) {DCS_F15E(1,1,2615,2);SelMod_H4P_Map(2615);}"),DefTempo);
+
+FA18C	=	EXEC("if (FA18C_Installed) {DCS_FA18C(1,1);SelMod_H4P_Map(2518);}");
+AJS37	=	EXEC("if (AJS37_Installed) {DCS_AJS37(1,1);SelMod_H4P_Map(2537);}");
+MB339	=	TEMPO(EXEC("if (MB339_Installed) {DCS_MB339(1,1,2539,1);SelMod_H4P_Map(2539);}"),EXEC("if (MB339_Installed) {DCS_MB339(1,1,2539,2);SelMod_H4P_Map(2539);}"),DefTempo);
+T45		=	TEMPO(EXEC("if (T45_Installed) {DCS_T45(1,1,2545,1);SelMod_H4P_Map(2545);}"),EXEC("if (T45_Installed) {DCS_T45(1,1,2545,2);SelMod_H4P_Map(2545);}"),DefTempo);
+F86		=	EXEC("if (F86_Installed) {DCS_F86(1,1);SelMod_H4P_Map(2586);}");
+C101EB	=	TEMPO(EXEC("if (C101_Installed) {DCS_C101(1,1,2501,1);SelMod_H4P_Map(2501);}"),EXEC("if (C101_Installed) {DCS_C101(1,1,2501,2);SelMod_H4P_Map(2501);}"),DefTempo);
+C101CC	=	C101EB;	//EXEC("if (C101_Installed) DCS_C101(1,1,2601);");	//left in due to legacy database entry.  re-enable 2601 if separate profile ever required.
+//Hawk	=	0;	//EXEC("if (Hawk_Installed) {DCS_Hawk(1,1);SelMod_H4P_Map(0);}");
+M2000C	=	EXEC("if (M2000C_Installed) {DCS_M2000C(1,1);SelMod_H4P_Map(2520);}");
+AV8B	=	EXEC("if (AV8B_Installed) {DCS_AV8B(1,1);SelMod_H4P_Map(2508);}");
+
+Mi8		=	EXEC("if (Mi8_Installed) 	{DCS_Mi8(1,1);SelMod_H4P_Map(1008);}");
+Mi24	=	EXEC("if (Mi24_Installed) 	{DCS_Mi24(1,1);SelMod_H4P_Map(1024);}");
+Ka50	=	EXEC("if (Ka50_Installed) 	{DCS_Ka50(1,1);SelMod_H4P_Map(1050);}");
+
+UH1		=	EXEC("if (UH1_Installed) 	{DCS_UH1(1,1);SelMod_H4P_Map(1501);}");
+SA342L	=	EXEC("if (SA342_Installed) 	{DCS_SA342(1,1,1541);SelMod_H4P_Map(1541);}");
+SA342M	=	EXEC("if (SA342_Installed) 	{DCS_SA342(1,1,1542);SelMod_H4P_Map(1542);}");
+AH64D	=	EXEC("if (AH64D_Installed) 	{DCS_AH64(1,1,1564);SelMod_H4P_Map(1564);}");
+
+Bf109	=	EXEC("if (Bf109_Installed) {DCS_Bf109(1,1);SelMod_H4P_Map(3009);}");
+Fw190	=	EXEC("if ((Fw190_Installed) & (Fw190D9_Installed)) {DCS_Fw190(1,1);SelMod_H4P_Map(3090);}");	//legacy shortcut
+Fw190A8	=	EXEC("if ((Fw190_Installed) & (Fw190A8_Installed)) {DCS_Fw190(1,1,3190);SelMod_H4P_Map(3190);}");
+Fw190D9	=	EXEC("if ((Fw190_Installed) & (Fw190D9_Installed)) {DCS_Fw190(1,1,3090);SelMod_H4P_Map(3090);}");
+//Yak52	=	TEMPO(EXEC("if (Yak52_Installed) DCS_Yak52(1,1,3052,l);"),EXEC("if (Yak52_Installed) DCS_Yak52(1,1,3052,2);"),DefTempo);
+
+P51D	=	EXEC("DCS_P51D(1,1);SelMod_H4P_Map(3551);");	//P-51D Automatic
+P47D	=	EXEC("if (P47D_Installed) {DCS_P47D(1,1);SelMod_H4P_Map(3547);}");
+SpitLFIX=	EXEC("if (SpitLFIX_Installed) {DCS_Spit(1,1,3509);SelMod_H4P_Map(3509);}");
+MosFBVI	=	EXEC("if (MosFBVI_Installed) {DCS_Mosquito(1,1,3606);SelMod_H4P_Map(3606);}");
+I16		=	EXEC("if (I16_Installed) {DCS_I16(1,1);SelMod_H4P_Map(3516);}");
+//CEII	=	EXEC("if (CE2_Installed) {DCS_CE2(1,1,3502,1);SelMod_H4P_Map(3502);}");
+
+DCSDX	=	EXEC("DCS_DX(1,1);SelMod_H4P_Map(0);");		//DX Automatic
+CA		=	EXEC("if (CA_Installed) {DCS_CA(1,1);SelMod_H4P_Map(999);}");		//Combined Arms
+AWACS	=	EXEC("DCS_AWACS(1,1);SelMod_H4P_Map(0);");					//AWACS mode
+
+//IL2BoS	=	EXEC("if (IL2BoS_Installed) {IL2GB(1,1,4000);SelMod_H4P_Map(0);}");	//IL-2 Great Battles
+//IL2TC	=	EXEC("if (IL2BoS_Installed) {IL2GB(1,1,4001);SelMod_H4P_Map(0);}");	//IL-2 Tank Crew
+//IL2_1946=	EXEC("if (IL21946_Installed) {IL2GB(1,1,4100);SelMod_H4P_Map(0);}");//IL-2 1946
+//Elite	=	EXEC("if (EliteD_Installed) {EliteD(1,1);SelMod_H4P_Map(0);}");		//Elite: Dangerous
+
+
+//For modules that can default to TQS even with WHT installed
+if (WarthogThrottle > 1)
+	{
+	F16C	=	TEMPO(EXEC("if (F16C_Installed) {DCS_F16C(1,1,2516,0);SelMod_H4P_Map(2516);}"),EXEC("if (F16C_Installed) {DCS_F16C(1,1,2516,1);SelMod_H4P_Map(2516);}"),DefTempo);	//TEMPO Long to enable TQS, Short for WHT
+	JF17	=	TEMPO(EXEC("if (JF17_Installed) {DCS_JF17(1,1,2117,0);SelMod_H4P_Map(2117);}"),EXEC("if (F16C_Installed) {DCS_JF17(1,1,2117,1);SelMod_H4P_Map(2117);}"),DefTempo);	//TEMPO Long to enable TQS, Short for WHT
+	}
+else
+	{
+	F16C	=	EXEC("if (F16C_Installed)	{DCS_F16C(1,1);SelMod_H4P_Map(0);}");
+	JF17	=	EXEC("if (JF17_Installed)	{DCS_JF17(1,1);SelMod_H4P_Map(0);}");
+	}
+
+
+
+DX_Resettable_Buttons = SEQ(	DX7,		//exclusions: 1-6 are for triggers, 20-23 are comms, 30-32 are modifiers.  If add, update index in DX_Button_Reset()
+								DX8,
+								DX9,
+								DX10,
+								DX11,
+								DX12,
+								DX13,
+								DX14,
+								DX15,
+								DX16,
+								DX17,
+								DX18,
+								DX19,
+								DX24,
+								DX25,
+								DX26,
+								DX27,
+								DX28,
+								DX29
+								);
+}
+
+int DCS_AcftSel(int hotas = 1)	//hotas argument added in 2.34 for VR
+{
+SetKBRate(KBPress, KBDelay);	//added in 2.40 to allow for different KBRate for non-DCS modules (e.g. IL-2).  Modules with differing KBRates SetKBRate in module init()
+if (MFDisplayEnabled > 0)	MFDisplay_Launch_ProfSel();		//added in 2.42 to launch selection graphics
+
+LastSel_Helo_Red_Init	=	X(RedHelo_Array,	RedHelo_Cur);
+LastSel_Helo_Blue_Init	=	X(BlueHelo_Array,	BlueHelo_Cur);
+LastSel_Jet_Red_Init	=	X(RedJet_Array,		RedJet_Cur);
+LastSel_Jet_Blue_Init	=	X(BlueJet_Array,	BlueJet_Cur);
+LastSel_Prop_Red_Init	=	X(RedProp_Array,	RedProp_Cur);
+LastSel_Prop_Blue_Init	=	X(BlueProp_Array,	BlueProp_Cur);
+
+DX_Button_Reset(); //added in 1.69 to clear discrete switch settings
+
+if (WarthogThrottle > 0) 
+	{
+	flashWHT5(0);												//added in 1.68 to cnx Viggen nav state indicator.
+	DeferCall(400,&WHT_Lights_Dn,0); 							//added in 1.68 to cnx Viggen nav state indicator.  400 in use because flash is 500, profile swap delay max 250, and execution time is 250
+	DeferCall(400+LED_Delay,&flashWHT3,0);						//added in 2.44 for JF17
+	DeferCall(2*LED_Delay+400,&Lights_WHT3,0);					//added in 2.44 for JF17
+	DeferCall(Flap_PS_Check_Delay,&PSM_FLAPM_Check,ProfID); 	//added in 1.61
+	ProfileSwapDelay = LED_Delay;
+	}
+else ProfileSwapDelay = 0;	
+
+if (TriggerZoom_state)		//Ensure TriggerZoom is disabled
+	{
+	ProfileSwapDelay = 250;	//prevents TriggerZoom flash from overriding the LED indications
+	TriggerZoom_toggle(0,1,0);
+	}
+
+
+DeferCall(ProfileSwapDelay,&Lights_ALL,0);	//zeroes out MFD lights so people know profile selection in order
+
+Backlight_Max_Init(0);
+
+if (WarthogStick > 0)
+	{
+	MapKeyR	(&Joystick,	S1,	0);	//added in 2.28 due to FC3 MapKeyR for Su-33
+	MapKey	(&Joystick,	S2,	0);
+	
+	MapKey	(&Joystick, S3, EXEC("GraceFlag = 1; DeferCall(ModTempo,&Grace_Flag,0);"));
+	MapKeyR	(&Joystick, S3, EXEC("Acft_Sel_S3_Init(WarthogStick);"));	//separate routine to prevent global mapping on initial release
+	
+	MapKeyR	(&Joystick,	TG1,0);	//Sanitize added in 2.40
+	MapKeyR	(&Joystick,	TG2,0);
+	MapKeyR	(&Joystick,	S2,	0);
+	MapKeyR	(&Joystick,	S4,	0);
+	
+	}
+else
+	{
+	MapKeyR	(&HCougar,	S1,	0);	//added in 2.28 due to FC3 MapKeyR for Su-33
+	MapKey	(&HCougar,	S2, 0);
+	MapKey	(&HCougar,	S3, EXEC("GraceFlag = 1; DeferCall(ModTempo,&Grace_Flag,0);"));
+	MapKeyR	(&HCougar,	S3, EXEC("Acft_Sel_S3_Init(WarthogStick);"));
+	
+	MapKeyR	(&HCougar,	TG1,0);
+	MapKeyR	(&HCougar,	TG2,0);
+	MapKeyR	(&HCougar,	S2, 0);
+	MapKeyR	(&HCougar,	S4, 0);
+	
+	}
+//S2 to be set by individual profile selects
+
+if (WarthogThrottle > 0) 	//for use with WH
+	{
+	LockAxis(&Throttle, THR_LEFT, 0);	//added in 2.25; frees up Left throttle Axis if locked (Helo or P-51)
+	MapKeyIO(&Throttle,	BSB,	0,	EXEC("if (LastSel_Helo_Blue) 		{ActKey(KEYON+PULSE+X(BlueHelo_Array,BlueHelo_Cur));Acft_Sel_LBRT(1);}	else {ActKey(KEYON+PULSE+X(RedHelo_Array,RedHelo_Cur));	Acft_Sel_LBRT(0);}")	);
+	MapKeyIO(&Throttle,	BSM,	0,	TEMPO(0,EXEC("if (LastSel_Jet_Blue) {ActKey(KEYON+PULSE+X(BlueJet_Array,BlueJet_Cur));	Acft_Sel_LBRT(1);}	else {ActKey(KEYON+PULSE+X(RedJet_Array,RedJet_Cur));	Acft_Sel_LBRT(0);}"),DoubleTap)		);
+	MapKeyIO(&Throttle,	BSF,	0,	EXEC("if (LastSel_Prop_Blue) 		{ActKey(KEYON+PULSE+X(BlueProp_Array,BlueProp_Cur));Acft_Sel_LBRT(1);}	else {ActKey(KEYON+PULSE+X(RedProp_Array,RedProp_Cur));	Acft_Sel_LBRT(0);}")	);
+	MapKeyR	(&Throttle,	BSB,	0);
+	MapKeyR	(&Throttle,	BSF,	0);
+	MapKeyR	(&Throttle,	BSM,	0);
+	}
+if (WarthogThrottle != 1) 	//for use with TQS (non exclusive)
+	{
+	MapKeyIO(&HCougar,	T7,		0,	EXEC("if (LastSel_Helo_Blue) 		{ActKey(KEYON+PULSE+X(BlueHelo_Array,BlueHelo_Cur));Acft_Sel_LBRT(1);}	else {ActKey(KEYON+PULSE+X(RedHelo_Array,RedHelo_Cur));	Acft_Sel_LBRT(0);}")	);
+	MapKeyIO(&HCougar,	DFM,	0,	TEMPO(0,EXEC("if (LastSel_Jet_Blue) {ActKey(KEYON+PULSE+X(BlueJet_Array,BlueJet_Cur));	Acft_Sel_LBRT(1);}	else {ActKey(KEYON+PULSE+X(RedJet_Array,RedJet_Cur));	Acft_Sel_LBRT(0);}"),DoubleTap)		);
+	MapKeyIO(&HCougar,	T8,		0,	EXEC("if (LastSel_Prop_Blue) 		{ActKey(KEYON+PULSE+X(BlueProp_Array,BlueProp_Cur));Acft_Sel_LBRT(1);}	else {ActKey(KEYON+PULSE+X(RedProp_Array,RedProp_Cur));	Acft_Sel_LBRT(0);}")	);
+	MapKeyR	(&HCougar,	T7,		0);
+	MapKeyR	(&HCougar,	T8,		0);
+	MapKeyR	(&HCougar,	DFM,	0);
+	}
+
+
+//define cycle buttons
+
+//if (hotas)
+//{
+if (WarthogStick)
+	{
+	MapKey	(&Joystick,	H2L,	EXEC("DCS_Acft_Cycle(0,-1);	Acft_Sel_LBRT(0);"));	//Red Cycle
+	MapKey	(&Joystick,	H2R,	EXEC("DCS_Acft_Cycle(0, 1);	Acft_Sel_LBRT(0);"));	
+	//H2U/D in with LBRT/LCON
+	
+	MapKey	(&Joystick,	H3R,	TEMPO(EXEC("TARSActive(1);"),	EXEC("TARS_PTT_Common_Active(1);"),DefTempo)	);	//SRS Toggle; long toggles SRS PTT Common
+	MapKey	(&Joystick,	H3L,	TEMPO(EXEC("TARSActive(0);"),	EXEC("TARS_PTT_Common_Active(0);"),DefTempo)	);	
+	MapKey	(&Joystick,	H3U,	TEMPO(EXEC("VACActive(1);"), EXEC("VAC_AIRIOActive(1);"), DefTempo));
+	MapKey	(&Joystick,	H3D,	TEMPO(EXEC("VACActive(0);"), EXEC("VAC_AIRIOActive(0);"),	 DefTempo));
+	
+	MapKey	(&Joystick,	H4U,	TEMPO(EXEC("CommStateActive(1);"),	EXEC("CommStateActive(2);"),	DefTempo)	);	//long forces commstate with VAC
+	MapKey	(&Joystick,	H4D,	TEMPO(EXEC("CommStateActive(0);"),	EXEC("H1_Set(4,ForceVRCycle);"),DefTempo)	);	//long cycles H1 between POV, TIR and VR (with VR = 0 and 1)
+
+	if (HornetStick > 0)
+		{
+		MapKey	(&Joystick,	H4R,	TEMPO(EXEC("PTTState(1);"),	EXEC("HOTASGripSelect(1);"),	DefTempo)	);		//PTT DX (0 for keyboard), long grip select F-18
+		MapKey	(&Joystick,	H4L,	TEMPO(EXEC("PTTState(0);"),	EXEC("HOTASGripSelect(0);"),	DefTempo)	);
+		}
+	else
+		{
+		MapKey	(&Joystick,	H4R,	EXEC("PTTState(1);"));		//PTT DX (0 for keyboard)
+		MapKey	(&Joystick,	H4L,	EXEC("PTTState(0);"));	
+		}
+		
+	
+
+	MapKeyR	(&Joystick,	H2R,	0);	//Sanitize added in 2.40
+	MapKeyR	(&Joystick,	H2L,	0);		
+	MapKeyR	(&Joystick,	H2D,	0);
+	MapKeyR	(&Joystick,	H2U,	0);	
+	
+	MapKeyR	(&Joystick,	H3R,	0);
+	MapKeyR	(&Joystick,	H3L,	0);		
+	MapKeyR	(&Joystick,	H3D,	0);
+	MapKeyR	(&Joystick,	H3U,	0);	
+
+	MapKeyR	(&Joystick,	H4R,	0);
+	MapKeyR	(&Joystick,	H4L,	0);		
+	MapKeyR	(&Joystick,	H4D,	0);
+	MapKeyR	(&Joystick,	H4U,	0);	
+	MapKeyR	(&Joystick,	H4P,	0);	
+	}
+
+else
+	{
+	MapKey	(&HCougar,	H2L,	EXEC("DCS_Acft_Cycle(0,-1);	Acft_Sel_LBRT(0);"));	//Red Cycle
+	MapKey	(&HCougar,	H2R,	EXEC("DCS_Acft_Cycle(0, 1);	Acft_Sel_LBRT(0);"));	
+	//H2U/D in with LBRT/LCON
+	
+	MapKey	(&HCougar,	H3R,	TEMPO(EXEC("TARSActive(1);"),	EXEC("TARS_PTT_Common_Active(1);"),DefTempo)	);	//SRS Toggle; long toggles SRS PTT Common
+	MapKey	(&HCougar,	H3L,	TEMPO(EXEC("TARSActive(0);"),	EXEC("TARS_PTT_Common_Active(0);"),DefTempo)	);	
+	MapKey	(&HCougar,	H3U,	TEMPO(EXEC("VACActive(1);"), EXEC("VAC_AIRIOActive(1);"), DefTempo));
+	MapKey	(&HCougar,	H3D,	TEMPO(EXEC("VACActive(0);"), EXEC("VAC_AIRIOActive(0);"),	 DefTempo));
+	
+	MapKey	(&HCougar,	H4U,	TEMPO(EXEC("CommStateActive(1);"),	EXEC("CommStateActive(2);"),	DefTempo)	);	//long forces commstate with VAC
+	MapKey	(&HCougar,	H4D,	TEMPO(EXEC("CommStateActive(0);"),	EXEC("H1_Set(4,ForceVRCycle);"),DefTempo)	);	//long cycles H1 between POV, TIR and VR (with VR = 0 and 1)
+
+	if (HornetStick > 0)
+		{
+		MapKey	(&HCougar,	H4R,	TEMPO(EXEC("PTTState(1);"),	EXEC("HOTASGripSelect(1);"),	DefTempo)	);		//PTT DX (0 for keyboard), long grip select F-18
+		MapKey	(&HCougar,	H4L,	TEMPO(EXEC("PTTState(0);"),	EXEC("HOTASGripSelect(0);"),	DefTempo)	);
+		}
+	else
+		{
+		MapKey	(&HCougar,	H4R,	EXEC("PTTState(1);"));		//PTT DX (0 for keyboard), /I grip select F-18
+		MapKey	(&HCougar,	H4L,	EXEC("PTTState(0);"));	
+		}
+	
+	MapKeyR	(&HCougar,	H2L,	0);	//Sanitize added in 2.40
+	MapKeyR	(&HCougar,	H2D,	0);	
+	MapKeyR	(&HCougar,	H2R,	0);
+	MapKeyR	(&HCougar,	H2U,	0);	
+	
+	MapKeyR	(&HCougar,	H3L,	0);
+	MapKeyR	(&HCougar,	H3D,	0);	
+	MapKeyR	(&HCougar,	H3R,	0);
+	MapKeyR	(&HCougar,	H3U,	0);	
+
+	MapKeyR	(&HCougar,	H4L,	0);
+	MapKeyR	(&HCougar,	H4D,	0);	
+	MapKeyR	(&HCougar,	H4R,	0);
+	MapKeyR	(&HCougar,	H4U,	0);	
+	}
+//}
+
+//else
+//{
+MapKey	(&LMFD,	GAINU,	EXEC("DCS_Acft_Cycle(0,-1);	Acft_Sel_LBRT(0);"));	//Red Cycle
+MapKey	(&LMFD,	GAIND,	EXEC("DCS_Acft_Cycle(0, 1);	Acft_Sel_LBRT(0);"));	
+MapKeyR	(&LMFD, GAINU,	0);
+MapKeyR	(&LMFD, GAIND,	0);
+
+//printf("%i non-DCS games enabled.",OtherGame_Enabled);
+//if (OtherGame_Enabled > 0)
+//	{
+//	printf("  Enabling selection.\xa");
+////	MapKey	(&LMFD,	BRTU,	TEMPO(EXEC("DCS_Acft_Cycle(0,-Acft_Sel_Skip_Mult);"),EXEC("DCS_Acft_Cycle(2, 1);"),DefTempo)	);
+////	MapKey	(&LMFD,	BRTD,	TEMPO(EXEC("DCS_Acft_Cycle(0, Acft_Sel_Skip_Mult);"),EXEC("DCS_Acft_Cycle(2,-1);"),DefTempo)	);
+//	MapKey	(&LMFD,	CONU,	EXEC("DCS_Acft_Cycle(2, 1);"));
+//	MapKey	(&LMFD,	COND,	EXEC("DCS_Acft_Cycle(2,-1);"));
+	
+//	if (WarthogStick > 0)
+//		{
+//		MapKey	(&Joystick,	H2U,	TEMPO(EXEC("DCS_Acft_Cycle(1, 1);	Acft_Sel_LBRT(1);"),EXEC("DCS_Acft_Cycle(2, 1);"),DefTempo)	);
+//		MapKey	(&Joystick,	H2D,	TEMPO(EXEC("DCS_Acft_Cycle(1,-1);	Acft_Sel_LBRT(1);"),EXEC("DCS_Acft_Cycle(2,-1);"),DefTempo)	);	//Blue Cycle
+//		SelMod_H4P_Map(ProfID);	//added in 2.43
+		//MapKey	(&Joystick,	H4P,	EXEC("DCS_Acft_Cycle(2, 1);"));				//Other cycle fwd without TEMPO.  commented out in 2.43
+//		}
+//	else
+//		{
+//		MapKey	(&HCougar,	H2U,	TEMPO(EXEC("DCS_Acft_Cycle(1, 1);	Acft_Sel_LBRT(1);"),EXEC("DCS_Acft_Cycle(2, 1);"),DefTempo)	);		
+//		MapKey	(&HCougar,	H2D,	TEMPO(EXEC("DCS_Acft_Cycle(1,-1);	Acft_Sel_LBRT(1);"),EXEC("DCS_Acft_Cycle(2,-1);"),DefTempo)	);
+//		}	
+//	}
+//else
+//	{
+	printf("\xa");
+	MapKey	(&LMFD,	CONU,	EXEC("DCS_Acft_Cycle(1,-Acft_Sel_Skip_Mult);"));
+	MapKey	(&LMFD,	COND,	EXEC("DCS_Acft_Cycle(1, Acft_Sel_Skip_Mult);"));
+	if (WarthogStick > 0)
+		{
+		MapKey	(&Joystick,	H2U,	EXEC("DCS_Acft_Cycle(1, 1);"));
+		MapKey	(&Joystick,	H2D,	EXEC("DCS_Acft_Cycle(1,-1);"));	//Blue Cycle
+		}
+	else
+		{
+		MapKey	(&HCougar,	H2U,	EXEC("DCS_Acft_Cycle(1, 1);"));		
+		MapKey	(&HCougar,	H2D,	EXEC("DCS_Acft_Cycle(1,-1);"));
+		}	
+//	}
+
+MapKey	(&LMFD,	SYMU,	EXEC("DCS_Acft_Cycle(1,-1);	Acft_Sel_LBRT(1);"));	//Blue Cycle
+MapKey	(&LMFD,	SYMD,	EXEC("DCS_Acft_Cycle(1, 1);	Acft_Sel_LBRT(1);"));	
+
+MapKey	(&RMFD,	GAINU,	TEMPO(EXEC("TARSActive(1);"),	EXEC("TARS_PTT_Common_Active(1);"),DefTempo)	);	//SRS Toggle; long toggles SRS PTT Common
+MapKey	(&RMFD,	GAIND,	TEMPO(EXEC("TARSActive(0);"),	EXEC("TARS_PTT_Common_Active(0);"),DefTempo)	);	
+
+MapKey	(&RMFD,	BRTU,	TEMPO(EXEC("VACActive(1);"), EXEC("VAC_AIRIOActive(1);"), DefTempo));		// /I CHAIN(VAICOM_Chatter,EXEC("MSPCheck = 1;")),	
+MapKey	(&RMFD,	BRTD,	TEMPO(EXEC("VACActive(0);"), EXEC("VAC_AIRIOActive(0);"),	 DefTempo));	// /I VAICOM_Toggle,	
+
+MapKey	(&RMFD,	SYMU,	TEMPO(EXEC("CommStateActive(1);"),	EXEC("CommStateActive(2);"),DefTempo)	);	//long forces commstate with VAC
+MapKey	(&RMFD,	SYMD,	TEMPO(EXEC("CommStateActive(0);"),	EXEC("H1_Set(4,ForceVRCycle);"),DefTempo)	);	//long cycles H1 between POV, TIR and VR (with VR = 0 and 1)
+
+
+if (HornetStick > 0)
+	{
+	MapKey	(&RMFD,	CONU,	TEMPO(EXEC("PTTState(1);"),	EXEC("HOTASGripSelect(1);"),	DefTempo)	);		//PTT DX (0 for keyboard), long grip select F-18
+	MapKey	(&RMFD,	COND,	TEMPO(EXEC("PTTState(0);"),	EXEC("HOTASGripSelect(0);"),	DefTempo)	);
+	}
+else
+	{
+	MapKey	(&RMFD,	CONU,	EXEC("PTTState(1);"));		//PTT DX (0 for keyboard)
+	MapKey	(&RMFD,	COND,	EXEC("PTTState(0);"));	
+	}
+
+	
+//define discrete buttons for DCS_UserSettings
+MapKey	(&LMFD,	OSB01,	Acft_L01);
+MapKey	(&LMFD,	OSB02,	Acft_L02);
+MapKey	(&LMFD,	OSB03,	Acft_L03);
+MapKey	(&LMFD,	OSB04,	Acft_L04);
+MapKey	(&LMFD,	OSB05,	Acft_L05);
+MapKey	(&LMFD,	OSB06,	Acft_L06);
+MapKey	(&LMFD,	OSB07,	Acft_L07);
+MapKey	(&LMFD,	OSB08,	Acft_L08);
+MapKey	(&LMFD,	OSB09,	Acft_L09);
+MapKey	(&LMFD,	OSB10,	Acft_L10);
+MapKey	(&LMFD,	OSB11,	Acft_L11);
+MapKey	(&LMFD,	OSB12,	Acft_L12);
+MapKey	(&LMFD,	OSB13,	Acft_L13);
+MapKey	(&LMFD,	OSB14,	Acft_L14);
+MapKey	(&LMFD,	OSB15,	Acft_L15);
+MapKey	(&LMFD,	OSB16,	Acft_L16);
+MapKey	(&LMFD,	OSB17,	Acft_L17);
+MapKey	(&LMFD,	OSB18,	Acft_L18);
+MapKey	(&LMFD,	OSB19,	Acft_L19);
+MapKey	(&LMFD,	OSB20,	Acft_L20);
+
+MapKey	(&RMFD,	OSB01,	Acft_R01);
+MapKey	(&RMFD,	OSB02,	Acft_R02);
+MapKey	(&RMFD,	OSB03,	Acft_R03);
+MapKey	(&RMFD,	OSB04,	Acft_R04);
+MapKey	(&RMFD,	OSB05,	Acft_R05);
+MapKey	(&RMFD,	OSB06,	Acft_R06);
+MapKey	(&RMFD,	OSB07,	Acft_R07);
+MapKey	(&RMFD,	OSB08,	Acft_R08);
+MapKey	(&RMFD,	OSB09,	Acft_R09);
+MapKey	(&RMFD,	OSB10,	Acft_R10);
+MapKey	(&RMFD,	OSB11,	Acft_R11);
+MapKey	(&RMFD,	OSB12,	Acft_R12);
+MapKey	(&RMFD,	OSB13,	Acft_R13);
+MapKey	(&RMFD,	OSB14,	Acft_R14);
+MapKey	(&RMFD,	OSB15,	Acft_R15);
+MapKey	(&RMFD,	OSB16,	Acft_R16);
+MapKey	(&RMFD,	OSB17,	Acft_R17);
+MapKey	(&RMFD,	OSB18,	Acft_R18);
+MapKey	(&RMFD,	OSB19,	Acft_R19);
+MapKey	(&RMFD,	OSB20,	Acft_R20);
+
+MapKeyR	(&RMFD,	OSB01,	0);	//forced on in 2.40
+MapKeyR	(&RMFD,	OSB02,	0);
+MapKeyR	(&RMFD,	OSB03,	0);
+MapKeyR	(&RMFD,	OSB04,	0);
+MapKeyR	(&RMFD,	OSB05,	0);
+MapKeyR	(&RMFD,	OSB06,	0);
+MapKeyR	(&RMFD,	OSB07,	0);
+MapKeyR	(&RMFD,	OSB08,	0);
+MapKeyR	(&RMFD,	OSB09,	0);
+MapKeyR	(&RMFD,	OSB10,	0);
+MapKeyR	(&RMFD,	OSB11,	0);
+MapKeyR	(&RMFD,	OSB12,	0);
+MapKeyR	(&RMFD,	OSB13,	0);
+MapKeyR	(&RMFD,	OSB14,	0);
+MapKeyR	(&RMFD,	OSB15,	0);
+MapKeyR	(&RMFD,	OSB16,	0);
+MapKeyR	(&RMFD,	OSB17,	0);
+MapKeyR	(&RMFD,	OSB18,	0);
+MapKeyR	(&RMFD,	OSB19,	0);
+MapKeyR	(&RMFD,	OSB20,	0);
+
+MapKeyR	(&LMFD,	OSB01,	0);
+MapKeyR	(&LMFD,	OSB02,	0);
+MapKeyR	(&LMFD,	OSB03,	0);
+MapKeyR	(&LMFD,	OSB04,	0);
+MapKeyR	(&LMFD,	OSB05,	0);
+MapKeyR	(&LMFD,	OSB06,	0);
+MapKeyR	(&LMFD,	OSB07,	0);
+MapKeyR	(&LMFD,	OSB08,	0);
+MapKeyR	(&LMFD,	OSB09,	0);
+MapKeyR	(&LMFD,	OSB10,	0);
+MapKeyR	(&LMFD,	OSB11,	0);
+MapKeyR	(&LMFD,	OSB12,	0);
+MapKeyR	(&LMFD,	OSB13,	0);
+MapKeyR	(&LMFD,	OSB14,	0);
+MapKeyR	(&LMFD,	OSB15,	0);
+MapKeyR	(&LMFD,	OSB16,	0);
+MapKeyR	(&LMFD,	OSB17,	0);
+MapKeyR	(&LMFD,	OSB18,	0);
+MapKeyR	(&LMFD,	OSB19,	0);
+MapKeyR	(&LMFD,	OSB20,	0);
+
+MapKeyR	(&RMFD,	GAINU,	0);
+MapKeyR	(&RMFD,	GAIND,	0);
+MapKeyR	(&RMFD,	BRTU,	0);
+MapKeyR	(&RMFD,	BRTD,	0);
+MapKeyR	(&RMFD,	SYMU,	0);
+MapKeyR	(&RMFD,	SYMD,	0);
+MapKeyR	(&RMFD,	CONU,	0);
+MapKeyR	(&RMFD,	COND,	0);
+
+MapKeyR	(&LMFD,	GAINU,	0);
+MapKeyR	(&LMFD,	GAIND,	0);
+MapKeyR	(&LMFD,	BRTU,	0);
+MapKeyR	(&LMFD,	BRTD,	0);
+MapKeyR	(&LMFD,	SYMU,	0);
+MapKeyR	(&LMFD,	SYMD,	0);
+MapKeyR	(&LMFD,	CONU,	0);
+MapKeyR	(&LMFD,	COND,	0);
+
+
+if (WarthogThrottle > 0)
+	{
+	MapKey	(&Throttle,	FLAPU,	0);
+	MapKey	(&Throttle,	FLAPD,	0);
+	MapKey	(&Throttle,	FLAPM,	0);
+
+	MapKey	(&Throttle,	EFLNORM,	0);
+	MapKey	(&Throttle,	EFLOVER,	0);
+	MapKey	(&Throttle,	EFRNORM,	0);
+	MapKey	(&Throttle,	EFROVER,	0);
+	
+	MapKey	(&Throttle,	EOLIGN,		0);
+	MapKey	(&Throttle,	EOLNORM,	0);
+	MapKey	(&Throttle,	EOLMOTOR,	0);
+	MapKey	(&Throttle,	EORIGN,		0);
+	MapKey	(&Throttle,	EORNORM,	0);
+	MapKey	(&Throttle,	EORMOTOR,	0);
+		
+	MapKey	(&Throttle,	APUON,	0);
+	MapKey	(&Throttle,	APUOFF,	0);
+
+	MapKey	(&Throttle,	RDRNRM,	0);
+	MapKey	(&Throttle,	RDRDIS,	0);
+
+	MapKey	(&Throttle,	EACON,	0);
+	MapKey	(&Throttle,	EACOFF,	0);
+
+//	MapKey	(&Throttle,	LDGH,	0);
+	
+	MapKey	(&Throttle,	APPAT,	0);
+	MapKey	(&Throttle,	APALT,	0);
+	MapKey	(&Throttle,	APAH,	0);
+//	MapKey	(&Throttle,	APENG,	0);
+//	MapKey	(&Throttle,	LTB,	0);	
+	
+	MapKey	(&Throttle,	IDLERON,	0);
+	MapKey	(&Throttle,	IDLEROFF,	0);
+	MapKey	(&Throttle,	IDLELON,	0);
+	MapKey	(&Throttle,	IDLELOFF,	0);	
+	
+//	MapKey	(&Throttle,	CSU,	0);	
+//	MapKey	(&Throttle,	CSD,	0);	
+//	MapKey	(&Throttle,	CSL,	0);	
+//	MapKey	(&Throttle,	CSR,	0);	
+//	MapKey	(&Throttle,	SC,		0);	
+	
+//	MapKey	(&Throttle,	CHF,	0);	
+//	MapKey	(&Throttle,	CHB,	0);	
+	
+//	MapKey	(&Throttle,	SPDF,	0);	
+//	MapKey	(&Throttle,	SPDB,	0);		
+	
+	MapKey	(&Throttle,	PSF,	0);
+	MapKey	(&Throttle,	PSB,	0);
+	MapKey	(&Throttle,	PSM,	0);
+	
+	
+	MapKeyR	(&Throttle,	FLAPU,	0);
+	MapKeyR	(&Throttle,	FLAPD,	0);
+	MapKeyR	(&Throttle,	FLAPM,	0);
+
+	MapKeyR	(&Throttle,	EFLNORM,	0);
+	MapKeyR	(&Throttle,	EFLOVER,	0);
+	MapKeyR	(&Throttle,	EFRNORM,	0);
+	MapKeyR	(&Throttle,	EFROVER,	0);
+	
+	MapKeyR	(&Throttle,	EOLIGN,		0);
+	MapKeyR	(&Throttle,	EOLNORM,	0);
+	MapKeyR	(&Throttle,	EOLMOTOR,	0);
+	MapKeyR	(&Throttle,	EORIGN,		0);
+	MapKeyR	(&Throttle,	EORNORM,	0);
+	MapKeyR	(&Throttle,	EORMOTOR,	0);
+		
+	MapKeyR	(&Throttle,	APUON,	0);
+	MapKeyR	(&Throttle,	APUOFF,	0);
+
+	MapKeyR	(&Throttle,	RDRNRM,	0);
+	MapKeyR	(&Throttle,	RDRDIS,	0);
+
+	MapKeyR	(&Throttle,	EACON,	0);
+	MapKeyR	(&Throttle,	EACOFF,	0);
+
+	MapKeyR	(&Throttle,	LDGH,	0);
+	
+	MapKeyR	(&Throttle,	APPAT,	0);
+	MapKeyR	(&Throttle,	APALT,	0);
+	MapKeyR	(&Throttle,	APAH,	0);
+	MapKeyR	(&Throttle,	APENG,	0);
+	MapKeyR	(&Throttle,	LTB,	0);	
+	
+	MapKeyR	(&Throttle,	IDLERON,	0);
+	MapKeyR	(&Throttle,	IDLEROFF,	0);
+	MapKeyR	(&Throttle,	IDLELON,	0);
+	MapKeyR	(&Throttle,	IDLELOFF,	0);	
+	
+	MapKeyR	(&Throttle,	CSU,	0);	
+	MapKeyR	(&Throttle,	CSD,	0);	
+	MapKeyR	(&Throttle,	CSL,	0);	
+	MapKeyR	(&Throttle,	CSR,	0);	
+	MapKeyR	(&Throttle,	SC,		0);	
+	
+	MapKeyR	(&Throttle,	CHF,	0);	
+	MapKeyR	(&Throttle,	CHB,	0);	
+	
+	MapKeyR	(&Throttle,	SPDF,	0);	
+	MapKeyR	(&Throttle,	SPDB,	0);		
+	
+	MapKeyR	(&Throttle,	PSF,	0);
+	MapKeyR	(&Throttle,	PSB,	0);
+	MapKeyR	(&Throttle,	PSM,	0);
+	
+	}
+if (WarthogThrottle != 1)	//TQS attached
+	{
+	MapKeyR	(&HCougar,	T1,	0);
+	MapKeyR	(&HCougar,	T6,	0);
+	MapKeyR	(&HCougar,	T9,	0);
+	MapKeyR	(&HCougar,	T10,0);
+	}
+AnalogBrakePoll(0);		//added in 2.61 to make sure polling cancelled between modules
+printf("Profile Selection:\xa Press and release S2 to accept profile\xa or quickly tap S3 to cancel.\xa\xa");
+
+
+//Set the default profile
+if 		(	(HCougar[T7]) | (Throttle[BSB])	)	//Back/Up for helos
+	{
+	if (Script_Debug) printf("Helo Selected ");	//for test purposes
+	if (LastSel_Helo_Blue)
+		{
+		if (Script_Debug) printf("(Blue)\xa");	//for test purposes
+		if (LED_Enable_on_Cycle > 0)	DeferCall(250+ProfileSwapDelay,	&ActKey,	KEYON+PULSE+LastSel_Helo_Blue_Init);
+		else	ActKey(KEYON+PULSE+X(BlueHelo_Array,BlueHelo_Cur));
+		
+		}
+	else
+		{
+		if (Script_Debug) printf("(Red)\xa");		//for test purposes
+		if (LED_Enable_on_Cycle > 0)	DeferCall(250+ProfileSwapDelay,	&ActKey,	KEYON+PULSE+LastSel_Helo_Red_Init);
+		else	ActKey(KEYON+PULSE+X(RedHelo_Array,RedHelo_Cur));
+		}
+	Acft_Sel_LBRT(LastSel_Helo_Blue);
+	}
+else if (	(HCougar[T8]) | (Throttle[BSF])	)	//Fwd/Down for Warbirds
+	{
+	if (Script_Debug) printf("Prop Selected ");	//for test purposes
+	if (LastSel_Prop_Blue)
+		{
+		if (Script_Debug) printf("(Blue)\xa");	//for test purposes
+		if (LED_Enable_on_Cycle > 0)	DeferCall(250+ProfileSwapDelay,	&ActKey,	KEYON+PULSE+LastSel_Prop_Blue_Init);
+		else	ActKey(KEYON+PULSE+X(BlueProp_Array,BlueProp_Cur));
+		}
+	else
+		{
+		if (Script_Debug) printf("(Red)\xa");	//for test purposes
+		if (LED_Enable_on_Cycle > 0)	DeferCall(250+ProfileSwapDelay,	&ActKey,	KEYON+PULSE+LastSel_Prop_Red_Init);
+		else	ActKey(KEYON+PULSE+X(RedProp_Array,RedProp_Cur));
+		}
+	Acft_Sel_LBRT(LastSel_Prop_Blue);
+	}
+else											//Jets by default
+	{
+	if (Script_Debug) printf("Jet Selected ");	//for test purposes
+	if (LastSel_Jet_Blue)
+		{
+		if (Script_Debug) printf("(Blue)\xa");	//for test purposes
+		if (LED_Enable_on_Cycle > 0)	DeferCall(250+ProfileSwapDelay,	&ActKey,	KEYON+PULSE+LastSel_Jet_Blue_Init);
+		else	ActKey(KEYON+PULSE+X(BlueJet_Array,BlueJet_Cur));
+		}
+	else
+		{
+		if (Script_Debug) printf("(Red)\xa");	//for test purposes
+		if (LED_Enable_on_Cycle > 0)	DeferCall(250+ProfileSwapDelay,	&ActKey,	KEYON+PULSE+LastSel_Jet_Red_Init);
+		else	ActKey(KEYON+PULSE+X(RedJet_Array,RedJet_Cur));
+		}
+	Acft_Sel_LBRT(LastSel_Jet_Blue);
+	}	
+if (Script_Debug) printf("Cougar:\xa T7: %i\xa T8: %i\xaWarthog:\xa BSB: %i\xa BSF: %i\xa",HCougar[T7],HCougar[T8],Throttle[BSB],Throttle[BSF]);	//for test purposes11
+}
+
+int	Acft_Sel_LBRT(int blue)
+{
+//if ((OtherGame_Enabled > 0) & (blue))
+//	{
+//	MapKey	(&LMFD,	BRTU,	EXEC("DCS_Acft_Cycle(1,-Acft_Sel_Skip_Mult);"));
+//	MapKey	(&LMFD,	BRTD,	EXEC("DCS_Acft_Cycle(1, Acft_Sel_Skip_Mult);"));
+//	}
+//else
+//	{
+	MapKey	(&LMFD,	BRTU,	EXEC("DCS_Acft_Cycle(0,-Acft_Sel_Skip_Mult);"));
+	MapKey	(&LMFD,	BRTD,	EXEC("DCS_Acft_Cycle(0, Acft_Sel_Skip_Mult);"));
+//	}
+}
+int Acft_Sel_S3_Init(int wh = 0)
+{
+if (wh > 0) MapKeyR	(&Joystick, S3,	EXEC("if (GraceFlag) Cancel_HOTAS_Init(ProfID,GearState); GraceFlag = 0;")	);	//Graceflag allows for long S3 without disabling
+else		MapKeyR	(&HCougar,	S3,	EXEC("if (GraceFlag) Cancel_HOTAS_Init(ProfID,GearState); GraceFlag = 0;")	);
+}
+
+int DCS_Acft_Cycle(int blue = 0, int posit = 1)	//updated in 2.40 to add OtherGame
+{
+if (Script_Debug) printf("DCS_Acft_Cycle:\xa");	//for test purposes
+//if (blue > 1)		//blue = 2 for other games
+//	{
+//	if (posit < 0)
+//		{
+//		if (Script_Debug) printf("	Decrease Other by 1...");	//for test purposes
+//		Acft_Cycle_Dir = -1;	//determines direction of cycle when selecting aircraft (so "missing" acft are skipped in the right direction)	
+//		OtherGame_Cur = (OtherGame_Cur+OtherGame_Index+posit)%OtherGame_Index;
+//		}
+//	else
+//		{
+//		Acft_Cycle_Dir = 1;		//determines direction of cycle when selecting aircraft (so "missing" acft are skipped in the right direction)
+//		OtherGame_Cur = (OtherGame_Cur+posit)%OtherGame_Index;
+//		}
+//	ActKey(KEYON+PULSE+X(OtherGame_Array,OtherGame_Cur));
+//	if (Script_Debug) printf("done.");	//for test purposes
+//	}	
+//else if (blue == 1)	//Blue Aircraft
+if (blue > 0)	//blue acft
+	{
+	if (posit < 0)
+		{
+		if (Script_Debug) printf("	Decrease Blue by 1...");	//for test purposes
+		Acft_Cycle_Dir = -1;	//determines direction of cycle when selecting aircraft (so "missing" acft are skipped in the right direction)
+		if	((HCougar[T7]) | (Throttle[BSB]))	//Helo
+			{
+			BlueHelo_Cur = (BlueHelo_Cur+BlueHelo_Index+posit)%BlueHelo_Index;		//posit < 0 will cycle by -posit
+			ActKey(KEYON+PULSE+X(BlueHelo_Array,BlueHelo_Cur));
+			}
+		else if	((HCougar[T8]) | (Throttle[BSF]))	//Props
+			{
+			BlueProp_Cur = (BlueProp_Cur+BlueProp_Index+posit)%BlueProp_Index;
+			if (Script_Debug) printf("math...");	//for test purposes
+			ActKey(KEYON+PULSE+X(BlueProp_Array,BlueProp_Cur));
+			if (Script_Debug) printf("array...");	//for test purposes
+			}
+		else	//Jets
+			{
+			BlueJet_Cur = (BlueJet_Cur+BlueJet_Index+posit)%BlueJet_Index;
+			ActKey(KEYON+PULSE+X(BlueJet_Array,BlueJet_Cur));
+			}
+		if (Script_Debug) printf("done.");	//for test purposes
+		}
+	else
+		{
+		Acft_Cycle_Dir = 1;		//determines direction of cycle when selecting aircraft (so "missing" acft are skipped in the right direction)
+		if	((HCougar[T7]) | (Throttle[BSB]))	//Helo
+			{
+			BlueHelo_Cur = (BlueHelo_Cur+posit)%BlueHelo_Index;		//posit < 0 will cycle by +posit
+			ActKey(KEYON+PULSE+X(BlueHelo_Array,BlueHelo_Cur));
+			}
+		else if	((HCougar[T8]) | (Throttle[BSF]))	//Props
+			{
+			BlueProp_Cur = (BlueProp_Cur+posit)%BlueProp_Index;
+			ActKey(KEYON+PULSE+X(BlueProp_Array,BlueProp_Cur));
+			}
+		else	//Jets
+			{
+			BlueJet_Cur = (BlueJet_Cur+posit)%BlueJet_Index;
+			ActKey(KEYON+PULSE+X(BlueJet_Array,BlueJet_Cur));
+			}
+		}
+	}	
+else		//Red Aircraft
+	{
+	if (posit < 0)
+		{
+		Acft_Cycle_Dir = -1;	//determines direction of cycle when selecting aircraft (so "missing" acft are skipped in the right direction)
+		if	((HCougar[T7]) | (Throttle[BSB]))	//Helo
+			{
+			RedHelo_Cur = (RedHelo_Cur+RedHelo_Index+posit)%RedHelo_Index;		//posit < 0 will cycle by -posit (plus because it's a negative value)
+			ActKey(KEYON+PULSE+X(RedHelo_Array,RedHelo_Cur));
+			}
+		else if	((HCougar[T8]) | (Throttle[BSF]))	//Props
+			{
+			RedProp_Cur = (RedProp_Cur+RedProp_Index+posit)%RedProp_Index;
+			ActKey(KEYON+PULSE+X(RedProp_Array,RedProp_Cur));
+			}
+		else	//Jets
+			{
+			RedJet_Cur = (RedJet_Cur+RedJet_Index+posit)%RedJet_Index;
+			ActKey(KEYON+PULSE+X(RedJet_Array,RedJet_Cur));
+			}
+		}
+	else
+		{
+		Acft_Cycle_Dir = 1;		//determines direction of cycle when selecting aircraft (so "missing" acft are skipped in the right direction)
+		if	((HCougar[T7]) | (Throttle[BSB]))	//Helo
+			{
+			RedHelo_Cur = (RedHelo_Cur+posit)%RedHelo_Index;		//posit < 0 will cycle by +posit
+			ActKey(KEYON+PULSE+X(RedHelo_Array,RedHelo_Cur));
+			}
+		else if	((HCougar[T8]) | (Throttle[BSF]))	//Props
+			{
+			RedProp_Cur = (RedProp_Cur+posit)%RedProp_Index;
+			ActKey(KEYON+PULSE+X(RedProp_Array,RedProp_Cur));
+			}
+		else	//Jets
+			{
+			RedJet_Cur = (RedJet_Cur+posit)%RedJet_Index;
+			ActKey(KEYON+PULSE+X(RedJet_Array,RedJet_Cur));
+			}
+		}
+	}	
+}
+
+int Global_S2_Init(int prof = 0, int gear = 0)
+{
+if			(prof == 2586)	F86_Map_S2(gear);		//F-86
+else if 	(prof == 1050)	BS2_CommState_Init();	//Ka-50
+else if		((prof == 2515) | (prof == 2509))		//F-15C or A-10A
+	{
+	if (WarthogStick > 0)	MapKeyIO(&Joystick,	S2, CHAIN(DX2,DX10), DX2);
+	else					MapKeyIO(&HCougar,	S2, CHAIN(DX2,DX10), DX2);
+	}
+//else if 	(prof == 1008)	//Mi-8, removed in 2.71 since S3+S2 now requests control for multicrew
+//	{
+//	if (WarthogStick > 0)	MapKeyIO(&Joystick,	S2, TEMPO(DX2, ESBR_Power_DX, LongTempo),	DX2);
+//	else					MapKeyIO(&HCougar,	S2, TEMPO(DX2, ESBR_Power_DX, LongTempo),	DX2);
+//	}
+else if 	(prof == 1024)	//Mi-24P
+	{
+	if (WarthogStick > 0)	MapKeyIO(&Joystick,	S2, TEMPO(DX2, USB_3, DefTempo),	DX2);
+	else					MapKeyIO(&HCougar,	S2, TEMPO(DX2, USB_3, DefTempo),	DX2);
+	}
+else if 	(prof == 2019)	//MiG-19
+	{
+	if (WarthogStick > 0)	MapKeyIO(&Joystick,	S2, TEMPO(DX2, MiG19_Sight_Uncage, DefTempo),	DX2);
+	else					MapKeyIO(&HCougar,	S2, TEMPO(DX2, MiG19_Sight_Uncage, DefTempo),	DX2);	
+	}
+else if		(prof == 2021)	//MiG-21
+	{
+	if (WarthogStick > 0)	MapKeyIO(&Joystick,	S2, TEMPO(DX2, MiG21_Wpn_Rel_Cover_Open, DefTempo),	DX2);
+	else					MapKeyIO(&HCougar,	S2, TEMPO(DX2, MiG21_Wpn_Rel_Cover_Open, DefTempo),	DX2);	
+	}
+else if (prof == 3009)		//Bf-109
+	{
+	if (WarthogStick > 0)	MapKeyIO(&Joystick,	S2,	DX2, DX5);
+	else					MapKeyIO(&HCougar,	S2,	DX2, DX5);
+	}
+//else if (prof == 5000)		//Elite
+//	{
+//	if (WarthogStick > 0)	MapKeyIO(&Joystick,	S2,	ED_DeployHardpoint,DX2);
+//	else					MapKeyIO(&HCougar,	S2,	ED_DeployHardpoint,DX2);
+//	}
+
+//2-seat aircraft with keyboard request control
+else if ((prof == 3502))	//any 2-seat aircraft with keyboard J for request control
+	{
+	if (WarthogStick > 0)	MapKeyIO(&Joystick,	S2, RequestAcftCtl, DX2);
+	else					MapKeyIO(&HCougar,	S2, RequestAcftCtl, DX2);
+	}
+else if ((prof == 1501) | (prof == 1024))	//any 2-seat aircraft with keyboard C for request control
+	{
+	if (WarthogStick > 0)	MapKeyIO(&Joystick,	S2, UH1_RequestControl, DX2);
+	else					MapKeyIO(&HCougar,	S2, UH1_RequestControl, DX2);
+	}
+	
+//all others	
+else if (WarthogStick > 0)	MapKey	(&Joystick,	S2,	BTN_S2);	//all others WH
+else						MapKey	(&HCougar,	S2,	BTN_S2);	//all others Cougar
+
+if (WarthogStick > 0)		MapKeyR	(&Joystick,	S2,	0);	//all WH
+else						MapKeyR	(&HCougar,	S2,	0);	//all Cougar	
+}
+
+int Global_S3_Init(int prof = 0, int gear = 0)	//only need gear for NWS/BS2
+{
+if (Script_Debug) printf("Global_S3_Init: ");	//for test purposes
+if (	((prof == 2515) | (prof == 2029)) | (prof == 2586) | (prof == 2508) | (prof == 2518) | (prof == 2604) | (prof == 2615)	)	S3_NWS(gear,prof);	//F-15C/E, AV-8B F/A-18, A-4E_C or F-86 (not F-5 since NWS routine is comm-related)
+else if (prof == 1050) BS2_Map_S3(BS2_ForceCommStateOff,gear);	//Ka-50
+else if (WarthogStick > 0)	//all others WH
+	{
+	MapKey	(&Joystick,	S3,	BTN_S3P);
+	MapKeyR	(&Joystick,	S3,	BTN_S3R);
+	}
+else						//all others Cougar
+	{
+	MapKey	(&HCougar,	S3,	BTN_S3P);
+	MapKeyR	(&HCougar,	S3,	BTN_S3R);
+	}
+if (Script_Debug) printf("%i\xa",prof);	//for test purposes
+}
+
+int Global_DF_Init(int wh, int prof = 0, int tqs = 0)	//works for both WH and cougar.  tqs added in 2.43 for F-16C/JF-17
+{
+if		((prof == 1008) | (prof == 1024))					//Mi-8/Mi-24
+		Mi8_DF_Init(wh);					
+else if	(prof == 1050)	BS2_DF_Init(wh);					//Ka-50
+
+else if	(prof == 1501)	UH1_DF_Init(wh);					//UH-1H
+else if (prof == 1542)	SA342_DF_Init(wh);					//SA342	check for 1541 L
+
+else if (prof == 2015)	MiG15_DF_Init(wh);					//MiG-15bis
+else if (prof == 2019)	MiG19_DF_Init(wh, GearState);		//MiG-19
+else if (prof == 2021)	MiG21_DF_Init(wh, GearState);		//MiG-21bis
+else if (prof == 2117)	JF17_DF_Init(wh, tqs);				//JF-17
+else if ((prof == 2039)|(prof == 2040))
+			L39_DF_Init(wh);								//L-39
+
+else if (prof == 2604)	A4EC_DF_Init(wh);					//A-4E-C
+else if (prof == 2505)	F5E_DF_Init(wh);					//F-5E
+else if (prof == 2508)	AV8B_DF_Init(wh);					//AV-8B
+//else if	(prof == 2510)	A10C_DF_Init(wh);					//A-10C Warthog
+else if	(prof == 2514)	F14_DF_Init(wh,CurrentStation,0);	//F-14 Tomcat
+else if	(prof == 2615)	F15E_DF_Init(wh);					//F-15E Strike Eagle
+//F-16C Viper (no need)
+else if	(prof == 2518)	FA18C_DF_Init(wh);					//F/A-18C Hornet
+else if	(prof == 2586)	F86_DF_Init(wh);					//F-86
+//else if ((prof == 2501) | (prof == 2601))
+//			C101_DF_Init(wh,prof);							//C-101
+else if	(prof == 2520)	M2000C_DF_Init(wh);					//M-2000C
+else if (prof == 2539)	MB339_DF_Init(wh);					//MB-339
+//else if (prof == 2545)	T45_DF_Init(wh);					//VNAO T-45 (not currently used)
+
+else if	(prof == 3009)	Bf109_DF_Init(wh);					//Bf109K-4
+
+else if	(	(prof == 2025)	|	(prof == 2011)	|	(prof == 2027) |	(prof == 2033) |	(prof == 2029)	|	(prof == 2509)	|	(prof == 2515)	)	//FC3
+							FC3_DF_Init(wh);
+else if ((prof == 3509)	)	Spit_DF_Init(wh);				//Spitfire LF Mk.IX		
+else if ((prof == 3606)	)	Mosquito_DF_Init(wh);			//Mosquito FB VI
+else if (prof == 3516)		I16_DF_Init(wh);				//I-16
+else if ((prof == 3551)	|	(prof == 2510)	)				//P-51D or A-10C
+	{
+	if (wh > 0)
+		{
+		MapKey	(&Throttle, BSB, PULSE+DX25);
+		MapKeyR	(&Throttle, BSB, 0);
+		MapKey	(&Throttle, BSF, PULSE+DX26);
+		MapKeyR	(&Throttle, BSF, 0);
+		if (prof == 2510)
+				MapKey	(&Throttle,	BSM,	TEMPO(0,PULSE+BoatSwitch_Ctr,	DoubleTap));	//individual key commands added in 1.24 (DX29 moved to E-brake) TEMPO(0,PULSE+PinkySwitch_Ctr,DoubleTap)
+		else	MapKeyIO(&Throttle, BSM, 0, TEMPO(0,PULSE+DX24, DoubleTap));				//Only enables Fixed+Gyro Gunsight if dogfight switch is centered for 100ms (prevents going to fixed+gyro when going direct b/t Fixed and Gyro).
+		}
+	else
+		{
+		MapKey	(&HCougar,	T7, PULSE+DX25);
+		MapKeyR	(&HCougar,	T7, 0);
+		MapKey	(&HCougar,	T8, PULSE+DX26);
+		MapKeyR	(&HCougar,	T8, 0);	
+		if (prof == 2510)
+				MapKeyIO(&HCougar,	DFM,	TEMPO(0,PULSE+PinkySwitch_Ctr,DoubleTap),		//delay in case going straight between T7/T8
+											TEMPO(0,PULSE+BoatSwitch_Ctr,	DoubleTap));	//individual key commands added in 1.24 (DX29 moved to E-brake)	
+		else	MapKeyIO(&HCougar,	DFM, 0, TEMPO(0,PULSE+DX24, DoubleTap));				//Only enables Fixed+Gyro Gunsight if dogfight switch is centered for 100ms (prevents going to fixed+gyro when going direct b/t Fixed and Gyro).
+		}
+	}
+else if ((prof == 2501) | (prof == 2601))	// C-101
+	{
+	if (wh > 0)
+		{
+		MapKeyIO(&Throttle, BSB, 	PULSE+DX11,	CHAIN(PULSE+DX11,EXEC("C101_MM_Set(2);"))	);
+		MapKeyR	(&Throttle, BSB, 	0);
+		MapKeyIO(&Throttle, BSF, 	PULSE+DX12,	CHAIN(PULSE+DX12,EXEC("C101_MM_Set(1);"))	);
+		MapKeyR	(&Throttle, BSF, 	0);
+		MapKeyIO(&Throttle, BSM, 	0, 	TEMPO(0,CHAIN(PULSE+DX19,EXEC("C101_MM_Set(0);")), DoubleTap)	);
+		}
+	else
+		{
+		MapKeyIO(&HCougar,	T7, 	PULSE+DX11,	CHAIN(PULSE+DX11,EXEC("C101_MM_Set(2);"))	);
+		MapKeyR	(&HCougar,	T7, 	0);
+		MapKeyIO(&HCougar,	T8, 	PULSE+DX12,	CHAIN(PULSE+DX12,EXEC("C101_MM_Set(1);"))	);
+		MapKeyR	(&HCougar,	T8, 	0);	
+		MapKeyIO(&HCougar, DFM, 	0,	TEMPO(0,CHAIN(PULSE+DX19,EXEC("C101_MM_Set(0);")), DoubleTap)	);
+		}
+	}
+else if (prof == 999)
+		{
+		CA_Binocs_Map(0,wh,WarthogStick);
+		if (wh > 0)	//Warthog
+				{
+
+				MapKey	(&Throttle, BSF, 	PULSE+DX26);
+				MapKeyR	(&Throttle,	BSF, 	PULSE+DX26);
+				MapKey	(&Throttle, BSM, 	0);	
+				}
+		else				//TQS
+				{
+
+				MapKey	(&HCougar,	T8, PULSE+DX26);
+				MapKeyR	(&HCougar,	T8, PULSE+DX26);
+				MapKey	(&HCougar,	DFM,0);
+				}
+		}
+else if (prof == 998)  AWACS_PTT_Map();
+
+//else if ((prof > 3999) & (prof < 5000))	IL2GB_DF_Init(wh,prof);	//IL-2
+//else if (prof == 5000)					EliteD_DF_Init(wh);	//Elite
+
+		
+//DX, Fw190, AJS-37, Hawk
+else if ((wh > 0))	//Warthog
+		{
+		MapKey	(&Throttle, BSB, DX25);
+		MapKeyR	(&Throttle,	BSB,	0);	
+		MapKey	(&Throttle, BSF, DX26);
+		MapKeyR	(&Throttle, BSF, 0);
+		MapKey	(&Throttle, BSM, 0);	
+		
+		if ((wh > 1) & (tqs > 0))	//TQS for F-16C
+			{
+			MapKey	(&HCougar,	T7,	DX25);
+			MapKeyR	(&HCougar,	T7, 0);
+			MapKey	(&HCougar,	T8, DX26);
+			MapKeyR	(&HCougar,	T8, 0);
+			MapKey	(&HCougar,	DFM,0);
+			}		
+		}
+else				//TQS
+		{
+		if (prof == 1564)
+			{
+			MapKeyIO(&HCougar,	T7,	CHAIN(DX9, EXEC("Engine_Start_Ind(1, Starter_Ind_x, AirBrkFlash+1);")),	DX25);
+			MapKeyIO(&HCougar,	T8, CHAIN(DX14,EXEC("Engine_Start_Ind(2, Starter_Ind_x, AirBrkFlash+1);")),	DX26);
+			}
+		else
+			{
+			MapKey	(&HCougar,	T7,	DX25);
+			MapKey	(&HCougar,	T8, DX26);
+			}
+		MapKeyR	(&HCougar,	T7, 0);
+		MapKeyR	(&HCougar,	T8, 0);
+		MapKey	(&HCougar,	DFM,0);
+		}
+}
+
+int SelMod_H4P_Map(int prof)
+{
+int h4pfunct;
+int h4pdef = TEMPO(EXEC("DCS_Acft_Cycle(2, 1);"),EXEC("DCS_Acft_Cycle(2,-1);"),DefTempo);	//default: short non-DCS cycle forward, long function reverse
+
+if (WarthogStick > 0)
+	{
+	//Multicrew Acft
+	if 		(prof == 2501)	h4pfunct	=	EXEC("SelMod_Station_Sel(2501,-1);");
+	else if (prof == 2601)	h4pfunct	=	EXEC("SelMod_Station_Sel(2601,-1);");	
+	else if (prof == 2514)	h4pfunct	=	EXEC("SelMod_Station_Sel(2514,-1);");
+	else if (prof == 2615)	h4pfunct	=	EXEC("SelMod_Station_Sel(2615,-1);");
+	else if (prof == 2539)	h4pfunct	=	EXEC("SelMod_Station_Sel(2539,-1);");
+	else if (prof == 2039)	h4pfunct	=	EXEC("SelMod_Station_Sel(2039,-1);");
+	else if (prof == 2040)	h4pfunct	=	EXEC("SelMod_Station_Sel(2040,-1);");
+	
+	//TQS aircraft (leave for second to last due to 
+	else if (WarthogThrottle > 1)
+		{
+		if		(prof == 2516)	h4pfunct	=	EXEC("SelMod_TQS_Sel(2516,-1);");
+		else if	(prof == 2117)	h4pfunct	=	EXEC("SelMod_TQS_Sel(2117,-1);");
+		
+		else					h4pfunct	=	h4pdef;
+		}
+	else					h4pfunct	=	h4pdef;
+	
+	MapKey	(&Joystick,	H4P,	h4pfunct);	//short non-DCS cycle forward, long function
+	}
+}
+int SelMod_Station_Sel(int prof, int stn, int index = 2)
+{
+if ((prof == 2501) | (prof == 2601))		//C-101
+	{
+	if ((stn < 1) | (stn > index)) DefaultStation_C101 = abs(DefaultStation_C101 - 2) + 1;	//forces 1 or 2 from a binary value
+	else DefaultStation_C101 = stn;
+	DCS_C101(LED_Enable_on_Cycle,Speech_on_Cycle,prof,DefaultStation_C101);
+	}
+else if (prof == 2514)						//F-14
+	{
+	if ((stn < 1) | (stn > index)) DefaultStation_F14 = abs(DefaultStation_F14 - 2) + 1;	//forces 1 or 2 from a binary value
+	else F14_DefaultStation = stn;
+	DCS_F14(LED_Enable_on_Cycle,Speech_on_Cycle,prof,DefaultStation_F14);
+	}
+else if (prof == 2615)						//F-15E
+	{
+	if ((stn < 1) | (stn > index)) DefaultStation_F15E = abs(DefaultStation_F15E - 2) + 1;	//forces 1 or 2 from a binary value
+	else F15E_DefaultStation = stn;
+	DCS_F15E(LED_Enable_on_Cycle,Speech_on_Cycle,prof,DefaultStation_F15E);
+	}
+else if (prof == 2539)						//MB-339
+	{
+	if ((stn < 1) | (stn > index)) DefaultStation_MB339 = abs(DefaultStation_MB339 - 2) + 1;	//forces 1 or 2 from a binary value
+	else DefaultStation_MB339 = stn;
+	DCS_MB339(LED_Enable_on_Cycle,Speech_on_Cycle,prof,DefaultStation_MB339);
+	}
+//else if (prof == 2545)						//T-45 (not currently in use)
+//	{
+//	if ((stn < 1) | (stn > index)) DefaultStation_T45 = abs(DefaultStation_T45 - 2) + 1;	//forces 1 or 2 from a binary value
+//	else DefaultStation_T45 = stn;
+//	DCS_T45(LED_Enable_on_Cycle,Speech_on_Cycle,prof,DefaultStation_T45);
+//	}
+else if ((prof == 2039) | (prof == 2040))	//L-39
+	{
+	if ((stn < 1) | (stn > index)) DefaultStation_L39 = abs(DefaultStation_L39 - 2) + 1;	//forces 1 or 2 from a binary value
+	else DefaultStation_L39 = stn;
+	DCS_L39(LED_Enable_on_Cycle,Speech_on_Cycle,prof,DefaultStation_L39);
+	}
+}
+int	SelMod_TQS_Sel(int prof, int tqs, int index = 2)
+{
+if 		(prof == 2516)	DCS_F16C(LED_Enable_on_Cycle,Speech_on_Cycle,prof,-1);
+else if (prof == 2117)	DCS_JF17(LED_Enable_on_Cycle,Speech_on_Cycle,prof,-1);
+}
+
+int	DX_Button_Reset(int btn = 0, int index = 19)	//button should be USB or DX, designed for DX; added in 1.69
+{
+if (btn) ActKey(btn);	
+else
+	{
+	while (btn < index)
+		{
+		ActKey(X(DX_Resettable_Buttons,btn));
+		btn = btn + 1;
+		}
+	}
+}
+
+
+
+int	GearStateRestore(int delay=250)		//useful for restoring LED after selection cancel
+{
+if (TriggerZoom_state) DeferCall(delay,&flashLLED2_250,1);	//restores flash if Triggerzoom enabled
+else if ((!FixedGear) & (RudderPedals != 2)) DeferCall(delay,&Lights_LLED2,GearState);	//sets gear LED if not ANT Rudder or Fixed Gear
+}
+
+
+
+
+int Cancel_HOTAS_Init(int prof, int gear = 0)	//gear is if required for Global_S3_Init
+{	//Cancels selected HOTAS config and returns to existing config.
+Global_S2_Init(prof,gear);
+Global_S3_Init(prof,gear);
+Global_DF_Init(WarthogThrottle,prof);
+MFD_Init(prof);
+CommState_Off(1,prof,CurrentStation,DMS_SnapView,1);	//added in 2.42 for bug fix
+
+PlayWav("cancel.wav");	//added in 1.61
+printf("Profile Switch Cancelled\xa");
+Lights_ALL(0);
+GearStateRestore(250);	//added in 1.61
+PlayWavSel(prof,-1,DCSFP_Enabled,MFDisplayEnabled);	//added in 2.42.  -1 in sel argument to disable wav playing.  perhaps disable DCSFP if ever added (likely not needed).
+}
+
+int	PSM_FLAPM_Check(int prof)	//added in 1.61
+{
+if (	((Throttle[FLAPU]) | (Throttle[FLAPD])) | ((Throttle[PSF])|(Throttle[PSB]))	)
+	{
+	if (	((Throttle[FLAPU]) | (Throttle[FLAPD])) & ((Throttle[PSF])|(Throttle[PSB])) & ((prof == 1541) | (prof == 1542))	)	//gazelle uses both PS and FLAPS for sustained action
+		{
+		PlayWav("flap_set.wav");
+		DeferCall(2000,&PlayWav,"psm_set.wav");
+		}
+	else if (	((Throttle[FLAPU]) | (Throttle[FLAPD])) & ((prof == 1541) | (prof == 1542) | (prof == 3551))	)	//gazelle and P-51 use flaps for sustained action
+		PlayWav("flap_set.wav");
+	else if (	((Throttle[PSF])|(Throttle[PSB]))	&	((prof == 1541) | (prof == 1542) | (prof == 1501))	)	PlayWav("psm_set.wav");	//UH1 and gazelle use PS for sustained action
+	}
+	
+if (Script_Debug) printf("FLAPM = %i\xaPSM = %i\xa",Throttle[FLAPM],Throttle[PSM]);	//for test purposes
+if (Script_Debug) printf("PSF = %i\xaPSB = %i\xa",Throttle[PSF],Throttle[PSB]);	//for test purposes
+}
+
+int PlayWav(alias wavfile)
+{
+    char buffer;Dim(&buffer, 2*PathLength+94);
+    if (!HVSound)
+    		sprintf (&buffer, "spawn -w \"%s\\Common\\Sound\" \"%s\\Common\\Sound\\sWavPlayer.exe .\\LV\\%s\"", &ScriptPath,&ScriptPath,&wavfile);
+    else	sprintf (&buffer, "spawn -w \"%s\\Common\\Sound\" \"%s\\Common\\Sound\\sWavPlayer.exe %s\"", 		&ScriptPath,&ScriptPath,&wavfile);
+
+    system(&buffer);
+    if (Script_Debug > 0) {printf(&buffer);printf("\xa");}
+}
+
+int PlayWavSel(int prof, int sel = 0, int dcsfp = 0, int mfdisp = 0, int wavgap = 0, int stn = 1)	//added in 1.61 to confirm selected profile.  initrun added in 2.05 for DCSFP.  wavgap is a catch-all for a delayed play.  stn added in 2.43 for multicrew with multiple mfds (i.e. F-14)
+{
+char wavfile;Dim(&wavfile, 14);	//allows 10x3 filename
+int wavdelay;
+
+
+//Red Helos
+if (prof == 1008)
+	{
+	sprintf(&wavfile, "mi8mtv2.wav");
+//	sprintf(&dcsfpfile,	&DCSFP_Mi8);
+	sprintf(&mfdispfile, &MFDisp_Mi8);
+	wavdelay = 1100;
+	}
+if (prof == 1024)
+	{
+	sprintf(&wavfile, "mi24.wav");
+//	sprintf(&dcsfpfile,	&DCSFP_Mi24);
+	sprintf(&mfdispfile, &MFDisp_Mi24C);
+	wavdelay = 1600;
+	}
+else if (prof == 1050)
+	{
+	sprintf(&wavfile, "ka50.wav");
+//	sprintf(&dcsfpfile, &DCSFP_Ka50);
+	sprintf(&mfdispfile, &MFDisp_Ka50);
+	wavdelay = 1500;
+	}
+	
+//Blue Helos
+else if (prof == 1501)
+	{
+	sprintf(&wavfile, "uh1h.wav");
+//	sprintf(&dcsfpfile, &DCSFP_UH1);
+	sprintf(&mfdispfile, &MFDisp_UH1);
+	wavdelay = 1500;
+	}
+else if (prof == 1541)
+	{
+	sprintf(&wavfile, "sa342l.wav");
+//	sprintf(&dcsfpfile, &DCSFP_SA342L);
+	sprintf(&mfdispfile, &MFDisp_SA342);
+	wavdelay = 1600;
+	}
+else if (prof == 1542)
+	{
+	sprintf(&wavfile, "sa342m.wav");
+//	sprintf(&dcsfpfile, &DCSFP_SA342M);
+	sprintf(&mfdispfile, &MFDisp_SA342);
+	wavdelay = 1600;
+	}
+else if (prof == 1564)
+	{
+	sprintf(&wavfile, "ah64d.wav");
+//	sprintf(&dcsfpfile, &DCSFP_AH64D);
+	sprintf(&mfdispfile, &MFDisp_AH64D);
+	wavdelay = 2100;
+	}
+	
+//Red Jets
+else if (prof == 2015)
+	{
+	sprintf(&wavfile, "mig15bis.wav");
+//	sprintf(&dcsfpfile, &DCSFP_MiG15);
+	sprintf(&mfdispfile, &MFDisp_MiG15);
+	wavdelay = 1200;
+	}
+else if (prof == 2019)
+	{
+	sprintf(&wavfile, "mig19.wav");
+//	sprintf(&dcsfpfile, &DCSFP_MiG19);
+	sprintf(&mfdispfile, &MFDisp_MiG19);
+	wavdelay = 1700;
+	}
+else if (prof == 2021)
+	{
+	sprintf(&wavfile, "mig21bis.wav");
+//	sprintf(&dcsfpfile, &DCSFP_MiG21);
+	sprintf(&mfdispfile, &MFDisp_MiG21);
+	wavdelay = 1700;
+	}
+else if (prof == 2025)
+	{
+	sprintf(&wavfile, "su25.wav");
+//	sprintf(&dcsfpfile, &DCSFP_Su25);
+	sprintf(&mfdispfile, &MFDisp_FC3);
+	wavdelay = 1700;
+	}
+else if (prof == 2027)
+	{
+	sprintf(&wavfile, "su27.wav");
+//	sprintf(&dcsfpfile, &DCSFP_Su27);
+	sprintf(&mfdispfile, &MFDisp_FC3);
+	wavdelay = 1800;
+	}
+else if (prof == 2033)
+	{
+	sprintf(&wavfile, "su33.wav");
+//	sprintf(&dcsfpfile, &DCSFP_Su33);
+	sprintf(&mfdispfile, &MFDisp_FC3);
+	wavdelay = 1800;
+	}
+else if (prof == 2011)
+	{
+	sprintf(&wavfile, "j11a.wav");
+//	sprintf(&dcsfpfile, &DCSFP_Su27);
+	sprintf(&mfdispfile, &MFDisp_FC3);
+	wavdelay = 1800;
+	}
+else if (prof == 2117)
+	{
+	sprintf(&wavfile, "jf17.wav");
+//	sprintf(&dcsfpfile, &DCSFP_JF17);
+	sprintf(&mfdispfile, &MFDisp_JF17);
+	wavdelay = 1700;
+	}
+else if (prof == 2029)
+	{
+	sprintf(&wavfile, "mig29.wav");
+//	sprintf(&dcsfpfile, &DCSFP_MiG29);
+	sprintf(&mfdispfile, &MFDisp_FC3);
+	wavdelay = 1350;
+	}	
+else if (prof == 2039)
+	{
+	sprintf(&wavfile, "l39c.wav");
+//	sprintf(&dcsfpfile, &DCSFP_L39C);
+	sprintf(&mfdispfile, &MFDisp_L39C);
+	wavdelay = 1500;
+	}	
+else if (prof == 2040)
+	{
+	sprintf(&wavfile, "l39za.wav");
+//	sprintf(&dcsfpfile, &DCSFP_L39ZA);
+	sprintf(&mfdispfile, &MFDisp_L39ZA);
+	wavdelay = 1950;
+	}	
+	
+//Blue Jets
+else if (prof == 2604)
+	{
+	sprintf(&wavfile, "a4e.wav");
+//	sprintf(&dcsfpfile, &DCSFP_A4EC);
+	sprintf(&mfdispfile, &MFDisp_A4EC);
+	wavdelay = 1350;
+	}
+else if (prof == 2505)
+	{
+	sprintf(&wavfile, "f5e.wav");
+//	sprintf(&dcsfpfile, &DCSFP_F5E);
+	sprintf(&mfdispfile, &MFDisp_F5E);
+	wavdelay = 950;
+	}	
+else if (prof == 2509)
+	{
+	sprintf(&wavfile, "a10a.wav");
+//	sprintf(&dcsfpfile, &DCSFP_A10A);
+	sprintf(&mfdispfile, &MFDisp_FC3);
+	wavdelay = 1050;
+	}	
+else if (prof == 2510)
+	{
+	sprintf(&wavfile, "a10c.wav");
+//	sprintf(&dcsfpfile, &DCSFP_A10C);
+	sprintf(&mfdispfile, &MFDisp_A10C);
+	wavdelay = 1050;
+	}	
+//else if (prof == 2512)
+//	{
+//	sprintf(&wavfile, "hawk.wav");
+//	sprintf(&dcsfpfile, &DCSFP_Hawk);
+//	wavdelay = 1150;
+//	}
+else if (prof == 2514)
+	{
+	sprintf(&wavfile, "f14.wav");
+//	sprintf(&dcsfpfile, &DCSFP_F14);
+	if (stn > 1)	sprintf(&mfdispfile, &MFDisp_F14R);
+	else			sprintf(&mfdispfile, &MFDisp_F14P);
+	wavdelay = 1450;
+	}	
+else if (prof == 2515)
+	{
+	sprintf(&wavfile, "f15c.wav");
+//	sprintf(&dcsfpfile, &DCSFP_F15C);
+	sprintf(&mfdispfile, &MFDisp_FC3);
+	wavdelay = 1200;
+	}	
+else if (prof == 2615)
+	{
+	sprintf(&wavfile, "f15e.wav");
+//	sprintf(&dcsfpfile, &DCSFP_F14);
+	if (stn > 1)	sprintf(&mfdispfile, &MFDisp_F15ER);
+	else			sprintf(&mfdispfile, &MFDisp_F15EP);
+	wavdelay = 1900;
+	}	
+else if (prof == 2516)
+	{
+	sprintf(&wavfile, "f16c.wav");
+//	sprintf(&dcsfpfile, &DCSFP_FA18C);
+	sprintf(&mfdispfile, &MFDisp_F16C);
+	wavdelay = 1600;
+	}
+else if (prof == 2518)
+	{
+	sprintf(&wavfile, "fa18c.wav");
+//	sprintf(&dcsfpfile, &DCSFP_FA18C);
+	sprintf(&mfdispfile, &MFDisp_F18C);
+	wavdelay = 1700;
+	}	
+else if (prof == 2537)
+	{
+	sprintf(&wavfile, "ajs37.wav");
+//	sprintf(&dcsfpfile, &DCSFP_AJS37);
+	sprintf(&mfdispfile, &MFDisp_AJS37);
+	wavdelay = 1750;
+	}	
+else if (prof == 2586)
+	{
+	sprintf(&wavfile, "f86f.wav");
+//	sprintf(&dcsfpfile, &DCSFP_F86);
+	sprintf(&mfdispfile, &MFDisp_F86);
+	wavdelay = 1550;
+	}		
+else if ((prof == 2501) | (prof == 2601))	//remove 2601 if CC made separate profile
+	{
+	sprintf(&wavfile, "c101eb.wav");
+//	sprintf(&dcsfpfile, &DCSFP_C101EB);
+	sprintf(&mfdispfile, &MFDisp_C101EB);
+	wavdelay = 1150;
+	}
+//else if (prof == 2601)
+//	{
+//	sprintf(&wavfile, "c101cc.wav");
+//	sprintf(&dcsfpfile, &DCSFP_C101CC);
+//	wavdelay = 1400;
+//	}
+//else if (prof == 2539)
+//	{
+//	sprintf(&wavfile, "mb339.wav");
+////	sprintf(&dcsfpfile, &DCSFP_MB339);
+//	sprintf(&mfdispfile, &MFDisp_MB339);
+//	wavdelay = 1350;
+//	}
+else if (prof == 2545)	//VNAO T-45
+	{
+	sprintf(&wavfile, "t45.wav");
+//	sprintf(&dcsfpfile, &DCSFP_T45);
+	sprintf(&mfdispfile, &MFDisp_T45);
+	wavdelay = 1800;
+	}
+else if (prof == 2520)
+	{
+	sprintf(&wavfile, "m2000c.wav");
+//	sprintf(&dcsfpfile, &DCSFP_M2000C);
+	sprintf(&mfdispfile, &MFDisp_M2000C);
+	wavdelay = 1550;
+	}	
+else if (prof == 2508)
+	{
+	sprintf(&wavfile, "av8b.wav");
+//	sprintf(&dcsfpfile, &DCSFP_AV8B);
+	sprintf(&mfdispfile, &MFDisp_AV8B);
+	wavdelay = 1500;
+	}
+
+//Red Props
+else if (prof == 3009)
+	{
+	sprintf(&wavfile, "bf109k4.wav");
+//	sprintf(&dcsfpfile, &DCSFP_Bf109);
+	sprintf(&mfdispfile, &MFDisp_Bf109);
+	wavdelay = 1380;
+	}	
+else if (prof == 3090)
+	{
+	sprintf(&wavfile, "fw190d9.wav");
+//	sprintf(&dcsfpfile, &DCSFP_Fw190);
+	sprintf(&mfdispfile, &MFDisp_Fw190);
+	wavdelay = 2400;
+	}
+else if (prof == 3190)
+	{
+	sprintf(&wavfile, "fw190a8.wav");
+//	sprintf(&dcsfpfile, &DCSFP_Fw190A8);
+	sprintf(&mfdispfile, &MFDisp_Fw190A8);
+	wavdelay = 2800;
+	}
+
+//Blue Props
+else if (prof == 3551)
+	{
+	sprintf(&wavfile, "p51d.wav");
+//	sprintf(&dcsfpfile, &DCSFP_P51D);
+	sprintf(&mfdispfile, &MFDisp_P51D);
+	wavdelay = 1580;
+	}
+else if (prof == 3547)
+	{
+	sprintf(&wavfile, "p47d.wav");
+//	sprintf(&dcsfpfile, &DCSFP_P47D);
+	sprintf(&mfdispfile, &MFDisp_P47D);
+	wavdelay = 1580;
+	}
+else if (prof == 3509)
+	{
+	sprintf(&wavfile, "spitlfix.wav");
+//	sprintf(&dcsfpfile, &DCSFP_SpitLFIX);
+	sprintf(&mfdispfile, &MFDisp_SpitLFIX);
+	wavdelay = 1950;
+	}
+else if (prof == 3606)
+	{
+	sprintf(&wavfile, "mosfbvi.wav");
+//	sprintf(&dcsfpfile, &DCSFP_MosFBVI);
+	sprintf(&mfdispfile, &MFDisp_MosFBVI);
+	wavdelay = 2000;
+	}
+else if (prof == 3516)
+	{
+	sprintf(&wavfile, "i16.wav");
+//	sprintf(&dcsfpfile, &DCSFP_I16);
+	sprintf(&mfdispfile, &MFDisp_I16);
+	wavdelay = 1200;
+	}
+else if (prof == 3502)
+	{
+	sprintf(&wavfile, "ce2.wav");
+//	sprintf(&dcsfpfile, &DCSFP_CE2);
+	sprintf(&mfdispfile, &MFDisp_CE2);
+	wavdelay = 1000;
+	}
+else if (prof == 3052)
+	{
+	sprintf(&wavfile, "yak52.wav");
+//	sprintf(&dcsfpfile, &DCSFP_Yak52);
+	sprintf(&mfdispfile, &MFDisp_Yak52);
+	wavdelay = 1150;
+	}
+//DCSDX
+else if (prof == 2000)
+	{
+	sprintf(&wavfile, "dcsdx.wav");
+//	sprintf(&dcsfpfile, &DCSFP_DCSDX);
+	wavdelay = 700;
+	}
+else if (prof == 999)
+	{
+	sprintf(&wavfile, "ca.wav");
+//	sprintf(&dcsfpfile, &DCSFP_CA);
+	sprintf(&mfdispfile, &MFDisp_CA);
+	wavdelay = 1010;
+	}
+else if (prof == 998)
+	{
+	sprintf(&wavfile, "awacs.wav");
+	sprintf(&mfdispfile, &MFDisp_AWACS);
+	wavdelay = 800;
+	}
+//else if (prof == 4001)
+//	{
+//	sprintf(&wavfile, "il2tc.wav");
+//	sprintf(&mfdispfile, &MFDisp_IL2TC);
+//	wavdelay = 2250;
+//	}	
+//else if ((prof >= 4000) & (prof < 4100))
+//	{
+//	sprintf(&wavfile, "il2bos.wav");
+//	sprintf(&mfdispfile, &MFDisp_IL2GB);
+//	wavdelay = 2100;
+//	}
+//else if ((prof >= 4100) & (prof < 5000))
+//	{
+//	sprintf(&wavfile, "il21946.wav");
+//	sprintf(&mfdispfile, &MFDisp_IL21946);
+//	wavdelay = 2100;
+//	}
+//else if (prof == 5000)
+//	{
+//	sprintf(&wavfile, "elited.wav");
+//	sprintf(&mfdispfile, &MFDisp_EliteD);
+//	wavdelay = 2100;
+//	}	
+else	//no Profile ID, so "selected" played alone
+	{
+//	sprintf(&dcsfpfile, &DCSFP__Default); 
+	wavdelay = 0;
+	wavgap = 0;
+	}
+
+if (Script_Debug) printf("%i,%i,%s,%i,%s\xa",prof,strlen(&wavfile),&wavfile,strlen(&mfdispfile),&mfdispfile);	//for test purposes
+if ((strlen(&wavfile) > 0) & (!SuppressWavInit) & (sel > -1)	) PlayWav(&wavfile);		//SupressWavInit added in 2.11, sel > -1 added in 2.42 to allow negative value to bypass wav play
+if (prof != 998) SuppressWavInit = 0;	//added in 2.11, condition added in 2.29 to allow suppress for other routines
+//if ((strlen(&dcsfpfile) > 0) & (dcsfp > 0)) DCSFP_Launch(&dcsfpfile);
+if ((strlen(&mfdispfile) > 0) & (mfdisp > 0)) MFDisplay_Launch();
+if (sel > 0) DeferCall(wavdelay+wavgap,&PlayWav,"select.wav");
+
+}
+
+int Backlight_Max_Init(int blenable)	//checks for if any backlight is enabled for any profile and then forces backlighting to 2 for disabled/unsupported profiles
+{
+int bl;
+bl =	(	(WarthogThrottle*Adjust_Backlight_FC3)+
+			(WarthogThrottle*Adjust_Backlight_SA342)+
+//			Adjust_Backlight_UH1+	//UH-1 left out because it's momentary
+			Adjust_Backlight_F5E+
+			Adjust_Backlight_A10C+
+			Adjust_Backlight_M2000C+
+			Adjust_Backlight_Bf109+
+			Adjust_Backlight_Fw190+
+			Adjust_Backlight_AV8B+
+//			Adjust_Backlight_C101+	//C101 not yet implemented
+			Adjust_Backlight_F15E+
+			Adjust_Backlight_F16C+
+			Adjust_Backlight_FA18C+
+			Adjust_Backlight_AH64
+			)	*	abs(blenable - 1);	
+if (Script_Debug) printf("blenable = %i\xa      bl = %i\xa",blenable,bl);
+
+if (bl > 0)	MFD_WHT_Power(2,LED_Delay,1);
+}
+
+
+//int DCSFP_Launch(alias dcsfpfile)
+//{
+//char buffer;Dim(&buffer, 255);
+//char openprofile;Dim(&openprofile, 255);
+    
+////	sprintf (&openprofile,  "OpenProfile=%s\\%s", &DCSFPFilePath,&dcsfpfile);
+////  sprintf (&buffer, "spawn -w \"%s\" \"%s\\DCSFlightpanels.exe %s\"", &DCSFPPath,&DCSFPPath,&openprofile);
+////	sprintf (&buffer, "spawn -w \"%s\" \"%s\\DCSFlightpanels.exe\"", &DCSFPPath,&DCSFPPath);
+//	sprintf (&buffer, "spawn -w \"H:\\DCS\\DCS_Flightpanels\" \"H:\\DCS\\DCS_Flightpanels\\DCSFlightpanels.exe\"");
+//	system(&buffer);
+//    if (Script_Debug > 0) {printf(&buffer);printf("\xa");}
+//}
+
+int MFDisplay_Launch(int sub = 0, int update = 1)	//alias mfdisplayfile)	//add when command line argument available, int sub added in 2.34 for F-14 RIO CAP drum with forceupdate added as a way to disable if sub is the same
+{
+char nsenabled;Dim(&nsenabled, 9);
+char hctqs;Dim(&hctqs, 6);
+char buffer;Dim(&buffer, 255);
+//char arg;Dim(&arg, 3);
+//char spath;Dim(&spath, 255);
+//char sexe;Dim(&sexe, 25);
+
+if (MFDisplayEnabled > 1)
+	{
+//	sprintf (&arg, "--");	//leading dashes for argument (-- for MFDMF)
+//	spath	=	&MFDMFPath;
+//	sexe	=	&MFDMFExe;
+	if	(sub)	sprintf	(&buffer, "spawn -w \"%s\" \"%s\\%s%s%s --mod %s --submod %s\"\xa", 	&MFDMFPath, &MFDMFPath, &MFDMFExe, &nsenabled, &hctqs, &mfdispfile, &MFDispSub);
+	else		sprintf	(&buffer, "spawn -w \"%s\" \"%s\\%s%s%s --mod %s\"\xa", 				&MFDMFPath, &MFDMFPath, &MFDMFExe, &nsenabled, &hctqs, &mfdispfile);
+	}
+else
+	{
+//	sprintf (&arg, "-");	// - for MFD4CTS/MFDisplay
+//	spath	=	&MFDisplayPath;
+//	sexe	=	&MFDisplayExe;
+	if	(sub)	sprintf	(&buffer, "spawn -w \"%s\" \"%s\\%s%s%s -mod %s -submod %s\"\xa", 	&MFDisplayPath, &MFDisplayPath, &MFDisplayExe, &nsenabled, &hctqs, &mfdispfile, &MFDispSub);
+	else		sprintf	(&buffer, "spawn -w \"%s\" \"%s\\%s%s%s -mod %s\"\xa", 				&MFDisplayPath, &MFDisplayPath, &MFDisplayExe, &nsenabled, &hctqs, &mfdispfile);
+	}
+//if ((NS430_Enabled > 0) & (MFD_Count > 2)) sprintf (&nsenabled, " %sns430",	&arg);	//for future implementation
+//else 
+		sprintf (&nsenabled, "");
+
+//if (!WarthogThrottle) sprintf (&hctqs, " %shc",	&arg);	//for future implementation
+//else 
+		sprintf (&hctqs, "");
+
+//if (MFDisplayEnabled > 1)
+//	{		
+//	if	(sub)	sprintf	(&buffer, "spawn -w \"%s\" \"%s\\%s%s%s %smod %s %ssubmod %s\"\xa", 	&spath, &spath, &sexe, &nsenabled, &hctqs, &arg, &arg, &mfdispfile, &MFDispSub);
+//	else		sprintf	(&buffer, "spawn -w \"%s\" \"%s\\%s%s%s %smod %s\"\xa", 				&spath, &spath, &sexe, &nsenabled, &hctqs, &arg, &mfdispfile);
+//	}
+//else
+//	{
+//	if	(sub)	sprintf	(&buffer, "spawn -w \"%s\" \"%s\\%s%s%s -mod %s -submod %s\"\xa", 	&MFDisplayPath, &MFDisplayPath, &MFDisplayExe, &nsenabled, &hctqs, &mfdispfile, &MFDispSub);
+//	else		sprintf	(&buffer, "spawn -w \"%s\" \"%s\\%s%s%s -mod %s\"\xa", 				&MFDisplayPath, &MFDisplayPath, &MFDisplayExe, &nsenabled, &hctqs, &mfdispfile);
+//	}
+
+if (update) system(&buffer);	//logic added in 2.34 to allow bypass if update = 0
+if (Script_Debug > 0) {printf(&buffer);printf("\xa");}
+}
+
+int MFDisplay_Launch_Delta(int sub)	//used for DeferCall
+{
+MFDisplay_Launch(sub, MFDisplay_Submod_Delta);
+}
+
+int MFDisplay_Submod_Sel(int prof, int sub, int force = 0)	//added in 2.34, force applice forceupdate (sets MFDisplay_Submod_Delta = 1)
+{
+int sub_ori = MFDisplay_Submod_Cur;
+
+if (!MFDisplay_Submod_Enabled)	sprintf(&MFDispSub,		"null");	//zaps everything if not enabled
+else if (prof == 2514)
+	{
+	if		(sub <  0)
+		{
+		if (sub < -6) MFDisplay_Submod_Cur = 	 0 - 	abs(MFDisplay_Submod_Cur);	//force negative value for FLIR (mutually exclusive of CAP Drum) and allow old CAP drum value to restore on release
+		else MFDisplay_Submod_Cur = sub;	//allows for CAP drum switch in memory while lantirn active
+		
+		if (MFDisplayEnabled > 1)	//allows for CAP drum switch displayed in MFDMF while lantirn active
+			{
+			MFDisplay_Submod_Cur = 0 - abs(sub);	
+			if		(MFDisplay_Submod_Cur == -6)	sprintf(&MFDispSub,	"tgt|flir" );
+			else if (MFDisplay_Submod_Cur == -5)	sprintf(&MFDispSub,	"dl|flir"  );
+			else if (MFDisplay_Submod_Cur == -4)	sprintf(&MFDispSub,	"tac|flir" );
+			else if (MFDisplay_Submod_Cur == -3)	sprintf(&MFDispSub,	"nav|flir" );
+			else if (MFDisplay_Submod_Cur == -2)	sprintf(&MFDispSub,	"spl|flir" );
+			else if (MFDisplay_Submod_Cur == -1)	sprintf(&MFDispSub,	"bit|flir" );
+			else 									//sprintf(&MFDispSub,	"null|flir");		
+												sprintf(&MFDispSub,	"flir");
+			}
+		else	sprintf(&MFDispSub,		"flir");
+//			{
+		
+//			MFDisplay_Submod_Cur = sub;	//allows for CAP drum switch in memory while lantirn active
+//			}
+		}
+	else
+		{
+		if (sub > 6)
+			{		
+//			sprintf(&MFDispSub,		"tid" );	//only necessary if more than one submod can be active at a time, then poss "null" instead
+			MFDisplay_Submod_Cur = 		abs(MFDisplay_Submod_Cur);	//sets value to positive for standing CAP drum value
+			}
+		else MFDisplay_Submod_Cur = sub;		//assigns cur to sub for new CAP drum value
+		
+		if		(MFDisplay_Submod_Cur == 6)	sprintf(&MFDispSub,		"tgt" );
+		else if (MFDisplay_Submod_Cur == 5)	sprintf(&MFDispSub,		"dl"  );
+		else if (MFDisplay_Submod_Cur == 4)	sprintf(&MFDispSub,		"tac" );
+		else if (MFDisplay_Submod_Cur == 3)	sprintf(&MFDispSub,		"nav" );
+		else if (MFDisplay_Submod_Cur == 2)	sprintf(&MFDispSub,		"spl" );
+		else if (MFDisplay_Submod_Cur == 1)	sprintf(&MFDispSub,		"bit" );
+		else 								sprintf(&MFDispSub,		"null");
+		}
+	}
+	
+if ((MFDisplay_Submod_Cur == sub_ori) & (!force)) MFDisplay_Submod_Delta = 0;
+else MFDisplay_Submod_Delta = 1;
+}
+
+int MFDisplay_Launch_ProfSel(int update = 1)	//launches the preset/selection graphics
+{
+char buffer;Dim(&buffer, 255);
+sprintf	(&buffer, "spawn -w \"%s\" \"%s\\%s --mod %s\"\xa", &MFDisplayPath, &MFDisplayPath, &MFDisplayExe, &MFDisp_CTSProf);
+if (update) system(&buffer);	//logic added in 2.34 to allow bypass if update = 0
+if (Script_Debug > 0) {printf(&buffer);printf("\xa");}
+}
+
+int TARSActive(int state, int defer = 0, int delay = 950)
+{
+TARS = state;
+SetCSVAC();
+if (!SuppressWavInit)	DeferCall(defer,&PlayWav,"SRS.wav");			//argument added in 2.29 to allow suppress init awacs mode
+printf("SimpleRadio Standalone ");
+if (state) 	{if (!SuppressWavInit)	DeferCall(defer+delay, &PlayWav,"enabled.wav");	printf("Enabled");}
+else		{if (!SuppressWavInit)	DeferCall(defer+delay, &PlayWav,"disabled.wav");	printf("Disabled");}	
+printf("\xa");
+if (Script_Debug) printf("TARS = %i\xa  CommStateVAC = %i\xa",TARS,CommStateVAC);	//for test purposes
+}
+int VACActive(int state, int defer = 0, int delay = 700)
+{
+VAC = state;
+SetCSVAC();
+DeferCall(defer,&PlayWav,"VAICOM.wav");
+printf("VAICOM ");
+if (state) 	{DeferCall(defer+delay, &PlayWav,"enabled.wav");	printf("Enabled");}	
+else		{DeferCall(defer+delay, &PlayWav,"disabled.wav");	printf("Disabled");}
+printf("\xa  CommStateVAC = %i\xa",CommStateVAC);
+if (Script_Debug) printf("VAC = %i\xa",VAC);	//for test purposes
+}
+int VAC_AIRIOActive(int state, int defer = 0, int delay = 900)	//Added in 2.34
+{
+VAC_AIRIO = state;
+//SetCSVAC();
+DeferCall(defer,&PlayWav,"AIRIO.wav");
+printf("VAICOM AI RIO ");
+if (state) 	{DeferCall(defer+delay, &PlayWav,"enabled.wav");	printf("Enabled");}	
+else		{DeferCall(defer+delay, &PlayWav,"disabled.wav");	printf("Disabled");}
+//printf("\xa  CommStateVAC = %i\xa",CommStateVAC);
+if (Script_Debug) printf("VAC_AIRIO = %i\xa",VAC_AIRIO);	//for test purposes
+}
+int CommStateActive(int state, int defer = 0, int delay = 550)
+{
+CommStateAllow = state;
+SetCSVAC();
+
+if (!SuppressWavInit)	DeferCall(defer,&PlayWav,"CommState.wav");		//argument added in 2.29 to allow suppress init awacs mode
+printf("CommState ");
+if (state > 1) 	{if (!SuppressWavInit)	DeferCall(defer+delay, &PlayWav,"forced.wav");		printf("Forced (with VAICOM)");}	
+else if (state) {if (!SuppressWavInit)	DeferCall(defer+delay, &PlayWav,"enabled.wav");		printf("Enabled");}	
+else			{if (!SuppressWavInit)	DeferCall(defer+delay, &PlayWav,"disabled.wav");	printf("Disabled");}
+printf("\xa  CommStateVAC = %i\xa",CommStateVAC);
+
+SuppressWavInit = 0;	//normally in PlayWavSel(); here for awacs mode passthrough (exception in PlayWavSel()	)
+if (Script_Debug) printf("CommStateAllow = %i\xa",CommStateAllow);	//for test purposes
+}
+
+int PTTState(int state, int defer = 0, int delay = 750)
+{
+TS3_DX = state;
+DeferCall(defer,&PlayWav,"PTT.wav");
+printf("Push to Talk: ");
+if (state)
+	{
+	PTT_Common = TS3PTT_DX;
+	DeferCall(defer+delay, &PlayWav,"dcsdx.wav");	printf("DirectX");
+	}	
+else
+	{
+	PTT_Common = TS3PTT;
+	DeferCall(defer+delay, &PlayWav,"keyboard.wav");	printf("Keyboard");
+	}
+SetMicSw(TS3_DX);	//added in 2.13 for resetting Mic_Sw_Up for DX/keyboard
+SetCommSw();
+
+printf("\xa");
+if (Script_Debug) printf("TS3_DX = %i\xa",TS3_DX);	//for test purposes
+}
+
+int TARS_PTT_Common_Active(int state, int delay = 1100)
+{
+TARS_PTT_Common = state;
+PlayWav("PTT.wav");
+DeferCall(650,&PlayWav,"common.wav");
+printf("SRS PTT Common ");
+if (state)	{DeferCall(delay, &PlayWav,"enabled.wav");	printf("Enabled");}	
+else		{DeferCall(delay, &PlayWav,"disabled.wav");	printf("Disabled");}
+printf("\xa");
+if (Script_Debug) printf("TARS_PTT_Common = %i\xa",TARS_PTT_Common);	//for test purposes
+}
+
+int SetCSVAC(int dummy = 0)
+{
+int csvac; //dummy to enforce VAC as 1
+//int cstars;	//added in 2.64 to combine TARS with VAC
+//int csvox;
+
+if (VAC < 0) csvac = 0;
+else if (VAC > 1) csvac = 1;
+else csvac = VAC;
+
+//if (TARS < 0) cstars = 0;
+//else if (TARS > 1) cstars = 1;
+//else cstars = TARS;
+
+//csvox = abs(csvac + cstars);
+//if (csvox > 1) csvox = 1;
+
+if (CommStateAllow > 1) CommStateVAC = 1;
+else CommStateVAC = CommStateAllow*abs(csvac-1);	//sets to 0 if VAC = 1 unless CommStateAllow > 1 (Forced on)
+//else CommStateVAC = CommStateAllow*abs(csvox-1)
+}
+
+
+int HOTASGripSelect(int grip, int defer = 0, int index = 2)
+{
+int delay;
+
+if (grip < 0) grip = HornetStick_Default-1;
+else if (grip > index-1) grip = HornetStick_Default+1;
+else HornetStick_Default = grip;
+
+if (HornetStick_Default < 0) HornetStick_Default = 0;			//error traps
+if (HornetStick_Default > index-1) HornetStick_Default = index-1;
+
+printf("Selected HOTAS Grip: ");
+if (grip > 0)
+	{
+	delay = 1400;
+	DeferCall(defer, &PlayWav,"f18grip.wav");	printf("F/A-18C");
+	}	
+else
+	{
+	delay = 1500;
+	DeferCall(defer, &PlayWav,"flcsgrip.wav");	printf("F-16C/A-10C FLCS");
+	}
+DeferCall(defer+delay, &PlayWav,"select.wav");
+
+printf("\xa");
+if (Script_Debug) printf("HornetStick_Default = %i\xa",HornetStick_Default);	//for test purposes
+}
+
+int H1_Set(int tir, int vrcycle)	//added in 2.43
+{
+if (Script_Debug) printf("H1_Set(%i)\xa",tir);
+
+int index;
+int tirtotal;
+int dly = 600;
+
+if ((TrackIR_Index > 2) & (vrcycle > 0))	//only toggle VRTrimDefault (VR must be enabled)
+	{
+	tir = abs(VRTrimDefault - 1);			//toggles trim only, and overrides entering argument
+	tirtotal = 2 + tir;						//forces VR with selected trim
+	if (Script_Debug) printf(" VR forced, trim setting to %i\xa",tir);
+	}
+else										//Toggle all 4 eligible states
+	{
+	if (TrackIR_Index > 2) 	index = 4;
+	else					index = TrackIR_Index;
+	if (Script_Debug) printf(" index = %i\xa",index);
+	
+	if (TrackIR > 1) 	tirtotal = TrackIR + VRTrimDefault;
+	else				tirtotal = TrackIR;
+	if (tir > index-1)	tirtotal = (tirtotal+1)%index;
+	else if (tir < 0)	tirtotal = (tirtotal+index-1)%index;
+	else				tirtotal = tir;
+	}
+if (Script_Debug) printf(" tirtotal = %i\xa",tirtotal);
+
+
+if (tirtotal > index-1) index = tirtotal + 1;
+
+if (tirtotal > 1)	//VR
+	{
+	TrackIR = 2;
+	TIR_Center = VR_Center;
+	PlayWav("vr.wav");
+	if (tirtotal > 2)
+		{
+		VRTrimDefault = 1;
+		DeferCall(dly,&PlayWav,"trim.wav");
+		}
+	else
+		{
+		VRTrimDefault = 0;
+		DeferCall(dly,&PlayWav,"mouse.wav");
+		}
+	}
+else	//TIR/POV
+	{
+	TrackIR = tirtotal;
+	TIR_Center = TrackIR_Center;
+	if (tirtotal == 1)	PlayWav("trackir.wav");
+	else				PlayWav("pov.wav");
+	}
+if (Script_Debug) printf(" TrackIR = %i\xa VRTrimDefault = %i\xa",TrackIR,VRTrimDefault);	
+
+}

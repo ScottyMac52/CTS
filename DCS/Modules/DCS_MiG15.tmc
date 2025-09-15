@@ -1,0 +1,849 @@
+//===========================================================================
+//	DCS World MiG-15bis for HOTAS Cougar/Warthog and Cougar MFDs
+//					by Don "Home Fries" Heumphreus
+//						last updated: 03JUL2021
+//
+//	Change Log:
+//	1.34	Initial Release
+//	1.35	Updated WheelBrakeFull argument for new DiffBraking() routine
+//	1.36	R_CTL added to SYM /I for deconfliction
+//	1.50	Added Warthog compatibilty
+//	1.53	Adjusted for new 2.0 module selection
+//	1.56	Enabled WAV files for aircraft selection
+//	1.61	Added Warthog Lighting init
+//	1.64	Assigned DCS_MiG15_Init() to S2 instead of TG1 (bug fix)
+//	1.66	Moved MiG15 CommState_Off routines here
+//			Added MapKeyR for ROSB13-14 for compatibilty with Spitfire
+//	1.69	Updated CommState_Off() call
+//	2.02	Set FkeyPress=1 on init to prevent Commswitch activation on profile load
+//	2.10	Added VAICOM support
+//	2.21	Added NS430 compatibility
+//	2.28	Removed DX20-23 mapping in lieu of KB_LSYMx for SRS deconfliction (Tx/CSx)
+//	2.29	Added MFDisplay module selection
+//			Replaced 4 MFD Led functions with Lights_Four()
+//	2.34a	Added option to change module using MiG15_Airbrake_Map_Set()
+//	2.43	Removed SnapViews for VR (function TBD, likely flaps and gyro/filter)
+//	2.44	Added Rudder Trim, VR and Spyglass Zoom to VR
+//	2.46	Moved ROSB20 to MFD_Init()
+//	2.50b	Removed duplicate MapKeyR(0) mappings to free stack space.
+//	2.51	Removed Script_Debug print commands to free stack space.
+//	2.54	Removed LED flashing with momentary airbrake for profile stabilty.
+//
+//
+//============================================================================
+
+//	Free DX 12-14 (11 in use for gear center)
+
+
+//int	MiG15_GearUnlock_Array;
+int	MiG15_GearUnlock_Cur;
+int	MiG15_GearTransit;	//determines if gear switch is out of neutral (i.e. dogfight switch up/down with gear unlocked
+int	Airbrake_Def_MiG15;
+int	MiG15_FuelValve_Cur;	//added in 1.40
+//int	MiG15_Flaps_Cur;		//added in 1.40
+
+//Added in 1.40 for Cougar/WH compatibility
+int	MiG15_TG1PO;
+int	MiG15_TG2P;
+int	MiG15_S1PO;
+int	MiG15_S1PI;
+int	MiG15_S1R;
+int	MiG15_S2;
+int	MiG15_S3P;
+int	MiG15_S3R;
+int	MiG15_S4PI;
+int	MiG15_S4PO;
+int	MiG15_S4R;
+
+
+
+int DCS_MiG15(int led, int sp)
+{
+printf("DCS MiG-15bis\xa");
+
+if (WarthogStick > 0)
+	{
+	MapKeyR(&Joystick, S2,	EXEC("DCS_MiG15_Init();"));
+	}
+else
+	{
+	MapKeyR(&HCougar, S2,	EXEC("DCS_MiG15_Init();"));
+	}
+if (sp > 0)	PlayWav("mig15bis.wav");
+if (led > 0)
+	{
+	//should see * * * * to indicate that MiG-21 has been selected.
+	Lights_Four(1,1,1,1,	ProfileSwapDelay+LED_Delay);
+//	DeferCall(ProfileSwapDelay+LED_Delay,&Lights_RLED1,1);	
+//	DeferCall(ProfileSwapDelay+2*LED_Delay,&Lights_RLED2,1);
+//	DeferCall(ProfileSwapDelay+4*LED_Delay,&Lights_LLED2,0);
+//	DeferCall(ProfileSwapDelay+3*LED_Delay,&Lights_LLED1,1);
+	//Lights_LMFD(1);
+	}
+}
+
+int	SetMenu_MiG15()
+{
+Set_Acft_Array_Cur(2015);
+}
+
+
+int DCS_MiG15_Init()
+{
+Determine_Differential_Braking(0);
+
+//Declare Values
+FkeyPress			=	1;	//added in 2.02 to prevent Commswitch key activation on profile load.
+GraceFlag			=	0;
+Eng_Start_x			=	IdleDetentLow;
+Eng_Stop_x			=	IdleDetentLow;
+Starter_Ind_x		=	Engine_Shutdown_Ind_Time;	//Starter_Ind_MiG21;
+MFD_Eng_Start		=	0;
+ProfID				=	2015;
+FixedGear			=	0;
+Helicopter			=	0;
+T6WheelBrake		=	0;
+BrakeOnCycleTime	=	Airbrake_Out_MiG15;
+BrakeOffCycleTime	=	Airbrake_In_MiG15;
+GearCycleTimeUp		=	Gear_Retract_MiG15;
+GearCycleTimeDn		=	Gear_Deploy_MiG15;
+TriggerZoomEnabled	=	0;	//TriggerZoom disabled because TG1 used for 23mm cannon
+S4AnalogBrake		=	AnalogPaddleBrake;	//added in 1.33
+AnalogParkingBrake	=	0;					//added in 1.33; JoyY Parking Brake disabled for MiG-15
+S4asNWS				=	0;					//added in 1.33
+S3holdNWS 			= 	0;	//added in 2.05
+Force_GearLock		=	Force_GearLock_MiG15;	//added in 1.34
+XYAxisTrim			=	0;	//added in 1.34
+DMS_SnapView		=	1;	//added in 1.34
+WheelBrakeFull		=	1;	//added in 1.35
+ToeBrakesAvailable	=	0;	//added in 1.40
+NVG_Capable			=	1;	//added in 1.40
+AB_Capable			=	0;	//added in 1.61
+Adjust_Backlighting	=	0;	//added in 1.62
+NS430_Enabled		=	NS430_Installed*NS430_Enabled_MiG15;	//added in 2.21
+CrewCount			=	1;
+StationChangeModifier	=	0;
+WH_Use_TQS			=	0;	//added in 2.43
+Analog_TDC			=	1;	//added in 2.43
+EngineCount			=	1;	//added in 2.43
+Airbrake_Type_Cur	=	Airbrake_Type_MiG15;	//added in 2.43
+Airbrake_Swap		=	1;	//added in 2.43
+CommInitType		=	1;	//0 for none/custom, 1 for single channel (P-51), 2 for simple (dual channel), 3 for complex (3 channel).  added in 2.43
+StnCheckDisabled	=	2;	//added in 2.43.  Forced for single seat
+CurrentStation 		=	1;	//moved here in 2.43
+
+//BrakeOffCycleTime 	= 	1500;
+
+//MiG15_GearUnlock_Array = SEQ(	EXEC("MiG15_GearUnlock_Cur = abs(MiG15_GearUnlock_Cur-1); GearState_Blink(GearState,250);"),
+//								EXEC("MiG15_GearUnlock_Cur = 0; GearState_Blink(GearState,500);"));
+
+//Assignment Init
+MiG15_S1PI	=	CHAIN(MiG15_Stick_Airbrake,EXEC("flashLLED1(0);"));
+MiG15_S1PO	=	CHAIN(MiG15_Stick_Airbrake, EXEC("flashLLED1(1,250);"));	// /I to kill flashing in case /r doesn't do the trick
+MiG15_S1R	=	EXEC("flashLLED1(0);");
+
+
+printf("Done\xa Execute DCS MiG-15bis Config (Profile v%i.%i):\xa",MajorVersion,MinorVersion);
+PlayWavSel(ProfID,abs(Init_Run - 1),DCSFP_Enabled,MFDisplayEnabled);	//added in 1.61, DCSFP added in 2.05, MFDisplay added in 2.29
+Pause_TrackIR(0);
+AnalogBrakePoll(0);	//added in 1.23
+MiG15_Switch_Posit_Init(GearDn_Ind_Default);
+AirBrake_Init(0);	//moved to individual modules in 1.22; set to 0 for MiG-15 because actual indicator light is steady state.  Will flash for momentary
+MFD_Init(ProfID);
+	printf("   Map HOTAS Cougar/Warthog for DCS MiG-15bis Config:\xa");
+	DCS_Axis_Init(ProfID,EngineCount,Analog_TDC);
+
+
+		printf("      Button Mapping:\xa");
+			printf("         Shift Commands: S3 momentary...");
+			if (WarthogStick > 0)
+				{
+				if (WarthogThrottle > 0) 	SetShiftButton(&Joystick, S3, &Throttle, 0, 0);
+				else						SetShiftButton(&Joystick, S3, &HCougar, 0, 0);
+				MapKey	(&Joystick, S3, BTN_S3P);		
+				MapKeyR	(&Joystick, S3, BTN_S3R);	
+				}				
+			else
+				{
+				SetShiftButton(&HCougar, S3, &HCougar, 0, 0);
+				MapKey	(&HCougar, S3, BTN_S3P);		
+				MapKeyR	(&HCougar, S3, BTN_S3R);		
+				}				
+			printf("Done!\xa");		
+			printf("         Stick Buttons...");	
+
+				
+				
+				//S1 as momentary airbrake
+				if (WarthogStick > 0)
+					{
+					//MapKeyIO(&Joystick, TG1, EXEC("TriggerZoom_toggle(-1,AirBrkFlash,GearState);"), CHAIN(DX1,EXEC("TriggerZoom_in();"))	);
+					//MapKeyRIO(&Joystick,TG1, UP+DX1, EXEC("ActKey(ZoomIn_slow); DeferCall(KBDelay,&TriggerZoom_out,0);"));				//ActKey(DX1) added in 1.21 to force DX1 release if stuck
+					MapKeyIO(&Joystick,	TG1, 0,DX1);
+					MapKeyR	(&Joystick,	TG1, 0);
+	
+					MapKey	(&Joystick, TG2,DX6);
+					MapKeyR	(&Joystick, TG2,0);				
+					
+					
+					if (AirBrkFlash)
+						{
+						MapKeyIO(&Joystick, S1,	MiG15_S1PI, MiG15_S1PO	);		
+						//MapKeyR	(&Joystick, S1,			EXEC("DeferCall(Airbrake_In_MiG15, &flashLLED1, 0);")	);
+						MapKeyR	(&Joystick, S1,	MiG15_S1R	);
+						}
+					else
+						{
+						MapKey	(&Joystick, S1,	MiG15_Stick_Airbrake);		//State Toggle Shift+T9.  
+						MapKeyR	(&Joystick, S1,	0);					
+						}
+					MapKey	(&Joystick,	S2,	BTN_S2);
+					MapKeyR	(&Joystick,	S2, 0);
+					
+					MapKeyIO(&Joystick, S4, BTN_S4PI,BTN_S4PO_NoDiff );	
+					MapKeyR	(&Joystick, S4, BTN_S4R_NoDiff);	
+						
+					}
+					
+				else
+					{
+					//MapKeyIO(&HCougar, TG1, EXEC("TriggerZoom_toggle(-1,AirBrkFlash,GearState);"), CHAIN(DX1,EXEC("TriggerZoom_in();"))	);
+					//MapKeyRIO(&HCougar,TG1, UP+DX1, EXEC("ActKey(ZoomIn_slow); DeferCall(KBDelay,&TriggerZoom_out,0);"));				//ActKey(DX1) added in 1.21 to force DX1 release if stuck
+					MapKeyIO(&HCougar,	TG1, 0,DX1);
+//					MapKeyR	(&HCougar,	TG1, 0);
+	
+					MapKey	(&HCougar, TG2,DX6);
+//					MapKeyR	(&HCougar, TG2,0);		
+					
+					if (AirBrkFlash)
+						{
+						MapKeyIO(&HCougar, S1,	MiG15_S1PI, MiG15_S1PO	);		// /I to kill flashing in case /r doesn't do the trick
+						//MapKeyR	(&HCougar, S1,			EXEC("DeferCall(Airbrake_In_MiG15, &flashLLED1, 0);")	);
+						MapKeyR	(&HCougar, S1,	MiG15_S1R	);
+						}
+					else
+						{
+						MapKey	(&HCougar, S1,			MiG15_Stick_Airbrake);		//State Toggle Shift+T9.  
+						MapKeyR	(&HCougar, S1,			0);
+						}	
+					
+			
+					MapKey	(&HCougar, S2, BTN_S2);
+					MapKeyR	(&HCougar,	S2, 0);
+					
+					MapKeyIO(&HCougar, S4, BTN_S4PI,BTN_S4PO_NoDiff );	
+					MapKeyR	(&HCougar, S4, BTN_S4R_NoDiff);	
+					}
+			printf("...Done!\xa");	
+						
+			H1_Init(TrackIR, PadlockEnabled, ProfID);	//moved to individual routines in 1.27 for trim reset removal on helos	; WH sort added to routine in 1.40
+			CommState_Off(1,ProfID,1,0,1);	//sets hats 2-4 to DX functions	; WH sort added to routine in 1.40
+
+//Throttle
+
+			P51D_CommState_Init(ProfID);						//Set Comms routine (DX21 plus whatever options selected); WH sort added to routine in 1.40 (?)
+			if (WarthogThrottle > 0)
+				{
+				printf("         Warthog Throttle Buttons\xa");	
+		
+				MapKey	(&Throttle, MSL,	0);	
+//				MapKeyR	(&Throttle, MSL,	0);	
+				MapKey	(&Throttle, MSR,	0);
+//				MapKeyR	(&Throttle, MSR,	0);	
+				
+				MapKey	(&Throttle,	CSU,	CHAIN(DX30,D(ModDelay),KB_LSYMD));	//TDC adjust
+				MapKey	(&Throttle,	CSD,	CHAIN(DX30,D(ModDelay),KB_LSYMU));
+				MapKey 	(&Throttle,	CSL,	KB_LSYMD);	//Tgt Wingspan
+				MapKey 	(&Throttle,	CSR,	KB_LSYMU);
+				
+				MapKey	(&Throttle,	SC,		0);
+//				MapKeyR	(&Throttle,	SC,		0);
+				
+				MapKey	(&Throttle,	PSF,	0);		
+				MapKey	(&Throttle,	PSM,	TEMPO(0,0,DoubleTap));
+				MapKey	(&Throttle,	PSB,	0);
+
+
+				
+				MapKeyIO(&Throttle,	CHF,	PULSE+MiG15_Flaps_Down,	TEMPO(EXEC("MiG15_Flaps_Set(4,Switch_Delay);"),  EXEC("MiG15_Flaps_Set(3,Switch_Delay);"), DefTempo));	//short for extend 1 incr, long for full 55;	/I to DX cycle flaps for sync
+				MapKeyIO(&Throttle,	CHB,	PULSE+MiG15_Flaps_Up,	TEMPO(EXEC("MiG15_Flaps_Set(-1,Switch_Delay);"), EXEC("MiG15_Flaps_Set(1,Switch_Delay);"), DefTempo));	//short for retract 1 incr, long for neutral
+//				MapKeyR	(&Throttle,	CHF,	0);	//Added for F-86 in 1.69
+//				MapKeyR	(&Throttle,	CHB,	0);	//Added for F-86 in 1.69
+				
+				MapKeyIO(&Throttle,	LTB,	DX24,	TEMPO(CHAIN(DX30,D(ModDelay),DX24),DX24,DefTempo)	);	//Starter, /I starter cover
+//				MapKeyR	(&Throttle,	LTB, 	0);			
+				
+				MapKey	(&Throttle,	IDLERON,	0);
+				MapKey	(&Throttle,	IDLEROFF,	0);
+				MapKey	(&Throttle,	IDLELON,	0);
+				MapKey	(&Throttle,	IDLELOFF,	0);
+
+
+			printf("...Base Switches\xa");				
+				//TriggerZoom_MapGearDn(TriggerZoom_state, ProfID);	//MapKeyIO(&HCougar, T8, PULSE+DX26, );			//done in TriggerZoom_MapGearDn()						
+																	//MapKeyR	(&Throttle, FLAPD, 0);
+				MapKeyIO(&Throttle,	FLAPD,		EXEC("if  (MiG15_GearUnlock_Cur) ActKey(KEYON+PULSE+DX25); MiG15_GearUnlock_Set(0); GearState_Blink(GearState,750);"),  																	//	Gear unlock
+												EXEC("if ((MiG15_GearUnlock_Cur) | (!Force_GearLock)) {ActKey(KEYON+PULSE+DX26);GearStateInd(1, ProfID, FixedGear, Helicopter, GearCycleTimeUp, AirBrkFlash); MiG15_GearTransit = 1;}") );	//Cycles Logical Gear State if unlocked or force lock disabled.  Gear command cycles automatically (governed in-game)								// gear up
+				MapKeyRIO(&Throttle,FLAPD,		EXEC("MiG15_GearUp_Map(Force_GearLock,MiG15_GearUnlock_Cur);"), 0);
+				MapKey	(&Throttle, FLAPM,		TEMPO(0,EXEC("if (MiG15_GearTransit != 0)  {ActKey(KEYON+PULSE+DX11);  MiG15_GearTransit = 0;  GearStateInd(GearState, ProfID, FixedGear, Helicopter, 0, 1);}"), DoubleTap));				//Terminates gear cycling indication if returned to center before timeout);	//Terminates gear cycling indication if returned to center before timeout
+
+				MapKeyIO(&Throttle,	LDGH,		TEMPO(CHAIN(DX31,D(ModDelay),DX9),EXEC("EjectCheckLDGH(ProfID);"), DefTempo),	TEMPO(CHAIN(DX31,D(ModDelay),DX9),	CHAIN(DX30,DX31,D(ModDelay),DX9),	LongTempo)	);		//I Long Eject/Toggle Gearstate, /IO capped fire extinguisher button
+				MapKeyIO(&Throttle,	APENG,		MiG15_GearLampTest,	CHAIN(DX30,D(ModDelay),DX9)	);	//gear lamp or ADI cage
+				
+				//MapKeyIO(&Throttle,	APPAT,		MiG15_FuelValve_Open_DX,	EXEC("MiG15_FuelValve_Set(2, Switch_Delay);")	);	// /I smooth open fuel valve, /O 2 steps up (open)
+				//MapKeyIO(&Throttle,	APAH,		0,							TEMPO(0,	EXEC("MiG15_FuelValve_Set(1, Switch_Delay);"), DoubleTap)	);
+				//MapKeyIO(&Throttle,	APALT,		MiG15_FuelValve_Close_DX,	EXEC("MiG15_FuelValve_Set(0, Switch_Delay);"));	// /I smooth shut fuel valve, /O 2 steps dn (shut)
+				MapKey	(&Throttle,	APPAT,		0);	
+				MapKey	(&Throttle,	APAH,		TEMPO(0,	0, DoubleTap)	);
+				MapKey	(&Throttle,	APALT,		0);	
+				
+				MapKeyIO(&Throttle,	EFLNORM,	0,	PULSE+CHAIN(DX31,D(ModDelay),DX6));	//Color Filter
+//				MapKeyR	(&Throttle,	EFLNORM,	0);
+				MapKeyIO(&Throttle,	EFLOVER,	0,	PULSE+CHAIN(DX31,D(ModDelay),DX6));	//Color Filter
+				MapKeyIO(&Throttle,	EFRNORM,	0,	PULSE+CHAIN(DX31,D(ModDelay),DX7));	//Gyro (toggle)
+				MapKeyIO(&Throttle,	EFROVER,	0,	PULSE+CHAIN(DX31,D(ModDelay),DX7));	//Fixed (toggle)
+//				MapKeyR	(&Throttle,	EFROVER,	0);
+				
+				MapKeyIO(&Throttle,	EOLIGN,		PULSE+MiG15_TacticalReleaseSw, 0);
+				MapKeyIO(&Throttle,	EOLNORM,	0, PULSE+MiG15_TacticalReleaseSw);
+				MapKeyIO(&Throttle,	EOLMOTOR,	0, PULSE+MiG15_TacticalReleaseSw);
+				MapKeyIO(&Throttle,	EORIGN,		PULSE+MiG15_DropTankSignalSw, 0);
+				MapKeyIO(&Throttle,	EORNORM,	0, PULSE+MiG15_DropTankSignalSw);
+				MapKeyIO(&Throttle,	EORMOTOR,	0, PULSE+MiG15_DropTankSignalSw);
+//				MapKeyR	(&Throttle,	EOLIGN,		0);
+//				MapKeyR	(&Throttle,	EORIGN,		0);
+				
+				MapKeyIO(&Throttle,	APUON,		0,	PULSE+CHAIN(DX31,D(ModDelay),DX16));	//air starter
+				MapKeyIO(&Throttle,	APUOFF,		0,	PULSE+CHAIN(DX31,D(ModDelay),DX16));
+				
+				MapKeyIO(&Throttle,	RDRNRM,		0,	PULSE+CHAIN(DX31,D(ModDelay),DX19));	//landing lt
+				MapKeyIO(&Throttle,	RDRDIS,		0,	PULSE+CHAIN(DX31,D(ModDelay),DX19));
+				MapKeyIO(&Throttle,	EACON,		0,	PULSE+CHAIN(DX31,D(ModDelay),DX1));		//ext light
+				MapKeyIO(&Throttle,	EACOFF,		0,	PULSE+CHAIN(DX31,D(ModDelay),DX1));		
+				
+
+				}
+			else
+				{
+				printf("         TQS Buttons\xa");	
+//Temporary T2/T3 mapping
+				if (VAC > 0)
+				{
+					MapKeyIO(&HCougar, T2,	CHAIN(X(Mic_Sw_Fwd,0),D(KBDelay+ModDelay),	EXEC("CommState_On(CommStateAllow);")),
+											CHAIN(X(Mic_Sw_Fwd,1),D(KBDelay+ModDelay),	EXEC("CommState_On(CommStateVAC);")));	
+					MapKeyRIO(&HCougar, T2,	EXEC("CommState_Off(CommStateAllow, ProfID);"), EXEC("CommState_Off(CommStateVAC, ProfID);"));	
+				}
+				else
+				{
+					MapKey	(&HCougar, T2, CHAIN(PULSE+X(Mic_Sw_Fwd,TS3_DX),D(KBDelay+ModDelay),	EXEC("CommState_On(CommStateVAC);"))	);		//temporary - cycles comm menu w/o PTT (added in 1.32)
+					MapKeyR	(&HCougar, T2, EXEC("CommState_Off(CommStateVAC, ProfID);"));	
+				}
+				if (TARS_PTT_Common) 	MapKey	(&HCougar, T3, PTT_Common);		//temporary	; if-else added in 1.32
+				else					MapKey	(&HCougar, T3, TS3_DX);
+				MapKeyR	(&HCougar, T3, 0);	
+//end temporary				
+			
+				MapKey	(&HCougar, T4, KB_LSYMD);
+				MapKeyR	(&HCougar, T4, 0);
+				MapKey	(&HCougar, T5, KB_LSYMU);
+				MapKeyR	(&HCougar, T5, 0);
+						
+				MapKeyIO(&HCougar,	T6, TEMPO(DX24, EXEC("EjectCheckT6(ProfID);"), DefTempo),	DX24);		//Will check for ejection parameters if held for 500ms.
+				}
+				
+			MiG15_Airbrake_Map_Set(Airbrake_Type_Cur, Airbrake_Swap);	//MIG-15 has its own airbrake routine
+			MiG15_DF_Init(WarthogThrottle);
+
+			printf("...Done!\xa");
+	printf("   HOTAS Mapping Complete.\xa\xa");	
+
+
+//MiG21_MFD_Init();
+
+TriggerZoom_state  = 0;			//reset TriggerZoom
+FlapState	=	2;				//2 is neutral (3 up, 0, 1 down
+//Lights_ALL(0);				//Says Init complete
+	Backlight_Max_Init(0);
+	DeferCall(4*LED_Delay,&Lights_RLED1,0);
+	DeferCall(5*LED_Delay,&Lights_RLED2,0);
+	//DeferCall(5*LED_Delay,&Lights_LLED2,0);
+	if (WarthogThrottle > 0) DeferCall(6*LED_Delay,&WHT_Lights_Dn_D,0);
+ActKey(DX1);				//just in case DX1 lingers from trigger activation
+if (Init_Run == 0) Gear_Ind_Init(GearDn_Ind_Default,FixedGear,Helicopter,AirBrkFlash);	
+
+Map_Cougar_ToeBrakes(0);	//added in 1.40
+
+printf("\xa DCS MiG-15bis Init Complete!\xa");	
+Set_Acft_Array_Cur(ProfID);
+}
+
+int MiG15_HCS_Init()
+{
+//				if (Script_Debug) printf("         Hat2 (TMS)...");	
+					MapKey	(&HCougar, 	H2U,	DX7);
+					MapKey	(&HCougar, 	H2R,	DX8);
+					MapKey	(&HCougar, 	H2D,	DX9);
+					MapKey	(&HCougar, 	H2L,	DX10);
+//				if (Script_Debug) printf("...Done!\xa");	
+//				if (Script_Debug) printf("         Hat3 (SnapViews)...");		
+					if (TrackIR < 2)
+						{
+						MapKeyIO(&HCougar, 	H3U,	Std_SnapView8,	Std_SnapView5);	// /I Bomb, Gunsight
+						MapKeyIO(&HCougar, 	H3R,	Std_SnapView3,	Std_SnapView6);	// /I aft, right side
+						MapKeyIO(&HCougar, 	H3L,	Std_SnapView1,	Std_SnapView4);	// /I aft, left side
+						MapKeyIO(&HCougar, 	H3D,	Std_SnapView2,	Std_SnapView0);	// Weps console
+						}
+					else	//VR function TBD (flaps and gyro/filter?)
+						{
+						MapKey	(&HCougar, 	H3U,	VR_Zoom_kb);
+						MapKeyIO(&HCougar, 	H3R,	RudderTrimRt_DX,	RudderTrimRt_DXO);	//0);	
+						MapKeyIO(&HCougar, 	H3L,	RudderTrimLt_DX,	RudderTrimLt_DXO);	//0);	
+						MapKey	(&HCougar, 	H3D,	VR_Spyglass);	
+						}
+//				if (Script_Debug) printf("...Done!\xa");	
+//				if (Script_Debug) printf("         Hat4 (CMS)...");	
+					MapKey	(&HCougar,	H4U,	DX15);
+					MapKeyR	(&HCougar,	H4U, 	0);			//added to cancel helo trim
+					MapKey	(&HCougar,	H4R,	DX16);
+					MapKey	(&HCougar,	H4D,	DX17);
+					MapKeyR	(&HCougar,	H4D,	0);			//added to cancel helo trim
+					MapKey	(&HCougar,	H4L,	DX18);
+//				if (Script_Debug) printf("...Done!\xa");
+}
+int MiG15_WHS_Init()
+{
+//				if (Script_Debug) printf("         Hat2 (TMS)...");	
+					MapKey	(&Joystick, 	H2U,	DX7);
+					MapKey	(&Joystick, 	H2R,	DX8);
+					MapKey	(&Joystick, 	H2D,	DX9);
+					MapKey	(&Joystick, 	H2L,	DX10);
+//				if (Script_Debug) printf("...Done!\xa");	
+//				if (Script_Debug) printf("         Hat3 (SnapViews)...");
+					if (TrackIR < 2)
+						{					
+						MapKeyIO(&Joystick, 	H3U,	Std_SnapView8,	Std_SnapView5);	// /I Bomb, Gunsight
+						MapKeyIO(&Joystick, 	H3R,	Std_SnapView3,	Std_SnapView6);	// /I aft, right side
+						MapKeyIO(&Joystick, 	H3L,	Std_SnapView1,	Std_SnapView4);	// /I aft, left side
+						MapKeyIO(&Joystick, 	H3D,	Std_SnapView2,	Std_SnapView0);	// Weps console
+						}
+					else
+						{					
+						MapKey	(&Joystick, 	H3U,	VR_Zoom_kb);
+						MapKeyIO(&Joystick, 	H3R,	RudderTrimRt_DX,	RudderTrimRt_DXO);	//0);	
+						MapKeyIO(&Joystick, 	H3L,	RudderTrimLt_DX,	RudderTrimLt_DXO);	//0);	
+						MapKey	(&Joystick, 	H3D,	VR_Spyglass);
+						}
+//				if (Script_Debug) printf("...Done!\xa");	
+//				if (Script_Debug) printf("         Hat4 (CMS)...");	
+					MapKey	(&Joystick,	H4U,	DX15);
+//					MapKeyR	(&Joystick,	H4U, 	0);			//added to cancel helo trim
+					MapKey	(&Joystick,	H4R,	DX16);
+					MapKey	(&Joystick,	H4D,	DX17);
+//					MapKeyR	(&Joystick,	H4D,	0);			//added to cancel helo trim
+					MapKey	(&Joystick,	H4L,	DX18);
+					MapKey	(&Joystick, H4P,	DX17);
+//					MapKeyR	(&Joystick, H4P,	0);
+//				if (Script_Debug) printf("...Done!\xa");
+}
+
+int MiG15_DF_Init(int wh)
+{
+if (wh > 0)	//gear mapped to flap lever on WH
+	{
+	MapKey	(&Throttle,	BSF,	0);	
+	MapKeyR	(&Throttle,	BSF,	0);	
+	MapKey	(&Throttle,	BSB,	0);
+	MapKeyR	(&Throttle,	BSB,	0);	
+	MapKey	(&Throttle,	BSM,	TEMPO(0,0,DoubleTap));	
+	}
+else
+	{
+	//TriggerZoom_MapGearDn(TriggerZoom_state, ProfID);	//enable this and disable T8 lines if TriggerZoom enabled for MiG-15				
+	//MapKeyR	(&HCougar, T8, 0);
+	
+	MapKeyIO(&HCougar,	T8,	EXEC("if  (MiG15_GearUnlock_Cur) ActKey(KEYON+PULSE+DX25); MiG15_GearUnlock_Set(0); GearState_Blink(GearState,750);"),  																		//	Gear unlock
+							EXEC("if ((MiG15_GearUnlock_Cur) | (!Force_GearLock)) {ActKey(KEYON+PULSE+DX26);GearStateInd(1, ProfID, FixedGear, Helicopter, GearCycleTimeUp, AirBrkFlash); MiG15_GearTransit = 1;}") );	//Cycles Logical Gear State if unlocked or force lock disabled.  Gear command cycles automatically (governed in-game)								// gear up
+	//MapKeyR	(&HCougar, 	T8,	EXEC("if  (MiG15_GearTransit > 0) {ActKey(KEYON+PULSE+DX25); MiG15_GearTransit = 0;}"));
+
+	
+	
+	//MapKeyIO(&HCougar,	T8,	CHAIN(PULSE+DX26,EXEC("MiG15_GearUnlock_Cur = 0; MiG15_GearUp_Map(Force_GearLock,MiG15_GearUnlock_Cur); GearState_Blink(GearState,500);")),	//added GearState_Blink() in 1.29
+	//						CHAIN(										PULSE+DX26,			EXEC("GearStateInd(1, ProfID, FixedGear, Helicopter, GearCycleTimeDn, AirBrkFlash);"))	);
+	MapKeyRIO(&HCougar,	T8,	EXEC("MiG15_GearUp_Map(Force_GearLock,MiG15_GearUnlock_Cur);"), 0);
+
+	//MapKeyIO(&HCougar, DFM,	0, TEMPO(0,EXEC("if (MiG15_GearTransit != 0)  {if (MiG15_GearTransit > 0) ActKey(KEYON+PULSE+DX25); else ActKey(KEYON+PULSE+DX26); MiG15_GearTransit = 0; GearStateInd(GearState, ProfID, FixedGear, Helicopter, 0, 1);}"), DoubleTap));	//Terminates gear cycling indication if returned to center before timeout
+	MapKeyIO(&HCougar, DFM,	0, TEMPO(0,EXEC("if (MiG15_GearTransit != 0)  {ActKey(KEYON+PULSE+DX11);  MiG15_GearTransit = 0;  GearStateInd(GearState, ProfID, FixedGear, Helicopter, 0, 1);}"), DoubleTap));	//Terminates gear cycling indication if returned to center before timeout
+	}
+}
+
+int MiG15_MFD_Init()
+{
+//===================================
+//		Standard MFD Buttons
+//===================================
+
+	printf("   Map Cougar Left  MFD (DX31)...");	
+//LOSB 1 in Init
+					MapKey	(&LMFD, OSB02,	CHAIN(DX31,D(ModDelay),DX2));
+					MapKey	(&LMFD, OSB03,	CHAIN(DX31,D(ModDelay),DX3));
+					MapKey	(&LMFD,	OSB04,	CHAIN(DX31,D(ModDelay),DX4));
+//					MapKeyR	(&LMFD,	OSB04,	0);	//for A-10C and F-5E					
+					MapKey	(&LMFD, OSB05,	CHAIN(DX31,D(ModDelay),DX5));
+//					MapKeyR	(&LMFD,	OSB05,	0);	//For F-5E
+//LOSB 6-10
+					MapKey	(&LMFD,	OSB06,	CHAIN(DX31,D(ModDelay),DX6));
+					MapKey	(&LMFD,	OSB07,	CHAIN(DX31,D(ModDelay),DX7));
+//					MapKeyR	(&LMFD,	OSB07,	0);	//for Bf109
+					MapKey	(&LMFD,	OSB08,	CHAIN(DX31,D(ModDelay),DX8));
+					MapKeyIO(&LMFD,	OSB09,	CHAIN(DX31,D(ModDelay),DX9),	TEMPO(CHAIN(DX31,D(ModDelay),DX9),	CHAIN(DX30,DX31,D(ModDelay),DX9),	LongTempo)	);	//capped fire extinguisher button
+					MapKeyIO(&LMFD,	OSB10,	CHAIN(DX31,D(ModDelay),DX10),	TEMPO(0,	CHAIN(DX30,DX31,D(ModDelay),DX10),	LongTempo)	);		//left emergency gear handle
+
+//LOSB 11-15
+					MapKey	(&LMFD,	OSB11,	CHAIN(DX31,D(ModDelay),DX11));
+					MapKey	(&LMFD,	OSB12,	CHAIN(DX31,D(ModDelay),DX12));
+					MapKeyIO(&LMFD,	OSB13,	CHAIN(DX31,D(ModDelay),DX13),	TEMPO(CHAIN(DX31,D(ModDelay),DX13),	CHAIN(DX30,DX31,D(ModDelay),DX13),	DefTempo)	);	//RadAlt
+					MapKey	(&LMFD,	OSB14,	CHAIN(DX31,D(ModDelay),DX14));
+					MapKey	(&LMFD,	OSB15,	CHAIN(DX31,D(ModDelay),DX15));
+
+
+//LOSB 16-19
+					MapKey	(&LMFD,	OSB16,	CHAIN(DX31,D(ModDelay),DX16));
+					MapKey	(&LMFD,	OSB17,	CHAIN(DX31,D(ModDelay),DX17));
+//					MapKeyIO(&LMFD,	OSB18,	CHAIN(EXEC("Print_Value(MiG15_GearUnlock_Cur);"),	X(MiG15_GearUnlock_Array,MiG15_GearUnlock_Cur), EXEC("MiG15_GearUp_Map(Force_GearLock,MiG15_GearUnlock_Cur);")	),
+//											CHAIN(DX30,D(ModDelay),DX25,	X(MiG15_GearUnlock_Array,MiG15_GearUnlock_Cur), EXEC("MiG15_GearUp_Map(Force_GearLock,MiG15_GearUnlock_Cur);")	)	);	//gear lock 
+					MapKeyIO(&LMFD,	OSB18,	CHAIN(							EXEC("GearState_Blink(GearState,250+500*MiG15_GearUnlock_Cur);MiG15_GearUp_Map(Force_GearLock,abs(MiG15_GearUnlock_Cur-1));DeferCall(KBDelay,&MiG15_GearUnlock_Set,-1);")	),	//shifted changes state w/o keystroke
+											CHAIN(DX30,D(ModDelay),DX25,	EXEC("GearState_Blink(GearState,250+500*MiG15_GearUnlock_Cur);MiG15_GearUp_Map(Force_GearLock,abs(MiG15_GearUnlock_Cur-1));DeferCall(KBDelay,&MiG15_GearUnlock_Set,-1);")	)	);	//gear lock; 500ms blink for locked, 250ms for unlocked.  
+					MapKey	(&LMFD,	OSB19,	CHAIN(DX31,D(ModDelay),DX19));
+
+
+
+//LMFD 20 in Init
+
+
+//Left Rocker Switches
+//SYM (free dx31+21/22)
+//		MapKeyIO(&LMFD,	SYMU,	CHAIN(R_CTL,DX31,D(ModDelay),DX21),	CHAIN(DX31,D(ModDelay),DX21));	//R_CTL added to /I in 1.36 to deconflict with brake+mic = equal function
+//		MapKeyIO(&LMFD,	SYMD,	CHAIN(R_CTL,DX31,D(ModDelay),DX22),	CHAIN(DX31,D(ModDelay),DX22));
+		MapKey(&LMFD,	SYMU,	KB_LSYMU);
+		MapKey(&LMFD,	SYMD,	KB_LSYMD);
+//CON 
+		MapKeyIO(&LMFD, COND,	KB_LCOND,	TEMPO(EXEC("MiG15_Flaps_Set(4,Switch_Delay);"),  EXEC("MiG15_Flaps_Set(3,Switch_Delay);"), DefTempo));	//short for extend 1 incr, long for full 55
+		MapKeyIO(&LMFD, CONU,	KB_LCONU,	TEMPO(EXEC("MiG15_Flaps_Set(-1,Switch_Delay);"), EXEC("MiG15_Flaps_Set(1,Switch_Delay);"), DefTempo));	//short for retract 1 incr, long for neutral
+		//MapKey	(&LMFD, CONU,	CHAIN(DX31,D(ModDelay),DX23)	);
+		//MapKey	(&LMFD, COND,	CHAIN(DX31,D(ModDelay),DX24)	);
+
+//BRT
+		MapKey(&LMFD,	BRTU,	KB_LBRTU,	TEMPO(KB_LBRTU,CHAIN(DX30,D(ModDelay),KB_LBRTU),DefTempo));
+		MapKey(&LMFD,	BRTD,	KB_LBRTD,	TEMPO(KB_LBRTD,CHAIN(DX30,D(ModDelay),KB_LBRTD),DefTempo));
+//		MapKeyIO(&LMFD,	BRTD,	MiG15_FuelValve_Open_DX,	TEMPO(MiG15_FuelValve_Open_DX,	CHAIN(DX30,MiG15_FuelValve_Open_DX),	DefTempo)	);	//Fuel Valve (/I and TEMPO for smooth)
+//		MapKeyIO(&LMFD,	BRTU,	MiG15_FuelValve_Close_DX,	TEMPO(MiG15_FuelValve_Close_DX,	CHAIN(DX30,MiG15_FuelValve_Close_DX),	DefTempo)	);
+		//MapKeyIO(&LMFD,	BRTD,	MiG15_FuelValve_Open_DX,	TEMPO(EXEC("MiG15_FuelValve_Set( 3, Switch_Delay);"),	CHAIN(DX30,MiG15_FuelValve_Open_DX),	DefTempo)	);	//Fuel Valve (/I and TEMPO for smooth)
+		//MapKeyIO(&LMFD,	BRTU,	MiG15_FuelValve_Close_DX,	TEMPO(EXEC("MiG15_FuelValve_Set(-1, Switch_Delay);"),	CHAIN(DX30,MiG15_FuelValve_Close_DX),	DefTempo)	);		
+//GAIN in Init
+
+
+	printf("Done!\xa");
+
+	printf("   Map Cougar Right MFD (DX32)...");
+
+//ROSB 1-10
+		MapKey	(&RMFD,	OSB01,	CHAIN(DX32,D(ModDelay),DX1));
+		MapKey	(&RMFD,	OSB02,	CHAIN(DX32,D(ModDelay),DX2));
+		MapKey	(&RMFD,	OSB03,	CHAIN(DX32,D(ModDelay),DX3));
+		MapKey	(&RMFD,	OSB04,	CHAIN(DX32,D(ModDelay),DX4));
+		MapKey	(&RMFD,	OSB05,	CHAIN(DX32,D(ModDelay),DX5));
+//		MapKeyR	(&RMFD,	OSB05,	0);
+		MapKey	(&RMFD,	OSB06,	CHAIN(DX32,D(ModDelay),DX6),	TEMPO(CHAIN(DX32,D(ModDelay),DX6),CHAIN(DX30,DX32,D(ModDelay),DX6),LongTempo)	);	//canopy jettison
+		MapKey	(&RMFD,	OSB07,	CHAIN(DX32,D(ModDelay),DX7));
+//		MapKeyR	(&RMFD,	OSB07,	0);
+		MapKey	(&RMFD,	OSB08,	CHAIN(DX32,D(ModDelay),DX8));
+		MapKey	(&RMFD,	OSB09,	CHAIN(DX32,D(ModDelay),DX9));
+		MapKey	(&RMFD,	OSB10,	CHAIN(DX32,D(ModDelay),DX10));	
+//ROSB 11-15
+		MapKey	(&RMFD,	OSB11,	CHAIN(DX32,D(ModDelay),DX11)	);
+		MapKey	(&RMFD,	OSB12,	CHAIN(DX32,D(ModDelay),DX12)	);
+		MapKey	(&RMFD,	OSB13,	CHAIN(DX32,D(ModDelay),DX13)	);
+		MapKey	(&RMFD,	OSB14,	CHAIN(DX32,D(ModDelay),DX14)	);	
+		MapKey	(&RMFD,	OSB15,	CHAIN(DX32,D(ModDelay),DX15)	);
+//		MapKeyR	(&RMFD,	OSB13,	0);	//for Spitfire Engine Start	
+//		MapKeyR	(&RMFD,	OSB14,	0);	//for Spitfire Engine Start				
+//ROSB 16-20
+		MapKeyIO(&RMFD,	OSB16,	CHAIN(DX32,D(ModDelay),DX16),	TEMPO(0,	CHAIN(DX30,DX32,D(ModDelay),DX16),	LongTempo)	);		//right emergency gear handle
+		MapKey	(&RMFD,	OSB17,	CHAIN(DX32,D(ModDelay),DX17)	);
+		MapKey	(&RMFD,	OSB18,	CHAIN(DX32,D(ModDelay),DX18)	);
+		MapKey	(&RMFD,	OSB19,	CHAIN(DX32,D(ModDelay),DX19)	);
+//		MapKey	(&RMFD,	OSB20,	CHAIN(DX32,D(ModDelay),DX24)	);
+
+
+//Right Rocker Switches
+//SYM
+//		MapKeyIO(&RMFD,	SYMU,	CHAIN(R_CTL,DX32,D(ModDelay),DX21),	CHAIN(DX32,D(ModDelay),DX21));	//R_CTL added to /I in 1.36 to deconflict with brake+mic = equal function
+//		MapKeyIO(&RMFD,	SYMD,	CHAIN(R_CTL,DX32,D(ModDelay),DX22),	CHAIN(DX32,D(ModDelay),DX22));
+		MapKey	(&RMFD,	SYMU,	KB_RSYMU);
+		MapKey	(&RMFD,	SYMD,	KB_RSYMD);
+//		MapKeyR	(&RMFD,	SYMU,	0);	//added in 1.61 to account for context sensitive R in M2000C
+//		MapKeyR	(&RMFD,	SYMD,	0);
+		
+//CON
+		MapKey	(&RMFD,	CONU,	KB_RCONU);
+		MapKey	(&RMFD,	COND,	KB_RCOND);
+//		MapKeyR	(&RMFD,	CONU,	0);	//added in 1.24 to account for context sensitive R in UH-1
+//		MapKeyR	(&RMFD,	COND,	0);
+
+//BRT
+	MapKey	(&RMFD,	BRTU,	KB_RBRTU);
+	MapKey	(&RMFD,	BRTD,	KB_RBRTD);
+
+//GAIN
+	MapKey	(&RMFD,	GAINU,	KB_RGAINU);
+	MapKey	(&RMFD,	GAIND,	KB_RGAIND);
+
+	printf("Done!\xa");	
+}
+
+
+int MiG15_GearUp_Map(int allow, int state)
+{
+if (WarthogThrottle > 0)
+	{
+	if ((allow) & (!state))	//force lock is allowed and state is 0 (locked)
+		{
+		MapKeyIO(&Throttle,	FLAPU,	EXEC("if (!MiG15_GearUnlock_Cur) ActKey(KEYON+PULSE+DX25); MiG15_GearUnlock_Set(1); GearState_Blink(GearState);"), 																		//	Gear unlock
+									EXEC("if (!MiG15_GearUnlock_Cur) {  ActKey(KEYON+DX30); DeferCall(ModDelay,&ActKey,KEYON+PULSE+DX25); DeferCall(KBDelay+ModDelay,&ActKey,DX30);}  MiG15_GearUnlock_Set(1); GearState_Blink(GearState);") );	//if gear up is locked, first press will unlock and then remap controller
+		MapKeyR	(&Throttle,	FLAPU,	EXEC("MiG15_GearUp_Map(Force_GearLock,MiG15_GearUnlock_Cur);"));
+		}
+	
+	else	//normal T7 mapping
+		{
+		MapKeyIO(&Throttle,	FLAPU,	EXEC("if  (!MiG15_GearUnlock_Cur) ActKey(KEYON+PULSE+DX25); MiG15_GearUnlock_Set(1); GearState_Blink(GearState);"),  																		//	Gear unlock
+									EXEC("if((MiG15_GearUnlock_Cur) | (!Force_GearLock)) {ActKey(KEYON+PULSE+DX25);GearStateInd(0, ProfID, FixedGear, Helicopter, GearCycleTimeUp, AirBrkFlash); MiG15_GearTransit = -1;}") );	//Cycles Logical Gear State if unlocked or force lock disabled.  Gear command cycles automatically (governed in-game)								// gear up
+		//MapKeyR	(&Throttle,	FLAPU, EXEC("if  (MiG15_GearTransit < 0) {ActKey(KEYON+PULSE+DX26); MiG15_GearTransit = 0;}");
+		MapKeyR	(&Throttle,	FLAPU,	0);
+		}
+	}
+else
+	{
+	if ((allow) & (!state))	//force lock is allowed and state is 0 (locked)
+		{
+		MapKeyIO(&HCougar,	T7,	EXEC("if (!MiG15_GearUnlock_Cur) ActKey(KEYON+PULSE+DX25); MiG15_GearUnlock_Set(1); GearState_Blink(GearState);"), 																		//	Gear unlock
+								EXEC("if (!MiG15_GearUnlock_Cur) {  ActKey(KEYON+DX30); DeferCall(ModDelay,&ActKey,KEYON+PULSE+DX25); DeferCall(KBDelay+ModDelay,&ActKey,DX30);}  MiG15_GearUnlock_Set(1); GearState_Blink(GearState);") );	//if gear up is locked, first press will unlock and then remap controller
+		MapKeyR	(&HCougar,	T7,	EXEC("MiG15_GearUp_Map(Force_GearLock,MiG15_GearUnlock_Cur);"));
+		}
+	
+	else	//normal T7 mapping
+		{
+		MapKeyIO(&HCougar,	T7,	EXEC("if  (!MiG15_GearUnlock_Cur) ActKey(KEYON+PULSE+DX25); MiG15_GearUnlock_Set(1); GearState_Blink(GearState);"),  																		//	Gear unlock
+								EXEC("if((MiG15_GearUnlock_Cur) | (!Force_GearLock)) {ActKey(KEYON+PULSE+DX25);GearStateInd(0, ProfID, FixedGear, Helicopter, GearCycleTimeUp, AirBrkFlash); MiG15_GearTransit = -1;}") );	//Cycles Logical Gear State if unlocked or force lock disabled.  Gear command cycles automatically (governed in-game)								// gear up
+		//MapKeyR	(&HCougar,	T7, EXEC("if  (MiG15_GearTransit < 0) {ActKey(KEYON+PULSE+DX26); MiG15_GearTransit = 0;}");
+		MapKeyR	(&HCougar,	T7,	0);
+		}
+	}
+}
+
+int MiG15_GearUnlock_Set(int state)
+{
+if (state < 0) MiG15_GearUnlock_Cur = abs(MiG15_GearUnlock_Cur-1);
+else MiG15_GearUnlock_Cur = state;
+
+//if (Script_Debug) printf("MiG15_GearUnlock_Cur = %i \xa",MiG15_GearUnlock_Cur);	//for test purposes
+}
+
+int MiG15_Airbrake_Map_Set(int type,int led = 1, int wav = 0)
+{
+if (WarthogThrottle > 0) MiG15_Airbrake_Map_Set_WH(type,led);
+else if (type > 0)	//on T9, off T10
+		{
+		if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1)	)		//TIR/MFD added in 2.34a 
+			MapKeyIO(&HCougar, T9,			TEMPO(UP+MiG15_Stick_Airbrake,EXEC("DCS_AcftSel(1);"),SwapTempo),			Binary_AirbrakeOn);		//Acft Sel Shift+T9.  
+		else
+			MapKeyIO(&HCougar, T9,			TEMPO(UP+MiG15_Stick_Airbrake,EXEC("MiG15_Airbrake_Type_Set(-1);"),1000),	Binary_AirbrakeOn);		//State Toggle Shift+T9.  
+		MapKeyR	(&HCougar, T9,				0);
+		
+		MapKey	(&HCougar, T10,				Binary_AirbrakeOff);		
+		MapKeyR	(&HCougar, T10,				0);
+		
+		printf("      Type %i (MiG-15 Binary-Discrete) Airbrake Set.\xa", type);
+		if (led)
+			{	
+			flashLLED1(1,250);
+			DeferCall(1000,&flashLLED1,0);
+			}
+		if (wav) PlayWav("t1bd.wav");
+		}
+
+else			//momentary T9, full switch T10
+		{
+//		if (AirBrkFlash)	//removed in 2.54 for stability
+//			{
+//			if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1)	)		//TIR/MFD added in 2.34a 
+//				MapKeyIO(&HCougar, T9,			TEMPO(UP+MiG15_Stick_Airbrake,EXEC("DCS_AcftSel(1);"),SwapTempo),			CHAIN(MiG15_Stick_Airbrake, EXEC("flashLLED1(1,250);"))	);		//Acft Sel Shift+T9.  
+//			else		
+//				MapKeyIO(&HCougar, T9,			TEMPO(UP+MiG15_Stick_Airbrake,EXEC("MiG15_Airbrake_Type_Set(-1);"),1000),	CHAIN(MiG15_Stick_Airbrake, EXEC("flashLLED1(1,250);"))	);		//State Toggle Shift+T9.  
+			//MapKeyRIO(&HCougar, T9,			0,EXEC("DeferCall(Airbrake_In_MiG15, &flashLLED1, 0);")	);
+//			MapKeyRIO(&HCougar, T9,			0,EXEC("flashLLED1(0);")	);
+//			}
+//		else
+//			{
+			if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1)	)
+				MapKeyIO(&HCougar, T9,			TEMPO(UP+MiG15_Stick_Airbrake,EXEC("DCS_AcftSel(1);"),SwapTempo),			MiG15_Stick_Airbrake);		//State Toggle Shift+T9.  
+			else
+				MapKeyIO(&HCougar, T9,			TEMPO(UP+MiG15_Stick_Airbrake,EXEC("MiG15_Airbrake_Type_Set(-1);"),1000),	MiG15_Stick_Airbrake);		//State Toggle Shift+T9.  
+			MapKeyR	(&HCougar, T9,			0);
+//			}		
+
+		MapKey	(&HCougar, T10,				Binary_AirbrakeOn);		
+		MapKeyR	(&HCougar, T10,				Binary_AirbrakeOff);
+
+		printf("      Type %i (MiG-15 Binary-Momentary) Airbrake Set.\xa", type);
+		if (led)
+			{	
+			flashLLED1(1,500);
+			DeferCall(1000,&flashLLED1,0);
+			}
+		if (wav) PlayWav("t0bm.wav");
+		}
+
+}
+
+
+int MiG15_Airbrake_Map_Set_WH(int type,int led = 1, int wav = 0)
+{
+
+if (type > 0)	//on T9, off T10
+		{
+		if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1)	)		//TIR/MFD added in 2.34a 
+			MapKeyIO(&Throttle, SPDB,		TEMPO(UP+MiG15_Stick_Airbrake,EXEC("DCS_AcftSel(1);"),SwapTempo),			Binary_AirbrakeOn);		//Acft Sel Shift+T9.  
+		else
+			MapKeyIO(&Throttle, SPDB,		TEMPO(UP+MiG15_Stick_Airbrake,EXEC("MiG15_Airbrake_Type_Set(-1);"),1000),	Binary_AirbrakeOn);		//State Toggle Shift+T9.  
+		MapKeyR	(&Throttle, SPDB,			0);
+		
+		MapKey	(&Throttle, SPDF,			Binary_AirbrakeOff);		
+		MapKeyR	(&Throttle, SPDF,			0);
+		
+		printf("      Type %i (MiG-15 Binary-Discrete) Airbrake Set.\xa", type);
+		if (led)
+			{	
+			flashLLED1(1,250);
+			DeferCall(1000,&flashLLED1,0);
+			}
+		if (wav) PlayWav("t1bd.wav");
+		}
+
+else			//momentary T9, full switch T10
+		{
+//		if (AirBrkFlash)	//removed in 2.54 for stability
+//			{
+//			if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1)	)		//TIR/MFD added in 2.34a 
+//				MapKeyIO(&Throttle, SPDB,	TEMPO(UP+MiG15_Stick_Airbrake,EXEC("DCS_AcftSel(1);"),SwapTempo),			CHAIN(MiG15_Stick_Airbrake, EXEC("flashLLED1(1,250);"))	);		//Acft Sel Shift+T9.  
+//			else		
+//				MapKeyIO(&Throttle, SPDB,	TEMPO(UP+MiG15_Stick_Airbrake,EXEC("MiG15_Airbrake_Type_Set(-1);"),1000),	CHAIN(MiG15_Stick_Airbrake, EXEC("flashLLED1(1,250);"))	);		//State Toggle Shift+T9.  
+			//MapKeyRIO(&&Throttle, SPDB,		0,EXEC("DeferCall(Airbrake_In_MiG15, &flashLLED1, 0);")	);
+//			MapKeyRIO(&Throttle, SPDB,		0,EXEC("flashLLED1(0);")	);
+//			}
+//		else
+//			{
+			if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1)	)		//TIR/MFD added in 2.34a 
+				MapKeyIO(&Throttle, SPDB,	TEMPO(UP+MiG15_Stick_Airbrake,EXEC("DCS_AcftSel(1);"),SwapTempo),			MiG15_Stick_Airbrake);		//Acft Sel Shift+T9.  
+			else		
+				MapKeyIO(&Throttle, SPDB,	TEMPO(UP+MiG15_Stick_Airbrake,EXEC("MiG15_Airbrake_Type_Set(-1);"),1000),	MiG15_Stick_Airbrake);		//State Toggle Shift+T9.  
+			MapKeyR	(&Throttle, SPDB,		0);
+//			}		
+
+		MapKey	(&Throttle, SPDF,			Binary_AirbrakeOn);		
+		MapKeyR	(&Throttle, SPDF,			Binary_AirbrakeOff);
+
+		printf("      Type %i (MiG-15 Binary-Momentary) Airbrake Set.\xa", type);
+		if (led)
+			{	
+			flashLLED1(1,500);
+			DeferCall(1000,&flashLLED1,0);
+			}
+		if (wav) PlayWav("t0bm.wav");
+		}
+
+}
+
+int MiG15_Airbrake_Type_Set(int type, int index = 1)	//calls other functions in order with delay to force timing values prior to init
+//type is airbrake type, index for upper boundary of array (start at 0; allows for function expansion) and should always be last argument
+//index set to 1 to allow for binary types 0 and 1.
+//MiG-15 uses its own brake routine similar to the binary types, but with a specific momentary key
+{
+if ((type < 0) | (type > index)) type = (Airbrake_Def_MiG15+1)%(index+1);	//allows toggle/cycle
+
+if (WarthogThrottle > 0) MiG15_Airbrake_Map_Set_WH(type,AirBrkFlash,1);	//no second argument because hotswap is automatic
+else	MiG15_Airbrake_Map_Set(type,AirBrkFlash,1);
+Airbrake_Def_MiG15 = type; 		//syncs airbrake type with current config
+}
+
+
+//=================================
+//		Array Discrete/Toggle 
+//=================================
+
+
+
+//Initial Switch Positions by gear/startup state.  To be fleshed out.
+int	MiG15_Switch_Posit_Init(int state)
+{
+MiG15_GearUnlock_Cur	=	state-1;
+MiG15_GearUp_Map(Force_GearLock,abs(state-1));
+
+//DeferCall(500,&Print_Value,MiG15_GearUnlock_Cur);	//for test purposes
+
+Lights_RLED1(0);
+}
+
+int MiG15_FuelValve_Set(int posit, int delay = 200, int index = 3, int time = 0)	//posit is switch position value (0 for mid, 1 for aft, 2 for fwd), delay is time between switches, time should always start at 0
+{
+if 	(posit > (index-1)) posit = (MiG15_FuelValve_Cur+1)%index;	//out of bounds up toggles one step
+else if (posit < 0) posit = (MiG15_FuelValve_Cur+(index-1))%index;		//out of bounds down toggles (index-1) steps (comes to -1)
+
+while (MiG15_FuelValve_Cur != posit)
+	{
+	if (MiG15_FuelValve_Cur < posit)
+		{
+		DeferCall(time, &ActKey, KEYON+PULSE+MiG15_FuelValve_Open_DX);		//0 = fully closed, 2 = fully open
+		MiG15_FuelValve_Cur = (MiG15_FuelValve_Cur+1);
+		if (MiG15_FuelValve_Cur > index-1) MiG15_FuelValve_Cur = index-1;
+		}
+	else	
+		{
+		ActKey(KEYON+PULSE+MiG15_FuelValve_Close_DX);	//different because Close does fully (not incremental)
+		MiG15_FuelValve_Cur = 0;
+		}
+	time = time + delay;
+	}
+//if (Script_Debug) printf("MiG15_FuelValve_Cur = %i\xa posit = %i\xa",MiG15_FuelValve_Cur,posit);	//for test purposes
+}
+
+
+
+int MiG15_Flaps_Set(int posit, int delay = 200, int index = 4, int neut = 1, int time = 0)	//posit is switch position value (3 for 55, 2 for 20, 1 neutral, 0 up).  time and neut are internal arguments and shouldn't be entered
+{
+if 	(posit > (index-1)) posit = (FlapState+1)%index;		//out of bounds up toggles one step
+else if (posit < 0) posit = (FlapState+(index-1))%index;	//out of bounds down toggles (index-1) steps (comes to -1)
+
+while (FlapState != posit)
+	{
+	if (AirBrkFlash > 0) flashRLED1(1,500);					//flash RLED1 when in cycle
+	if (FlapState < posit)
+		{
+		DeferCall(time, &ActKey, KEYON+PULSE+MiG15_Flaps_Down);
+		if	( (FlapState == neut) & (posit == index-1)	)	time = time + MiG15_Flap20_Delay + delay;	//flaps in neutral and set for full down requires 2 seconds in 20 for hydraulic accumulation
+		else time = time + delay;																		//here because of special timing circumstances (above)
+		FlapState = (FlapState+1);
+		if (FlapState > index-1) FlapState = index-1;
+		}
+	else
+		{	
+		DeferCall(time, &ActKey, KEYON+PULSE+MiG15_Flaps_Up);	
+		FlapState = (FlapState-1);
+		if (FlapState < 0) FlapState = 0;
+		time = time + delay;																			//here because of special timing circumstances (in prev section)
+		}
+	//time = time + delay;									//remmed because down differs from up
+	}
+//if (Script_Debug) printf("FlapState = %i\xa posit = %i\xa",FlapState,posit);	//for test purposes
+if (AirBrkFlash > 0) flashRLED1(0);	//cease flashing
+}
+

@@ -1,0 +1,1353 @@
+//================================================================================
+//		DCS World SRS AWACS Mode for HOTAS Cougar/Warthog and Cougar MFDs
+//					by Don "Home Fries" Heumphreus
+//						last updated: 07OCT2020
+//
+//	Change Log:
+//	2.29	Initial Release
+//	2.30	Replaced all LATC_RefStartPt references with LATC_BullsRef
+//	2.34a	Added HOTAS Module Selection to S3+SPDB/T9 Long
+//	2.40	Added abilty to select analog mouse controls on the fly (Warthog)
+//			Fixed S3 assignments
+//			Added shifted H3 LATC assignments to CS
+//	2.44	Set Brake Cycle time (dummy value) to 1 to prevent poss DBZ
+//			Added AWACS_CommSw_Map()to T10 (Cougar TQS)
+//	2.46	Remapped Radio Overlay from DX29+DX3 to DX30+DX29
+//			Added MSP as shift modifier
+//	2.50b	Removed duplicate MapKeyR(0) mappings to free stack space.
+//
+//
+//================================================================================
+
+//Note: for IOUMD assignments, ID and OD are normally the same because they involve both shift modifiers.
+//Shift must be MSP because it is on the throttle while U/D must be on the same controller (stick).
+//U is S1 for button isolation (as before), and D is S3.
+//Exception: MFD IUD commands are 0 because they are physically impossible to actuate without 3 hands.
+//Cougar still uses S3 for shift and doesn't use /D to allow for LOTATC switch using S3+S1
+
+int DCS_AWACS(int led, int sp)
+{
+printf("AWACS Mode Config\xa");
+
+if (WarthogStick > 0)
+	{
+//	printf("(Currently only option for Warthog)...");
+	MapKeyR(&Joystick, S2, EXEC("DCS_AWACS_Init();"));
+	}
+else
+	{
+	MapKeyR(&HCougar, S2, EXEC("DCS_AWACS_Init();"));
+	}
+if (sp > 0)	PlayWav("awacs.wav");
+if (led > 0)	Lights_Four(1,0,0,1,	ProfileSwapDelay+LED_Delay);
+}
+
+
+int	SetMenu_AWACS()
+{
+Set_Acft_Array_Cur(998);
+}
+
+
+int	SRS_AWACS_Array;
+int	SRS_AWACS_Cur;
+int AWACS_LATC_Cur;
+int AWACS_LATC_S_Cur;
+int AWACS_LATC_TQS_Cur;
+
+int DCS_AWACS_Init(int wav = 1)
+{
+int rdoovlyo;	//internal for DXI
+int rdoovlyi;
+if (Overlay_Enable_SRS > 1)
+	{
+	rdoovlyo = Rdo_Ovly_DXI;
+	rdoovlyi = Rdo_Ovly_KB;
+	}
+else
+	{
+	rdoovlyo = Rdo_Ovly_KB;
+	rdoovlyi = Rdo_Ovly_DXI;
+	}
+//Determine_Differential_Braking(DiffBraking_Enabled*DiffBraking_DX,CougarToeBrakes);
+
+FkeyPress				=	1;	//added in 2.02 to prevent Commswitch key activation on profile load.
+GraceFlag				=	0;
+Eng_Start_x				=	0;
+Eng_Stop_x				=	0;
+Starter_Ind_x			=	0;
+MFD_Eng_Start			=	0;
+ProfID					=	998;
+FixedGear				=	0;
+Helicopter				=	0;
+	HeloRotateMicrostick=	0;
+	CenterPositRudder	=	0;
+T6WheelBrake			=	0;
+TriggerZoomEnabled		=	0;
+GearCycleTimeDn			=	0;
+GearCycleTimeUp			=	0;
+BrakeOnCycleTime		=	1;	//min value to prevent DBZ
+BrakeOffCycleTime		=	1;
+//XYAxisTrim				=	XYAxisTrim_DX;		//added in 1.34
+	JoyXTrim			=	0;		//added in 1.34
+	JoyYTrim			=	0;		//added in 1.34
+//DMS_SnapView			=	DMS_SnapView_DX;	//added in 1.34
+WheelBrakeFull			=	0;	//added in 1.35
+ToeBrakesAvailable		=	0;	//added in 1.40, constant in dcs world.tmc TBI
+NVG_Capable				=	0;	//added in 1.40
+AB_Capable				=	0;	//added in 1.61
+Adjust_Backlighting		=	0;	//added in 1.62
+NS430_Enabled			=	0;	//added in 2.21
+//DX_Eng_Quantity			=	1;	//added in 2.27 as buffer for CA (force single engine).  obsolete in 2.43
+SRS_AWACS_Cur			=	1;
+StationChangeModifier	=	0;
+WH_Use_TQS				=	0;	//added in 2.43
+Analog_TDC				=	0;	//added in 2.43  not used for awacs
+EngineCount				=	0;	//added in 2.43  not used for awacs
+CommInitType			=	0;	//0 for none/custom, 1 for single channel (P-51), 2 for simple (dual channel), 3 for complex (3 channel).  added in 2.43
+StnCheckDisabled		=	2;	//added in 2.43.  Forced
+CurrentStation 			=	1;	//moved here in 2.43
+
+	S4AnalogBrake = 0;
+	
+	XYAxisTrim = 0;
+	DMS_SnapView = 0;
+
+
+S4asNWS					=	0;					//added in 1.33
+S3holdNWS 				= 	0;	//added in 2.05
+
+SRS_AWACS_Array = 	SEQ(	Rdo_ICS,			//0
+							Rdo1_VHF_AM,		//1
+							Rdo2_UHF,			//2
+							Rdo3_VHF_FM,		//3
+							Rdo4,				//4
+							Rdo5,				//5
+							Rdo6,				//6
+							Rdo7,				//7
+							Rdo8,				//8
+							Rdo9,				//9
+							Rdo10				//10
+							);
+					
+							
+printf("Done\xa Execute DCS AWACS Config (Profile v%i.%i):\xa",MajorVersion,MinorVersion);
+PlayWavSel(ProfID,abs((Init_Run - 1)*wav),DCSFP_Enabled,MFDisplayEnabled);	//added in 1.61, DCSFP added in 2.05, MFDisplay added in 2.29
+TARSActive(1,1800);
+CommStateActive(0,3700);
+
+Pause_TrackIR(0);
+//AirBrake_Init(AirBrkFlash);	//moved to individual modules in 1.22 
+MFD_Init(ProfID);
+	printf("   Map HOTAS for DCS AWACS Config:\xa");
+	AWACS_Axis_Init();
+if (WarthogStick > 0)
+	{
+		printf("      Warthog Stick Button Mapping:\xa");
+			printf("         Shift Commands: S3  momentary...");
+			if (WarthogThrottle > 0)
+					SetShiftButton(&Throttle, MSP,	&Joystick, S1, S3);
+			else	SetShiftButton(&Joystick, S3,	&Joystick, S1, 0);
+				MapKey	(&Joystick, S3, PTT_Common);	//X(SRS_AWACS_Array,0)	);	
+				MapKeyR	(&Joystick, S3, 0);	
+			printf("...Done!\xa");	
+			printf("         Warthog Stick Buttons...");	
+
+
+//				MapKeyR	(&Joystick, TG2, 	0);
+//				MapKey(&Joystick,S1,  		0); 
+
+				MapKeyUMD(&Joystick,TG1, 	DX30,	//DX3
+											DOWN+Rdo_ICS,
+											DOWN+Rdo_ICS);
+				MapKeyR	(&Joystick, TG1,	UP+Rdo_ICS);		
+
+				if (!WarthogThrottle)
+					{
+					MapKeyUMD(&Joystick,S1,		TEMPO(EXEC("AWACS_HC_LATC_Map(3);"),EXEC("AWACS_HC_LATC_Map(-1);"),DefTempo),0);	//Tempo Short to cycle LotATC
+					}
+				else	MapKey	(&Joystick,S1,		0);
+
+
+				MapKeyR	(&Joystick, S2, 	0);
+			
+
+//				MapKeyR	(&Joystick, S4, 	0);
+
+				//H1 taken care of in AWACS_ZSlew_Set()
+				
+				MapKeyUMD(&Joystick,H2U,	DX1,
+											CHAIN(DX29,D(ModDelay),DX1),
+											CHAIN(DX29,D(ModDelay),DX1));
+				MapKeyUMD(&Joystick,H2D,	DX2,
+											CHAIN(DX29,D(ModDelay),DX2),
+											CHAIN(DX29,D(ModDelay),DX2));
+				MapKeyUMD(&Joystick,H2L,	DX26,
+											CHAIN(DX29,D(ModDelay),DX26),
+											CHAIN(DX29,D(ModDelay),DX26));
+				MapKeyUMD(&Joystick,H2R,	DX25,
+											CHAIN(DX29,D(ModDelay),DX25),
+											CHAIN(DX29,D(ModDelay),DX25));
+	
+				MapKeyIOUMD(&Joystick,H4P,	DX30,DX30,	//DX3,
+											rdoovlyi,rdoovlyo,
+											rdoovlyi,rdoovlyi);
+				MapKeyUMD(&Joystick,H4U,	DX13,
+											EXEC("AWACS_Cycle_Rdo(11);"),
+											EXEC("AWACS_Cycle_Rdo(11);")	);
+															
+				MapKeyUMD(&Joystick,H4D,	DX12,
+											EXEC("AWACS_Cycle_Rdo(-1);"),
+											EXEC("AWACS_Cycle_Rdo(-1);")	);	
+				MapKeyUMD(&Joystick,H4R,	DX28,
+											CHAIN(DX29,D(ModDelay),DX28),
+											CHAIN(DX29,D(ModDelay),DX28)	);
+				MapKeyUMD(&Joystick,H4L,	DX27,
+											CHAIN(DX29,D(ModDelay),DX27),
+											CHAIN(DX29,D(ModDelay),DX27)	);
+				if (Rdo_LED_AWACS > 0)
+					{
+					MapKeyR	(&Joystick,	H4U,	EXEC("DeferCall(5*LED_Delay,&AWACS_LED,SRS_AWACS_Cur);")	);
+					MapKeyR	(&Joystick,	H4D,	EXEC("DeferCall(5*LED_Delay,&AWACS_LED,SRS_AWACS_Cur);")	);
+					}
+				else
+					{
+					MapKeyR	(&Joystick, H4U, 	0);
+					MapKeyR	(&Joystick, H4D, 	0);
+					}
+//				MapKeyR	(&Joystick, H4P, 	0);
+				
+			printf("...Done!\xa");	
+	}
+else
+	{
+		printf("      Button Mapping:\xa");
+			printf("         Shift Commands: S3  momentary...");
+				SetShiftButton(&HCougar, S3, &HCougar, S1, 0);
+				MapKey	(&HCougar, S3, PTT_Common);	//X(SRS_AWACS_Array,0)	);	
+				MapKeyR	(&HCougar, S3, 0);		
+			printf("...Done!\xa");	
+			printf("         Cougar Stick Buttons...");	
+				
+			if (!TARS_PTT_Common) 
+					MapKey	(&HCougar, TG2, CHAIN(UP+DX21,D(ModDelay),X(SRS_AWACS_Array,SRS_AWACS_Cur))	);
+			else 	MapKey	(&HCougar, TG2, 0);
+//					MapKeyR	(&HCougar, TG2, 0);
+			
+				if (!WarthogThrottle)
+					{
+					MapKeyIO(&HCougar,S1,		TEMPO(EXEC("AWACS_HC_LATC_Map(3);"),EXEC("AWACS_HC_LATC_Map(-1);"),DefTempo),0);
+					}
+				else		MapKey	(&HCougar,S1,		0);
+
+			MapKeyUMD(&HCougar,TG1, DX30,	//DX3
+									DOWN+Rdo_ICS,
+									DOWN+Rdo_ICS);
+			MapKeyR	(&HCougar, TG1,	UP+Rdo_ICS);		
+	
+			MapKeyR	(&HCougar,	S2, 0);
+	
+//			MapKeyR	(&HCougar,	S4, 0);
+			
+			//H1 taken care of in TQS section
+			
+			MapKeyUMD(&HCougar,	H2U,	DX1,
+										CHAIN(DX29,D(ModDelay),DX1),
+										CHAIN(DX29,D(ModDelay),DX1));
+			MapKeyUMD(&HCougar,	H2D,	DX2,
+										CHAIN(DX29,D(ModDelay),DX2),
+										CHAIN(DX29,D(ModDelay),DX2));
+			MapKeyUMD(&HCougar,	H2L,	DX26,
+										CHAIN(DX29,D(ModDelay),DX26),
+										CHAIN(DX29,D(ModDelay),DX26));
+			MapKeyUMD(&HCougar,	H2R,	DX25,
+										CHAIN(DX29,D(ModDelay),DX25),
+										CHAIN(DX29,D(ModDelay),DX25));
+
+			MapKeyUMD(&HCougar,	H4U,	DX13,
+										EXEC("AWACS_Cycle_Rdo(11);"),
+										EXEC("AWACS_Cycle_Rdo(11);")	);
+														
+			MapKeyUMD(&HCougar,	H4D,	DX12,
+										EXEC("AWACS_Cycle_Rdo(-1);"),
+										EXEC("AWACS_Cycle_Rdo(-1);")	);	
+			MapKeyUMD(&HCougar,	H4R,	DX28,
+										CHAIN(DX29,D(ModDelay),DX28),
+										CHAIN(DX29,D(ModDelay),DX28)	);
+			MapKeyUMD(&HCougar,	H4L,	DX27,
+										CHAIN(DX29,D(ModDelay),DX27),
+										CHAIN(DX29,D(ModDelay),DX27)	);
+										
+			if (Rdo_LED_AWACS > 0)
+				{
+				MapKeyR	(&HCougar,	H4U,	EXEC("DeferCall(5*LED_Delay,&AWACS_LED,SRS_AWACS_Cur);")	);
+				MapKeyR	(&HCougar,	H4D,	EXEC("DeferCall(5*LED_Delay,&AWACS_LED,SRS_AWACS_Cur);")	);
+				}
+			else
+				{
+				MapKeyR	(&HCougar, H4U, 	0);
+				MapKeyR	(&HCougar, H4D, 	0);
+				}
+			printf("...Done!\xa");	
+	}
+	AWACS_PTT_Map();
+
+			
+if (WarthogThrottle > 0)
+	{
+			printf("         Throttle Buttons...");	
+	
+				MapKeyR	(&Throttle, SC, 0);				
+
+				if (Throttle[EFRNORM])	AWACS_Stick_Map(1,0);
+				else					AWACS_Stick_Map(0,0);
+				if (Throttle[EFLNORM])	AWACS_Throttle_Map(1,0);
+				else					AWACS_Throttle_Map(0,0);
+
+				if (Throttle[APUON])				 	AWACS_ZSlew_Set(0,1);	//H1 as mousewheel
+				else									AWACS_ZSlew_Set(0,0);	//H1 as mouse
+				
+				if ((Throttle[PSF]) | (Throttle[PSB]))	AWACS_ZSlew_Set(1,1);	//CS as mousewheel
+				else									AWACS_ZSlew_Set(1,0);	//CS as mouse
+				
+				if (Throttle[EORNORM])					AWACS_AnalogMouse_Set(0,1);	//Stick Mouse
+				else if (Throttle[EOLNORM])				AWACS_AnalogMouse_Set(1,1);	//SC Mouse
+				//else									AWACS_AnalogMouse_Set(1,0);	//SC xyrot
+				//if (Throttle[EORNORM])					AWACS_AnalogMouse_Set(0,1);	//Stick Mouse
+				else									AWACS_AnalogMouse_Set(0,0);	//stick xy
+				
+					MapKey	(&Throttle,	LDGH,	X(SRS_AWACS_Array,0)	);		
+					
+					MapKey	(&Throttle,	CHF,	EXEC("AWACS_Cycle_Rdo(11);")	);	
+					MapKey	(&Throttle,	CHB,	EXEC("AWACS_Cycle_Rdo(-1);")	);	
+					
+				if (Rdo_LED_AWACS > 0)
+					{
+					MapKeyR	(&Throttle,	CHF,	EXEC("DeferCall(5*LED_Delay,&AWACS_LED,SRS_AWACS_Cur);")	);
+					MapKeyR	(&Throttle,	CHB,	EXEC("DeferCall(5*LED_Delay,&AWACS_LED,SRS_AWACS_Cur);")	);
+					}
+				else
+					{
+					MapKeyR	(&Throttle,	CHF,	0);
+					MapKeyR	(&Throttle,	CHB,	0);
+					}
+					
+					
+//					MapKey	(&Throttle,	IDLERON,	0);
+//					MapKey	(&Throttle,	IDLEROFF,	0);
+//					MapKey	(&Throttle,	IDLELON,	0);
+//					MapKey	(&Throttle,	IDLELOFF,	0);
+
+					MapKey	(&Throttle,	PSF,	EXEC("AWACS_ZSlew_Set(1,1);"));		//PS as mousewheel or mouse
+					MapKey	(&Throttle,	PSB,	EXEC("AWACS_ZSlew_Set(1,1);"));
+					MapKey	(&Throttle,	PSM,	TEMPO(0,EXEC("AWACS_ZSlew_Set(1,0);"),DoubleTap));
+					
+//					MapKey	(&Throttle,	FLAPU,	0);	
+//					MapKey	(&Throttle,	FLAPD,	0);	
+//					MapKeyR	(&Throttle,	FLAPU,	0);
+//					MapKeyR	(&Throttle,	FLAPD,	0);
+//					MapKey	(&Throttle,	FLAPM,	0);	
+
+
+				
+				MapKey	(&Throttle,	EACON,		EXEC("AWACS_APSwitch_Init();"));
+				MapKey	(&Throttle,	EACOFF,		EXEC("AWACS_APSwitch_Init();"));
+				MapKey	(&Throttle,	RDRNRM,		EXEC("AWACS_APSwitch_Init();"));
+				MapKey	(&Throttle,	RDRDIS,		EXEC("AWACS_APSwitch_Init();"));
+		
+				MapKey	(&Throttle,	EFLNORM,	EXEC("AWACS_Throttle_Map(1);"));
+//				MapKeyR	(&Throttle,	EFLNORM,	0);
+				MapKey	(&Throttle,	EFLOVER,	EXEC("AWACS_Throttle_Map(0);"));
+				MapKey	(&Throttle,	EFRNORM,	EXEC("AWACS_Stick_Map(1);"));
+//				MapKeyR	(&Throttle,	EFRNORM,	0);
+				MapKey	(&Throttle,	EFROVER,	EXEC("AWACS_Stick_Map(0);"));
+				
+				MapKey	(&Throttle,	EOLIGN,		EXEC("AWACS_AnalogMouse_Set(1,1);"));	//SC Mouse
+				MapKey	(&Throttle,	EOLNORM,	EXEC("AWACS_AnalogMouse_Set(1,1);"));	//SC Mouse
+				MapKey	(&Throttle,	EOLMOTOR,	EXEC("AWACS_AnalogMouse_Set(1,0);"));	//SC xyrot	
+				MapKey	(&Throttle,	EORIGN,		EXEC("AWACS_AnalogMouse_Set(0,1);"));	//Stick Mouse
+				MapKey	(&Throttle,	EORNORM,	EXEC("AWACS_AnalogMouse_Set(0,1);"));	//Stick Mouse
+				MapKey	(&Throttle,	EORMOTOR,	EXEC("AWACS_AnalogMouse_Set(0,0);"));	//Stick xy
+//				MapKeyR	(&Throttle,	EOLIGN,		0);
+//				MapKeyR	(&Throttle,	EORIGN,		0);
+				
+				MapKey	(&Throttle,	APUON,		EXEC("AWACS_ZSlew_Set(0,1);"));	//H1 mousewheel or mouse
+				MapKey	(&Throttle,	APUOFF,		EXEC("AWACS_ZSlew_Set(0,0);"));
+				
+				//BSB in AWACS_PTT_Map()
+				MapKey	(&Throttle, BSF, 	CHAIN(DX30,D(ModDelay),DX21)	);
+				MapKey	(&Throttle, BSM,	0);
+				MapKeyR	(&Throttle,	BSF,	0);
+				MapKeyR	(&Throttle,	BSB,	0);
+				
+				if ((TrackIR > 1) | (MFD_Count < 1))		//TIR/MFD added in 2.34a 
+						MapKeyUMD(&Throttle,	SPDB, 	0,rdoovlyo,TEMPO(rdoovlyi, EXEC("DCS_AcftSel(1);"),	SwapTempo));
+				else	MapKeyUMD(&Throttle,	SPDB,	0,rdoovlyo,rdoovlyi);	//CHAIN(DX29,D(ModDelay),DX3)	);
+				MapKeyR	(&Throttle,	SPDB,	0);
+				
+				MapKey	(&Throttle,	SPDF,	EXEC("AWACS_CommSw_Map(0);"));
+				MapKeyR	(&Throttle,	SPDF,	EXEC("AWACS_CommSw_Map(1);"));
+				
+				AWACS_APSwitch_Init();
+	}
+else
+	{
+			H1_Init(0, PadlockEnabled, ProfID, -2);	//moved to individual routines in 1.27 for trim reset removal on helos, added XYAxisTrim in 1.34 (-1 in 2.29 for mouse, changed to -2 in 2.40 (scrollwheel only))
+													//Cougar only in 2.40 (WH replaced AWACS_ZSlew_Set() ).  TQS section not stick because AWACS_ZSlew_Set() can adj Cougar Stick on fly
+			printf("         TQS Buttons...");	
+//				MapKey(&HCougar, T1, MOUSE_LEFT);
+//				MapKeyR	(&HCougar, T1, 0);							
+
+//				MapKey	(&HCougar,	T6,	MOUSE_RIGHT);
+//				MapKeyR	(&HCougar, T6, 0);
+				
+				//T7 in AWACS_PTT_Map()
+				MapKey	(&HCougar, T8,	CHAIN(DX30,D(ModDelay),DX21)	);
+				MapKey	(&HCougar, DFM,	0);		
+				MapKeyR	(&HCougar, T7,	0);
+				MapKeyR	(&HCougar, T8,	0);
+				if ((TrackIR > 1) | (MFD_Count < 1))		//TIR/MFD added in 2.34a 
+						MapKeyIO(&HCougar, T9, 	TEMPO(rdoovlyi, EXEC("DCS_AcftSel(1);"),	SwapTempo),		rdoovlyo);	//CHAIN(DX29,D(ModDelay),DX3)	);
+				else	MapKeyIO(&HCougar, T9,	rdoovlyi,rdoovlyo);	//CHAIN(DX29,D(ModDelay),DX3)	);	
+//				MapKeyR	(&HCougar, T9, 0);	
+				MapKey	(&HCougar,T10, EXEC("AWACS_CommSw_Map(0);"));
+				MapKeyR	(&HCougar,T10, EXEC("AWACS_CommSw_Map(1);"));				
+				AWACS_HC_LATC_Map(LATC_Default_AWACS,0);	
+	}
+	
+if (	((Throttle[SPDF]) & (WarthogThrottle > 0)) | ((HCougar[T10]) & (!WarthogThrottle))	)	AWACS_CommSw_Map(0);
+else	AWACS_CommSw_Map(1);
+
+Global_DF_Init(WarthogThrottle,ProfID);
+	printf("...Done!\xa");	
+printf("   HOTAS Mapping Complete.\xa");			
+
+
+FlapState=0;				//for future implementation
+TriggerZoom_state  = 0;		//reset TriggerZoom
+ActKey(DX1);				//just in case DX1 lingers from trigger activation
+//Lights_ALL(0);				//Says Init Complete
+	
+	DeferCall(LED_Delay,&Lights_RLED2,0);	//Number changed in 1.28
+	DeferCall(2*LED_Delay,&Lights_LLED1,0);
+	DeferCall(3*LED_Delay,&Lights_RLED1,0);
+	DeferCall(4*LED_Delay,&Backlight_Max_Init,0);
+	if (WarthogThrottle > 0) DeferCall(7*LED_Delay,&WHT_Lights_Dn_D,0);
+
+if (Init_Run == 0) Gear_Ind_Init(GearDn_Ind_Default,FixedGear,Helicopter,AirBrkFlash);
+
+if (GearDn_Ind_Default > 0) Map_Cougar_ToeBrakes(ToeBrakesAvailable);//added in 1.40;
+else	Map_Cougar_ToeBrakes(0);
+
+printf(" AWACS Config Complete!\xa");	
+Set_Acft_Array_Cur(ProfID);
+}
+
+
+int AWACS_MFD_Init()
+{
+//===================================
+//		Standard MFD Buttons
+//===================================
+
+	printf("   Map Cougar MFDs...");	
+//LOSB 1 in Init
+			if (Scratchpad_Enabled)
+					MapKeyIOUMD(&RMFD, OSB01,	CHAIN(UP+USB_RIGHTALT,D(ModDelay),Scratchpad_Hotkey),	TEMPO(EXEC("AWACS_Cycle_Rdo(1,1);"),MapView,DefTempo),
+												CHAIN(UP+USB_RIGHTALT,D(ModDelay),Scratchpad_Hotkey),	TEMPO(EXEC("AWACS_Cycle_Rdo(1,1);"),MapView,DefTempo),
+												CHAIN(UP+USB_RIGHTALT,D(ModDelay),Scratchpad_Hotkey),	CHAIN(UP+USB_RIGHTALT,D(ModDelay),Scratchpad_Hotkey));	
+			else	MapKeyIOUMD(&RMFD, OSB01,	CHAIN(UP+USB_RIGHTALT,D(ModDelay),MapView),				TEMPO(EXEC("AWACS_Cycle_Rdo(1,1);"),MapView,DefTempo),
+												CHAIN(UP+USB_RIGHTALT,D(ModDelay),MapView),				TEMPO(EXEC("AWACS_Cycle_Rdo(1,1);"),MapView,DefTempo),
+												0,														CHAIN(UP+USB_RIGHTALT,D(ModDelay),MapView));
+//					MapKey	(&RMFD,	OSB01,	EXEC("AWACS_Cycle_Rdo(1,1);")	);
+					
+					MapKeyIOUMD(&LMFD, OSB02,	CHAIN(UP+USB_RIGHTALT,D(ModDelay),LSOView),		TEMPO(EXEC("AWACS_Cycle_Rdo(2,1);"),LSOView,DefTempo),
+												CHAIN(UP+USB_RIGHTALT,D(ModDelay),LSOView),		TEMPO(EXEC("AWACS_Cycle_Rdo(2,1);"),LSOView,DefTempo),
+												0,												CHAIN(UP+USB_RIGHTALT,D(ModDelay),LSOView));
+					MapKeyIOUMD(&RMFD, OSB02,	CHAIN(UP+USB_RIGHTALT,D(ModDelay),LSOView),		TEMPO(EXEC("AWACS_Cycle_Rdo(2,1);"),LSOView,DefTempo),
+												CHAIN(UP+USB_RIGHTALT,D(ModDelay),LSOView),		TEMPO(EXEC("AWACS_Cycle_Rdo(2,1);"),LSOView,DefTempo),
+												0,												CHAIN(UP+USB_RIGHTALT,D(ModDelay),LSOView));
+					
+					MapKey	(&LMFD, OSB03,	EXEC("AWACS_Cycle_Rdo(3,1);")	);
+					MapKey	(&RMFD, OSB03,	EXEC("AWACS_Cycle_Rdo(3,1);")	);
+					
+					MapKeyUMD(&LMFD,OSB04,	DX4,	EXEC("AWACS_Cycle_Rdo(4,1);"),	EXEC("AWACS_Cycle_Rdo(4,1);")	);
+					MapKeyUMD(&RMFD,OSB04,	DX4,	EXEC("AWACS_Cycle_Rdo(4,1);"),	EXEC("AWACS_Cycle_Rdo(4,1);")	);
+					
+					MapKeyUMD(&LMFD,OSB05,	DX5,	EXEC("AWACS_Cycle_Rdo(5,1);"),	EXEC("AWACS_Cycle_Rdo(5,1);")	);
+					MapKeyUMD(&RMFD,OSB05,	DX5,	EXEC("AWACS_Cycle_Rdo(5,1);"),	EXEC("AWACS_Cycle_Rdo(5,1);")	);
+
+
+
+					MapKeyIOUMD(&LMFD,OSB06,DX6,DX6,
+											REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX6));"),CHAIN(DX29,D(ModDelay),DX6),
+											0,REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX6));"));
+					MapKeyIOUMD(&RMFD,OSB06,DX6,DX6,
+											REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX6));"),CHAIN(DX29,D(ModDelay),DX6),
+											0,REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX6));"));
+					MapKeyIOUMD(&LMFD,OSB07,DX7,DX7,
+											REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX7));"),CHAIN(DX29,D(ModDelay),DX7),
+											0,REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX7));"));
+					MapKeyIOUMD(&RMFD,OSB07,DX7,DX7,
+											REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX7));"),CHAIN(DX29,D(ModDelay),DX7),
+											0,REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX7));"));
+					MapKeyIOUMD(&LMFD,OSB08,DX8,DX8,
+											REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX8));"),CHAIN(DX29,D(ModDelay),DX8),
+											0,REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX8));"));
+					MapKeyIOUMD(&RMFD,OSB08,DX8,DX8,
+											REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX8));"),CHAIN(DX29,D(ModDelay),DX8),
+											0,REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX8));"));			
+					MapKeyIOUMD(&LMFD,OSB09,DX9,DX9,
+											REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX9));"),CHAIN(DX29,D(ModDelay),DX9),
+											0,REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX9));"));
+					MapKeyIOUMD(&RMFD,OSB09,DX9,DX9,
+											REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX9));"),CHAIN(DX29,D(ModDelay),DX9),
+											0,REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX9));"));
+					MapKeyIOUMD(&LMFD,OSB10,DX10,DX10,
+											REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX10));"),CHAIN(DX29,D(ModDelay),DX10),
+											0,REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX10));"));
+					MapKeyIOUMD(&RMFD,OSB10,DX10,DX10,
+											REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX10));"),CHAIN(DX29,D(ModDelay),DX10),
+											0,REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX10));"));
+					
+
+					
+
+//LOSB 11-15, 16
+					MapKeyUMD(&LMFD,OSB11,	DX11,	EXEC("AWACS_Cycle_Rdo(10,1);"),	EXEC("AWACS_Cycle_Rdo(10,1);")	);
+					MapKeyUMD(&RMFD,OSB11,	DX11,	EXEC("AWACS_Cycle_Rdo(10,1);"),	EXEC("AWACS_Cycle_Rdo(10,1);")	);
+						
+					MapKeyUMD(&LMFD,OSB12,	DX12,	EXEC("AWACS_Cycle_Rdo(9,1);"),	EXEC("AWACS_Cycle_Rdo(9,1);")	);
+					MapKeyUMD(&RMFD,OSB12,	DX12,	EXEC("AWACS_Cycle_Rdo(9,1);"),	EXEC("AWACS_Cycle_Rdo(9,1);")	);
+					
+					MapKeyUMD(&LMFD,OSB13,	DX13,	EXEC("AWACS_Cycle_Rdo(8,1);"),	EXEC("AWACS_Cycle_Rdo(8,1);")	);
+					MapKeyUMD(&RMFD,OSB13,	DX13,	EXEC("AWACS_Cycle_Rdo(8,1);"),	EXEC("AWACS_Cycle_Rdo(8,1);")	);
+					
+					MapKeyUMD(&LMFD,OSB14,	DX14,	EXEC("AWACS_Cycle_Rdo(7,1);"),	EXEC("AWACS_Cycle_Rdo(7,1);")	);
+					MapKeyUMD(&RMFD,OSB14,	DX14,	EXEC("AWACS_Cycle_Rdo(7,1);"),	EXEC("AWACS_Cycle_Rdo(7,1);")	);
+					
+					MapKeyUMD(&LMFD,OSB15,	DX15,	EXEC("AWACS_Cycle_Rdo(6,1);"),	EXEC("AWACS_Cycle_Rdo(6,1);")	);
+					MapKeyUMD(&RMFD,OSB15,	DX15,	EXEC("AWACS_Cycle_Rdo(6,1);"),	EXEC("AWACS_Cycle_Rdo(6,1);")	);
+					
+					
+					
+					MapKeyIOUMD(&LMFD,OSB16,DX16,DX16,
+											REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX16));"),CHAIN(DX29,D(ModDelay),DX16),
+											0,REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX16));"));
+					MapKeyIOUMD(&RMFD,OSB16,DX16,DX16,
+											REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX16));"),CHAIN(DX29,D(ModDelay),DX16),
+											0,REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX16));"));
+
+					MapKeyIOUMD(&LMFD,OSB17,DX17,DX17,
+											REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX17));"),CHAIN(DX29,D(ModDelay),DX17),
+											0,REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX17));"));
+					MapKeyIOUMD(&RMFD,OSB17,DX17,DX17,
+											REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX17));"),CHAIN(DX29,D(ModDelay),DX17),
+											0,REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX17));"));
+					
+					MapKeyIOUMD(&LMFD,OSB18,DX18,DX18,
+											REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX18));"),CHAIN(DX29,D(ModDelay),DX18),
+											0,REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX18));"));
+					MapKeyIOUMD(&RMFD,OSB18,DX18,DX18,
+											REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX18));"),CHAIN(DX29,D(ModDelay),DX18),
+											0,REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX18));"));
+					
+					MapKeyIOUMD(&LMFD,OSB19,DX19,DX19,
+											REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX19));"),CHAIN(DX29,D(ModDelay),DX19),
+											0,REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX19));"));
+					MapKeyIOUMD(&RMFD,OSB19,DX19,DX19,
+											REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX19));"),CHAIN(DX29,D(ModDelay),DX19),
+											0,REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX19));"));
+					
+					//LMFD 20 in Init
+					MapKeyIOUMD(&RMFD,OSB20,DX24,DX24,	
+											REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX24));"),CHAIN(DX29,D(ModDelay),DX24),
+											0,REXEC(6,2*KBDelay,"ActKey(KEYON+PULSE+CHAIN(DX29,D(ModDelay),DX24));"));
+
+//Rocker Switches (use 1-2, 25-28, use EXEC("AWACS_Cycle_Rdo();")	function for cycling radio to free up 2 DX)
+//SYM
+		MapKey	(&LMFD,	SYMU,	CHAIN(DX29,D(ModDelay),DX1));
+		MapKey	(&LMFD,	SYMD,	CHAIN(DX29,D(ModDelay),DX2));
+		
+		MapKey	(&RMFD,	SYMU,	CHAIN(DX29,D(ModDelay),DX1));
+		MapKey	(&RMFD,	SYMD,	CHAIN(DX29,D(ModDelay),DX2));
+//		MapKeyR	(&RMFD,	SYMU,	0);	
+//		MapKeyR	(&RMFD,	SYMD,	0);
+		
+//CON
+		MapKey	(&LMFD,	CONU,	CHAIN(DX29,D(ModDelay),DX25));
+		MapKey	(&LMFD,	COND,	CHAIN(DX29,D(ModDelay),DX26));
+
+		MapKey	(&RMFD,	CONU,	CHAIN(DX29,D(ModDelay),DX25));
+		MapKey	(&RMFD,	COND,	CHAIN(DX29,D(ModDelay),DX26));
+//		MapKeyR	(&RMFD,	CONU,	0);	//added in 1.24 to account for context sensitive R in UH-1
+//		MapKeyR	(&RMFD,	COND,	0);
+		
+//BRT
+		MapKey	(&LMFD,	BRTU,	CHAIN(DX29,D(ModDelay),DX27));
+		MapKey	(&LMFD,	BRTD,	CHAIN(DX29,D(ModDelay),DX28));
+
+		MapKey	(&RMFD,	BRTU,	CHAIN(DX29,D(ModDelay),DX27));
+		MapKey	(&RMFD,	BRTD,	CHAIN(DX29,D(ModDelay),DX28));
+		
+//GAIN (Left in Init)
+		MapKey	(&RMFD,	GAINU,	EXEC("AWACS_Cycle_Rdo(-1);"));
+		MapKey	(&RMFD,	GAIND,	EXEC("AWACS_Cycle_Rdo(11);"));
+		
+		if (Rdo_LED_AWACS > 0)
+			{
+			MapKeyR	(&RMFD,	GAINU,	EXEC("DeferCall(5*LED_Delay,&AWACS_LED,SRS_AWACS_Cur);"));	
+			MapKeyR	(&RMFD,	GAIND,	EXEC("DeferCall(5*LED_Delay,&AWACS_LED,SRS_AWACS_Cur);"));
+			}
+		else
+			{
+			MapKeyR	(&RMFD,	GAINU,	0);	
+			MapKeyR	(&RMFD,	GAIND,	0);
+			}
+	printf("Done!\xa");	
+}
+
+int AWACS_Axis_Init()	//maps Joy XY, ANT, Rudders; ms added in 1.35 in order to pass argument to Aux_Axis_Init() where 0 disables the microstick (analog toe-brake routine now deprecated); eng added in 1.40 for number of throttle axes mapped (Warthog)
+{
+printf("   Map Axes:\xa");
+
+	AWACS_AnalogMouse_Set(0,Stick_as_Mouse_AWACS);	//replaced with on-the fly routine in 2.40 (0 argument forces stick, either warthog or cougar).
+	if (WarthogThrottle > 0)
+		{
+		printf("      Axis Mapping Warthog Throttle(SC Mouse)...");
+		
+			MapAxis (&Throttle,	THR_LEFT,	0);
+			MapAxis (&Throttle,	THR_RIGHT,	0);
+			SetDigitalThrottle_WH(-1);
+
+//			MapAxis(&Throttle, SCX, MOUSE_X_AXIS, AXIS_NORMAL, MAP_RELATIVE);	//covered in throttle button init section
+//			MapAxis(&Throttle, SCY, MOUSE_Y_AXIS, AXIS_NORMAL, MAP_RELATIVE);
+
+			SetSCurve(&Throttle, SCX,
+			0, //Left Deadzone
+			Mouse_DZ_WHT, //Center Deadzone
+			0, //Right Deadzone
+			0, //Curve
+			Mouse_Scale_T //Scale/zoom
+			);			
+				
+			SetSCurve(&Throttle, SCY,
+			0, //Left Deadzone
+			Mouse_DZ_WHT, //Center Deadzone
+			0, //Right Deadzone
+			0, //Curve
+			Mouse_Scale_T //Scale/zoom
+			);	
+			
+			MapAxis(&Throttle, THR_FC, 0);
+			KeyAxis(&Throttle, THR_FC, 0, AXMAP2(1, 0));	//zeros out any possible digital throttle from Ka-50 engine start routine.
+			printf("Done.\xa");
+		}
+	else
+		{
+		printf("      Axis Mapping TQS Auxiliary...");
+//		Microstick X Analog
+//			MapAxis(&HCougar, IN_POSITION_AXIS_SLIDER2, MOUSE_X_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
+
+			SetSCurve(&HCougar, IN_POSITION_AXIS_SLIDER2,
+			0, //Left Deadzone
+			Mouse_DZ_TQS, //Center Deadzone
+			0, //Right Deadzone
+			0, //Curve
+			Mouse_Scale_T //Scale/zoom
+			);	
+			
+//		Microstick Y Analog
+//			MapAxis(&HCougar, RDR_Y, MOUSE_Y_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
+			
+			SetSCurve(&HCougar, RDR_Y,
+			0, //Left Deadzone
+			Mouse_DZ_TQS, //Center Deadzone
+			0, //Right Deadzone
+			0, //Curve
+			Mouse_Scale_T //Scale/zoom
+			);			
+			
+			//Man Rng Analog
+			MapAxis(&HCougar, MAN_RNG, 0);
+		
+			//Digital
+			Digital_Microstick_Init(0);
+			KeyAxis(&HCougar, MAN_RNG, 0, AXMAP2 (0));	//added in 0.25 due to AXMAP in A-10C		
+		printf("Done.\xa");
+		}
+
+}
+
+int AWACS_APSwitch_Init()
+{
+if (Throttle[EACON])
+	{
+	if (Throttle[RDRNRM])
+		{
+		AWACS_Cycle_Rdo(10,1);
+		MapKey	(&Throttle,	APPAT,		EXEC("AWACS_Cycle_Rdo(10,1);")	);
+		MapKey	(&Throttle,	APAH,		TEMPO(0,EXEC("AWACS_Cycle_Rdo(10,1);"),DoubleTap)	);
+		MapKey	(&Throttle,	APALT,		EXEC("AWACS_Cycle_Rdo(10,1);")	);
+		}
+	else
+		{
+		MapKey	(&Throttle,	APPAT,		EXEC("AWACS_Cycle_Rdo(4,1);")	);
+		MapKey	(&Throttle,	APAH,		TEMPO(0,EXEC("AWACS_Cycle_Rdo(5,1);"),DoubleTap)	);
+		MapKey	(&Throttle,	APALT,		EXEC("AWACS_Cycle_Rdo(6,1);")	);
+		}	
+	}
+else if (Throttle[RDRNRM])
+		{
+		MapKey	(&Throttle,	APPAT,		EXEC("AWACS_Cycle_Rdo(7,1);")	);
+		MapKey	(&Throttle,	APAH,		TEMPO(0,EXEC("AWACS_Cycle_Rdo(8,1);"),DoubleTap)	);
+		MapKey	(&Throttle,	APALT,		EXEC("AWACS_Cycle_Rdo(9,1);")	);
+		}	
+else
+		{
+		MapKey	(&Throttle,	APPAT,		EXEC("AWACS_Cycle_Rdo(1,1);")	);
+		MapKey	(&Throttle,	APAH,		TEMPO(0,EXEC("AWACS_Cycle_Rdo(2,1);"),DoubleTap)	);
+		MapKey	(&Throttle,	APALT,		EXEC("AWACS_Cycle_Rdo(3,1);")	);
+		}		
+}
+
+int AWACS_Cycle_Rdo(int rdo, int force=0, int index=11)	//force is a carry-through argument
+{
+if (Script_Debug) printf("rdo(init) = %i\xa",rdo);
+if ((rdo < 0) | (rdo > index-1))	
+	{
+	if (rdo < 0)	
+		{
+		if (SRS_AWACS_Cur == 1) 		rdo = index-1;	//forces jump to rdo10 over ICS
+		else							rdo = (SRS_AWACS_Cur + (index-1))%index;
+		}
+	else
+		{
+		if (SRS_AWACS_Cur == index-1)	rdo = 1;			//forces jump to rdo1 over ICS
+		else							rdo = (SRS_AWACS_Cur + 1)%index;
+		}
+
+	}
+SRS_AWACS_Cur=rdo;
+ActKey(KEYON+PULSE+X(SRS_AWACS_Array,SRS_AWACS_Cur));
+AWACS_PTT_Map();
+if (Script_Debug) printf("SRS_AWACS_Cur = %i\xa rdo(fin) = %i\xa",SRS_AWACS_Cur,rdo);
+if ((force > -1) & (Rdo_LED_AWACS > 0)) AWACS_LED(SRS_AWACS_Cur,force);		//Rdo_LED_AWACS added in 2.46
+}
+
+int AWACS_LED(int rdo, int force=0, int defer=0, int delay=50)
+{
+int time=0;
+if (	(AirBrkFlash > -1) & ((force) | (	(!LMFD[GAINU]) & (!LMFD[GAIND]) & (!RMFD[GAINU]) & (!RMFD[GAIND])	&	(!Throttle[MSL]) & (!Throttle[MSR]) & (!Throttle[CHF]) & (!Throttle[CHB]) & ((!HCougar[T4]) & (!HCougar[T5]))	)	)	)
+	{
+	if 		(rdo == 1)	Lights_Four(0,0,0,1, LED_Clock+defer, delay);
+	else if (rdo == 2)	Lights_Four(0,0,1,0, LED_Clock+defer, delay);
+	else if (rdo == 3)	Lights_Four(0,0,1,1, LED_Clock+defer, delay);
+	else if (rdo == 4)	Lights_Four(0,1,0,0, LED_Clock+defer, delay);
+	else if (rdo == 5)	Lights_Four(0,1,0,1, LED_Clock+defer, delay);
+	else if (rdo == 6)	Lights_Four(0,1,1,0, LED_Clock+defer, delay);
+	else if (rdo == 7)	Lights_Four(0,1,1,1, LED_Clock+defer, delay);
+	else if (rdo == 8)	Lights_Four(1,0,0,0, LED_Clock+defer, delay);
+	else if (rdo == 9)	Lights_Four(1,0,0,1, LED_Clock+defer, delay);
+	else if (rdo == 10)	Lights_Four(1,0,1,0, LED_Clock+defer, delay);	
+	else				Lights_Four(0,0,0,0, LED_Clock+defer, delay);
+
+//	LED_Clock = LED_Clock+defer+(5*delay);
+//	if (Script_Debug > 0) printf("AWACS: LED_Clock = %i\xa",LED_Clock);
+
+//	while (LED_Clock > 0)
+//		{
+//		DeferCall(time,&LED_Clock_Countdown,delay);	//every 50ms reduces value by 50ms
+//		time = time + delay;
+//		if (Script_Debug > 0) printf("AWACS: time = %i\xa",time);
+//		}
+	}
+}
+int AWACS_PTT_Map()
+{
+if (WarthogStick > 0)
+	{
+	if (!TARS_PTT_Common)
+		{
+		MapKey	(&Joystick, TG2, CHAIN(UP+DX21,D(ModDelay),X(SRS_AWACS_Array,SRS_AWACS_Cur))	);	//force if not PTT Common (otherwise uses TG1)
+		MapKey	(&Throttle, BSB, 	X(SRS_AWACS_Array,SRS_AWACS_Cur)	);
+		MapKey	(&Throttle,	APENG,	X(SRS_AWACS_Array,SRS_AWACS_Cur)	);
+		if (!Throttle[SPDF])	MapKey	(&Throttle, MSD, X(SRS_AWACS_Array,SRS_AWACS_Cur)	);	
+		}
+	else
+		{
+		MapKey	(&Joystick, TG2, 0);
+		MapKey	(&Throttle,	APENG,	DX21	);
+		if (!Throttle[SPDF])	MapKey(&Throttle, MSD, DX21);
+		}
+	}
+else
+	{
+	if (!TARS_PTT_Common)
+		{
+		MapKey	(&HCougar, TG2, CHAIN(UP+DX21,D(ModDelay),X(SRS_AWACS_Array,SRS_AWACS_Cur))	);	//force if not PTT Common (otherwise uses TG1)
+		MapKey	(&HCougar, T7,	X(SRS_AWACS_Array,SRS_AWACS_Cur)	);
+		if (!HCougar[T10])	MapKey	(&HCougar, T2, X(SRS_AWACS_Array,SRS_AWACS_Cur)	);
+		}
+	else
+		{
+		MapKey	(&HCougar, TG2, 0);
+		
+		if (!HCougar[T10])	MapKey	(&HCougar, T2,	DX21);
+		}
+	}
+}
+int AWACS_CommSw_Map(int awacs)
+{
+if (awacs)
+	{
+	if (WarthogThrottle > 0)
+		{
+		if (!TARS_PTT_Common)
+				MapKey(&Throttle, MSD, X(SRS_AWACS_Array,SRS_AWACS_Cur)	);
+		else	MapKey(&Throttle, MSD, TS3PTT_DX);
+		MapKey	(&Throttle, MSU,	PTT_Common);	//TS3PTT_DX);
+		MapKey	(&Throttle, MSR,	EXEC("AWACS_Cycle_Rdo(11);")	);	
+		MapKey	(&Throttle, MSL,	EXEC("AWACS_Cycle_Rdo(-1);")	);
+//		MapKey	(&Throttle, MSP,	Rdo_ICS);	
+		if (Rdo_LED_AWACS > 0)
+			{
+			MapKeyR	(&Throttle,	MSR,	EXEC("DeferCall(5*LED_Delay,&AWACS_LED,SRS_AWACS_Cur);")	);
+			MapKeyR	(&Throttle,	MSL,	EXEC("DeferCall(5*LED_Delay,&AWACS_LED,SRS_AWACS_Cur);")	);
+			}
+		else
+			{
+			MapKeyR	(&Throttle, MSR,	0);
+			MapKeyR	(&Throttle, MSL,	0);
+			}
+		MapKeyR	(&Throttle, MSU,	0);
+		MapKeyR	(&Throttle, MSD,	0);
+		MapKeyR	(&Throttle, MSP,	0);		
+		}
+	else		
+		{
+		if (!TARS_PTT_Common)
+		
+				MapKey(&HCougar, T2, X(SRS_AWACS_Array,SRS_AWACS_Cur)	);
+		else	MapKey(&HCougar, T2, TS3PTT_DX);
+		
+		MapKey	(&HCougar, T3,	Rdo_ICS);
+		MapKey	(&HCougar, T4,	EXEC("AWACS_Cycle_Rdo(11);")	);	
+		MapKey	(&HCougar, T5,	EXEC("AWACS_Cycle_Rdo(-1);")	);	
+		
+		MapKeyR	(&HCougar, T2,	0);
+		MapKeyR	(&HCougar, T3,	0);
+		if (Rdo_LED_AWACS > 0)
+			{
+			MapKeyR	(&HCougar, T4,	EXEC("DeferCall(5*LED_Delay,&AWACS_LED,SRS_AWACS_Cur);")	);	
+			MapKeyR	(&HCougar, T5,	EXEC("DeferCall(5*LED_Delay,&AWACS_LED,SRS_AWACS_Cur);")	);
+			}
+		else
+			{
+			MapKeyR	(&HCougar, T4,	0);
+			MapKeyR	(&HCougar, T5,	0);
+			}		
+		}
+	}
+else Complex_A10C_Comm_Init(1,1);	
+}
+
+int AWACS_Stick_Map(int latc, int wav = 1)
+{
+if (latc < 0) latc = abs(AWACS_LATC_S_Cur - 1);
+printf("Map Stick(");
+if (wav) PlayWav("stick.wav");
+if (latc > 0)		//LotATC
+	{
+	printf("LotATC)...");
+	if (wav) DeferCall(700,&PlayWav,"latc.wav");
+	if (WarthogStick > 0)
+		{
+		printf("WH Stick\xa");
+		MapKeyUMD(&Joystick,S2, 	DX11,
+									USB_RIGHTSHIFT,
+									USB_RIGHTSHIFT);	
+		MapKeyUMD(&Joystick,S3,		0,
+									USB_RIGHTALT,
+									USB_RIGHTALT);								
+		MapKeyUMD(&Joystick,S4, 	DX29,
+									USB_RIGHTCONTROL,
+									USB_RIGHTCONTROL);	
+									
+		MapKeyIOUMD(&Joystick,H3U,	DX4,DX4,
+									LATC_ShowCircle,	USB_RIGHTCONTROL,
+									LATC_ShowCircle,	LATC_ShowCircle);
+		MapKeyIOUMD(&Joystick,H3D,	DX15,DX15,
+									LATC_ShowLblBack,	USB_RIGHTALT,
+									LATC_ShowLblBack,	LATC_ShowLblBack);
+		MapKeyIOUMD(&Joystick,H3L,	DX14,DX14,
+									LATC_RangeRings,	USB_RIGHTSHIFT,
+									LATC_RangeRings,	LATC_RangeRings);
+		MapKeyIOUMD(&Joystick,H3R,	DX5,DX5,
+									LATC_BullsRef,	R_CTL+USB_RIGHTSHIFT,
+									LATC_BullsRef,	LATC_BullsRef);
+		}
+	else
+		{
+		printf("HC Stick\xa");
+		MapKeyUMD(&HCougar,S2,	 	DX11,
+									USB_RIGHTSHIFT,
+									USB_RIGHTSHIFT);	
+		MapKeyUMD(&HCougar,S3,		0,
+									USB_RIGHTALT,
+									USB_RIGHTALT);								
+		MapKeyUMD(&HCougar,S4, 		DX29,
+									USB_RIGHTCONTROL,
+									USB_RIGHTCONTROL);	
+									
+		MapKeyIOUMD(&HCougar,H3U,	DX4,DX4,
+									LATC_ShowCircle,	USB_RIGHTCONTROL,
+									LATC_ShowCircle,	USB_RIGHTCONTROL);
+		MapKeyIOUMD(&HCougar,H3D,	DX15,DX15,
+									LATC_ShowLblBack,	USB_RIGHTALT,
+									LATC_ShowLblBack,	USB_RIGHTALT);
+		MapKeyIOUMD(&HCougar,H3L,	DX14,DX14,
+									LATC_RangeRings,	USB_RIGHTSHIFT,
+									LATC_RangeRings,	USB_RIGHTSHIFT);
+		MapKeyIOUMD(&HCougar,H3R,	DX5,DX5,
+									LATC_BullsRef,	R_CTL+USB_RIGHTSHIFT,
+									LATC_BullsRef,	R_CTL+USB_RIGHTSHIFT);
+		
+		//H1_Init(0, PadlockEnabled, ProfID, -1);		//forced to prevent unmapping 
+		}
+	}
+else		//F10 View
+	{
+	printf("F10 View)...");
+	if (wav) DeferCall(700,&PlayWav,"f10.wav");
+	if (WarthogStick > 0)
+		{
+		printf("WH Stick\xa");
+		MapKeyUMD(&Joystick,S2, 	DX11,
+									MOUSE_LEFT,
+									MOUSE_LEFT);	
+		MapKeyUMD(&Joystick,S3,		0,
+									PTT_Common,		//X(SRS_AWACS_Array,0),
+									PTT_Common);	//X(SRS_AWACS_Array,0));								
+		MapKeyUMD(&Joystick,S4, 	DX29,
+									MOUSE_RIGHT,
+									MOUSE_RIGHT);	
+									
+		MapKeyUMD(&Joystick,H3U,	DX4,
+									USB_RIGHTCONTROL,
+									USB_RIGHTCONTROL);
+		MapKeyUMD(&Joystick,H3D,	DX15,
+									USB_RIGHTALT,
+									USB_RIGHTALT);
+		MapKeyUMD(&Joystick,H3L,	DX14,
+									R_CTL+USB_RIGHTSHIFT,
+									R_CTL+USB_RIGHTSHIFT);
+		MapKeyUMD(&Joystick,H3R,	DX5,
+									USB_RIGHTSHIFT,
+									USB_RIGHTSHIFT);
+		}
+	else
+		{
+		printf("HC Stick\xa");
+		MapKeyUMD(&HCougar,S2, 		DX11,
+									MOUSE_LEFT,
+									MOUSE_LEFT);	
+		MapKeyUMD(&HCougar,S3,		0,
+									PTT_Common,		//X(SRS_AWACS_Array,0),
+									PTT_Common);	//X(SRS_AWACS_Array,0));								
+		MapKeyUMD(&HCougar,S4, 		DX29,
+									MOUSE_RIGHT,
+									MOUSE_RIGHT);	
+									
+		MapKeyUMD(&HCougar,	H3U,	DX4,
+									USB_RIGHTCONTROL,
+									USB_RIGHTCONTROL);
+		MapKeyUMD(&HCougar,	H3D,	DX15,
+									USB_RIGHTALT,
+									USB_RIGHTALT);
+		MapKeyUMD(&HCougar,	H3L,	DX14,
+									R_CTL+USB_RIGHTSHIFT,
+									R_CTL+USB_RIGHTSHIFT);
+		MapKeyUMD(&HCougar,	H3R,	DX5,
+									USB_RIGHTSHIFT,
+									USB_RIGHTSHIFT);
+		
+		//H1_Init(0, PadlockEnabled, ProfID, -1);		//forced to prevent unmapping 
+		}
+	}
+AWACS_LATC_S_Cur = latc;
+}
+
+int AWACS_TQS_Map(int latc, int wav = 1, int delay = 2000)	//delay allows for stick call first (2000 is stick+latc long combo)
+{
+if (latc < 0) latc = abs(AWACS_LATC_TQS_Cur - 1);
+printf("Map TQS(");
+if (wav) DeferCall(delay,&PlayWav,"throttle.wav");
+if (latc > 0)		//LotATC
+	{
+	if (wav) DeferCall(delay+550,&PlayWav,"latc.wav");
+	printf("LotATC)\xa");
+		
+		MapKey	(&HCougar,	T1,	USB_RIGHTCONTROL);
+		MapKey	(&HCougar,	T6,	USB_RIGHTSHIFT);	
+	
+		MapAxis(&HCougar, IN_POSITION_AXIS_SLIDER2, DX_THROTTLE_AXIS, 	AXIS_NORMAL, MAP_ABSOLUTE);
+		MapAxis(&HCougar, RDR_Y, 					DX_YROT_AXIS, 		AXIS_NORMAL, MAP_ABSOLUTE);
+
+	}
+else		//F10 View
+	{
+	if (wav) DeferCall(delay+550,&PlayWav,"f10.wav");
+	printf("F10 View)\xa");
+	
+		MapKey	(&HCougar,	T1,	MOUSE_LEFT);
+		MapKey	(&HCougar,	T6,	MOUSE_RIGHT);
+	
+		MapAxis(&HCougar, IN_POSITION_AXIS_SLIDER2, MOUSE_X_AXIS, 		AXIS_NORMAL, MAP_RELATIVE);
+		MapAxis(&HCougar, RDR_Y, 					MOUSE_Y_AXIS, 		AXIS_NORMAL, MAP_RELATIVE);
+	}
+AWACS_LATC_TQS_Cur = latc;
+}
+
+int AWACS_Throttle_Map(int latc, int wav = 1)
+{
+printf("Map WHT(");
+if (wav) PlayWav("throttle.wav");
+if (latc)		//LotATC
+	{
+	printf("LotATC)\xa");
+	if (wav) DeferCall(550,&PlayWav,"latc.wav");
+	MapKey	(&Throttle, SC, 	USB_RIGHTSHIFT);	
+	MapKey	(&Throttle,	LTB,	USB_RIGHTCONTROL);
+				
+	MapKeyIOUMD(&Throttle,	CSU,	LATC_ShowCircle,	USB_RIGHTCONTROL,
+									LATC_ShowCircle,	USB_RIGHTCONTROL,
+									LATC_ShowCircle,	LATC_ShowCircle);
+	MapKeyIOUMD(&Throttle,	CSD,	LATC_ShowLblBack,	USB_RIGHTALT,
+									LATC_ShowLblBack,	USB_RIGHTALT,
+									LATC_ShowLblBack,	LATC_ShowLblBack);
+	MapKeyIOUMD(&Throttle,	CSL,	LATC_BullsRef,		R_CTL+USB_RIGHTSHIFT,
+									LATC_BullsRef,		R_CTL+USB_RIGHTSHIFT,
+									LATC_BullsRef,		LATC_BullsRef);
+	MapKeyIOUMD(&Throttle,	CSR,	LATC_RangeRings,	USB_RIGHTSHIFT,
+									LATC_RangeRings,	USB_RIGHTSHIFT,
+									LATC_RangeRings,	LATC_RangeRings);
+	MapKey		(&Throttle, MSP,	CHAIN(Rdo_ICS,		USB_RIGHTALT));
+	if (Throttle[EOLNORM])	AWACS_AnalogMouse_Set(1,0);	//conditional because it also kills the stick
+	}
+else		//F10 View
+	{
+	printf("F10 View)");
+	if (wav) DeferCall(550,&PlayWav,"f10.wav");
+	//MapAxis(&Throttle, SCX, MOUSE_X_AXIS, AXIS_NORMAL, MAP_RELATIVE);
+			
+	MapKey	(&Throttle, SC, 	MOUSE_LEFT);	
+	MapKey	(&Throttle,	LTB,	MOUSE_RIGHT);
+	MapKey	(&Throttle, MSP,	Rdo_ICS);
+	if (Throttle[EOLNORM])					AWACS_AnalogMouse_Set(1,1);	//conditional because it also kills the stick (also why else is commented out)
+	//else									AWACS_AnalogMouse_Set(1,0);
+	if (Throttle[PSF] | (Throttle[PSB]))	AWACS_ZSlew_Set(1,1);
+	else									AWACS_ZSlew_Set(1,0);
+	}
+}
+int AWACS_HC_LATC_Map(int latc, int wav = 1)	//-1 to toggle on off (default joystick), 3 to toggle js/throttle.  wav is a passthru argument.
+{
+if (latc < 0) 		//Master toggle
+	{
+	latc = abs(AWACS_LATC_Cur - 1);
+	AWACS_Stick_Map(latc,wav);	//toggles
+	AWACS_TQS_Map(0,wav);		//forces off (default js mode)
+	AWACS_LATC_Cur = latc;
+	}
+else if ((latc > 2) & (AWACS_LATC_Cur != 0))	//toggles both if AWACS_LATC_Cur active (S3+S1 Long)
+	{
+	AWACS_Stick_Map(-1,wav);	
+	AWACS_TQS_Map(-1,wav);			
+	}
+else if (latc == 2)			//forces TQS on	stick off
+	{
+	AWACS_Stick_Map(0,wav);
+	AWACS_TQS_Map(1,wav);		
+	}
+else if (latc == 1)			//forces stick on tqs off
+	{
+	AWACS_Stick_Map(1,wav);
+	AWACS_TQS_Map(0,wav);			
+	}
+else						//forces both off
+	{
+	AWACS_Stick_Map(0,wav);
+	AWACS_TQS_Map(0,wav);			
+	}
+}
+
+int AWACS_ZSlew_Set(int sc, int z)	//sc is whether sc is selected (0 for H1), z is whether mousewheel is selected (0 for mouse)
+{
+if (sc)
+	{
+	if (z)
+		{
+		MapKey	(&Throttle,	CSU,	AXIS(MOUSE_Z_AXIS,	 Mouse_Zincr_H1, Mouse_Zdelay_H1));
+		MapKey	(&Throttle,	CSD,	AXIS(MOUSE_Z_AXIS,	-Mouse_Zincr_H1, Mouse_Zdelay_H1));
+
+		MapKey	(&Throttle,	CSL,	MOUSE_CENTER);
+		MapKey	(&Throttle,	CSR,	MOUSE_CENTER);	
+		}
+	else
+		{
+		if (Mouse_Y_Rev > 0)
+			{
+			MapKeyIOUMD(&Throttle,	CSD,	AXIS(MOUSE_Z_AXIS,	-Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Y_AXIS,	-Mouse_Incr_H1, Mouse_Delay_H1),
+											AXIS(MOUSE_Z_AXIS,	-Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Y_AXIS,	-Mouse_Incr_H1, Mouse_Delay_H1),
+											AXIS(MOUSE_Z_AXIS,	-Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Z_AXIS,	-Mouse_Zincr_H1,Mouse_Zdelay_H1));
+			MapKeyIOUMD(&Throttle,	CSU,	AXIS(MOUSE_Z_AXIS,	 Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Y_AXIS,	 Mouse_Incr_H1, Mouse_Delay_H1),
+											AXIS(MOUSE_Z_AXIS,	 Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Y_AXIS,	 Mouse_Incr_H1, Mouse_Delay_H1),
+											AXIS(MOUSE_Z_AXIS,	 Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Z_AXIS,	 Mouse_Zincr_H1,Mouse_Zdelay_H1));
+			}
+		else
+			{
+			MapKeyIOUMD(&Throttle,	CSU,	AXIS(MOUSE_Z_AXIS,	 Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Y_AXIS,	-Mouse_Incr_H1,	Mouse_Delay_H1),
+											AXIS(MOUSE_Z_AXIS,	 Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Y_AXIS,	-Mouse_Incr_H1,	Mouse_Delay_H1),
+											AXIS(MOUSE_Z_AXIS,	 Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Z_AXIS,	 Mouse_Zincr_H1,Mouse_Zdelay_H1));
+			MapKeyIOUMD(&Throttle,	CSD,	AXIS(MOUSE_Z_AXIS,	-Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Y_AXIS,	 Mouse_Incr_H1, Mouse_Delay_H1),
+											AXIS(MOUSE_Z_AXIS,	-Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Y_AXIS,	 Mouse_Incr_H1, Mouse_Delay_H1),
+											AXIS(MOUSE_Z_AXIS,	-Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Z_AXIS,	-Mouse_Zincr_H1,Mouse_Zdelay_H1));
+			}
+		MapKeyIOUMD(&Throttle,	CSL,	MOUSE_CENTER,	AXIS(MOUSE_X_AXIS,	-Mouse_Incr_H1, Mouse_Delay_H1),
+										MOUSE_CENTER,	AXIS(MOUSE_X_AXIS,	-Mouse_Incr_H1, Mouse_Delay_H1),
+										MOUSE_CENTER,	MOUSE_CENTER);
+		MapKeyIOUMD(&Throttle,	CSR,	MOUSE_CENTER,	AXIS(MOUSE_X_AXIS,	 Mouse_Incr_H1, Mouse_Delay_H1),
+										MOUSE_CENTER,	AXIS(MOUSE_X_AXIS,	 Mouse_Incr_H1, Mouse_Delay_H1),
+										MOUSE_CENTER,	MOUSE_CENTER);
+		}
+	}
+else if (WarthogStick > 0)
+	{
+	if (z)
+		{
+		MapKey	(&Joystick,	H1U,	AXIS(MOUSE_Z_AXIS,	 Mouse_Zincr_H1, Mouse_Zdelay_H1));
+		MapKey	(&Joystick,	H1D,	AXIS(MOUSE_Z_AXIS,	-Mouse_Zincr_H1, Mouse_Zdelay_H1));
+
+		MapKey	(&Joystick,	H1L,	MOUSE_CENTER);
+		MapKey	(&Joystick,	H1R,	MOUSE_CENTER);	
+		}
+	else
+		{
+		if (Mouse_Y_Rev > 0)
+			{
+			MapKeyIOUMD(&Joystick,	H1D,	AXIS(MOUSE_Z_AXIS,	-Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Y_AXIS,	-Mouse_Incr_H1, Mouse_Delay_H1),
+											AXIS(MOUSE_Z_AXIS,	-Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Y_AXIS,	-Mouse_Incr_H1, Mouse_Delay_H1),
+											AXIS(MOUSE_Z_AXIS,	-Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Z_AXIS,	-Mouse_Zincr_H1,Mouse_Zdelay_H1));
+			MapKeyIOUMD(&Joystick,	H1U,	AXIS(MOUSE_Z_AXIS,	 Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Y_AXIS,	 Mouse_Incr_H1, Mouse_Delay_H1),
+											AXIS(MOUSE_Z_AXIS,	 Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Y_AXIS,	 Mouse_Incr_H1, Mouse_Delay_H1),
+											AXIS(MOUSE_Z_AXIS,	 Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AAXIS(MOUSE_Z_AXIS,	 Mouse_Zincr_H1,Mouse_Zdelay_H1));
+			}
+		else
+			{
+			MapKeyIOUMD(&Joystick,	H1U,	AXIS(MOUSE_Z_AXIS,	 Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Y_AXIS,	-Mouse_Incr_H1,	Mouse_Delay_H1),
+											AXIS(MOUSE_Z_AXIS,	 Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Y_AXIS,	-Mouse_Incr_H1,	Mouse_Delay_H1),
+											AXIS(MOUSE_Z_AXIS,	 Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Z_AXIS,	 Mouse_Zincr_H1,Mouse_Zdelay_H1));
+			MapKeyIOUMD(&Joystick,	H1D,	AXIS(MOUSE_Z_AXIS,	-Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Y_AXIS,	 Mouse_Incr_H1, Mouse_Delay_H1),
+											AXIS(MOUSE_Z_AXIS,	-Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Y_AXIS,	 Mouse_Incr_H1, Mouse_Delay_H1),
+											AXIS(MOUSE_Z_AXIS,	-Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Z_AXIS,	-Mouse_Zincr_H1,Mouse_Zdelay_H1));
+			}
+		MapKeyIOUMD(&Joystick,	H1L,	MOUSE_CENTER,	AXIS(MOUSE_X_AXIS,	-Mouse_Incr_H1, Mouse_Delay_H1),
+										MOUSE_CENTER,	AXIS(MOUSE_X_AXIS,	-Mouse_Incr_H1, Mouse_Delay_H1),
+										MOUSE_CENTER,	MOUSE_CENTER);
+		MapKeyIOUMD(&Joystick,	H1R,	MOUSE_CENTER,	AXIS(MOUSE_X_AXIS,	 Mouse_Incr_H1, Mouse_Delay_H1),
+										MOUSE_CENTER,	AXIS(MOUSE_X_AXIS,	 Mouse_Incr_H1, Mouse_Delay_H1),
+										MOUSE_CENTER,	MOUSE_CENTER);
+		}
+	}
+else	//in case Cougar stick, wh throttle
+	{
+	if (z)
+		{
+		MapKey	(&HCougar,	H1U,	AXIS(MOUSE_Z_AXIS,	 Mouse_Zincr_H1, Mouse_Zdelay_H1));
+		MapKey	(&HCougar,	H1D,	AXIS(MOUSE_Z_AXIS,	-Mouse_Zincr_H1, Mouse_Zdelay_H1));
+
+		MapKey	(&HCougar,	H1L,	MOUSE_CENTER);
+		MapKey	(&HCougar,	H1R,	MOUSE_CENTER);	
+		}
+	else
+		{
+		if (Mouse_Y_Rev > 0)
+			{
+			MapKeyIOUMD(&HCougar,	H1D,	AXIS(MOUSE_Z_AXIS,	-Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Y_AXIS,	-Mouse_Incr_H1, Mouse_Delay_H1),
+											AXIS(MOUSE_Z_AXIS,	-Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Y_AXIS,	-Mouse_Incr_H1, Mouse_Delay_H1),
+											AXIS(MOUSE_Z_AXIS,	-Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Z_AXIS,	-Mouse_Zincr_H1,Mouse_Zdelay_H1));
+			MapKeyIOUMD(&HCougar,	H1U,	AXIS(MOUSE_Z_AXIS,	 Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Y_AXIS,	 Mouse_Incr_H1, Mouse_Delay_H1),
+											AXIS(MOUSE_Z_AXIS,	 Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Y_AXIS,	 Mouse_Incr_H1, Mouse_Delay_H1),
+											AXIS(MOUSE_Z_AXIS,	 Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Z_AXIS,	 Mouse_Zincr_H1,Mouse_Zdelay_H1));
+			}
+		else
+			{
+			MapKeyIOUMD(&HCougar,	H1U,	AXIS(MOUSE_Z_AXIS,	 Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Y_AXIS,	-Mouse_Incr_H1,	Mouse_Delay_H1),
+											AXIS(MOUSE_Z_AXIS,	 Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Y_AXIS,	-Mouse_Incr_H1,	Mouse_Delay_H1),
+											AXIS(MOUSE_Z_AXIS,	 Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Z_AXIS,	 Mouse_Zincr_H1,Mouse_Zdelay_H1));
+			MapKeyIOUMD(&HCougar,	H1D,	AXIS(MOUSE_Z_AXIS,	-Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Y_AXIS,	 Mouse_Incr_H1, Mouse_Delay_H1),
+											AXIS(MOUSE_Z_AXIS,	-Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Y_AXIS,	 Mouse_Incr_H1, Mouse_Delay_H1),
+											AXIS(MOUSE_Z_AXIS,	-Mouse_Zincr_H1,Mouse_Zdelay_H1),
+											AXIS(MOUSE_Z_AXIS,	-Mouse_Zincr_H1,Mouse_Zdelay_H1));
+			}
+		MapKeyIOUMD(&HCougar,	H1L,	MOUSE_CENTER,	AXIS(MOUSE_X_AXIS,	-Mouse_Incr_H1, Mouse_Delay_H1),
+										MOUSE_CENTER,	AXIS(MOUSE_X_AXIS,	-Mouse_Incr_H1, Mouse_Delay_H1),
+										MOUSE_CENTER,	MOUSE_CENTER);
+		MapKeyIOUMD(&HCougar,	H1R,	MOUSE_CENTER,	AXIS(MOUSE_X_AXIS,	 Mouse_Incr_H1, Mouse_Delay_H1),
+										MOUSE_CENTER,	AXIS(MOUSE_X_AXIS,	 Mouse_Incr_H1, Mouse_Delay_H1),
+										MOUSE_CENTER,	MOUSE_CENTER);
+		}
+	}
+}
+
+int AWACS_AnalogMouse_Set(int sc, int mouse)	//sc is whether SC is mouse (0 for stick), mouse is whether mouse or joystick axes
+{
+if (mouse > 0) mouse = 1;		//error trap bounds mouse to logical argument
+else if (mouse < 0) mouse = 0;
+
+if (sc)
+	{
+	printf("      Axis mapping Warthog SC...");
+	if (mouse)
+		{
+		if (Mouse_Y_Rev > 0)
+			{
+			printf("Rev Y...");
+			MapAxis	(&Throttle, SCY, 	MOUSE_Y_AXIS, 		 AXIS_REVERSED, MAP_RELATIVE);
+			}
+		else
+			{
+			printf("Nrm Y...");
+			MapAxis	(&Throttle, SCY, 	MOUSE_Y_AXIS, 		 AXIS_NORMAL, 	MAP_RELATIVE);
+			}
+		MapAxis	(&Throttle, SCX, 	MOUSE_X_AXIS, 		 AXIS_NORMAL, 	MAP_RELATIVE);
+		}
+	else
+		{
+		MapAxis(&Throttle, SCX, DX_XROT_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
+		MapAxis(&Throttle, SCY, DX_YROT_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
+		}
+	}
+else if (WarthogStick > 0)
+	{
+	printf("      Axis mapping Warthog Stick...");
+		if (mouse)
+			{
+			printf("Mouse...");
+			MapAxis(&Joystick, JOYX, MOUSE_X_AXIS, AXIS_NORMAL, MAP_RELATIVE);
+//			if (Mouse_Y_Rev > 0)
+//				{
+//				printf("Rev Y\xa");
+//				MapAxis(&Joystick, JOYY, MOUSE_Y_AXIS, AXIS_REVERSED, MAP_RELATIVE);
+//				}
+//			else
+//				{
+//				printf("Nrm Y\xa");
+				MapAxis(&Joystick, JOYY, MOUSE_Y_AXIS, AXIS_NORMAL, MAP_RELATIVE);
+//				}
+			SetSCurve(&Joystick, JOYX,
+			0, //Left Deadzone
+			Mouse_DZ_WHS, //Center Deadzone
+			0, //Right Deadzone
+			Mouse_Curve_J, //Curve
+			0 //Scale/zoom
+			);			
+				
+			SetSCurve(&Joystick, JOYY,
+			0, //Left Deadzone
+			Mouse_DZ_WHS, //Center Deadzone
+			0, //Right Deadzone
+			Mouse_Curve_J, //Curve
+			0 //Scale/zoom
+			);
+			}
+		else
+			{
+			MapAxis(&Joystick, JOYX, DX_X_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
+			MapAxis(&Joystick, JOYY, DX_Y_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
+			SetSCurve(&Joystick, JOYX, 0, 0, 0, 0, 0	);			
+			SetSCurve(&Joystick, JOYY, 0, 0, 0, 0, 0	);
+			}
+	}
+else
+	{
+	printf("      Axis mapping Cougar Stick...");
+		if (mouse)
+			{
+			printf("Mouse...");
+			MapAxis(&HCougar, JOYX, MOUSE_X_AXIS, AXIS_NORMAL, MAP_RELATIVE);
+//			if (Mouse_Y_Rev > 0)
+//				{
+//				printf("Rev Y\xa");
+//				MapAxis(&HCougar, JOYY, MOUSE_Y_AXIS, AXIS_REVERSED, MAP_RELATIVE);
+//				}
+//			else
+//				{
+//				printf("Nrm Y\xa");
+				MapAxis(&HCougar, JOYY, MOUSE_Y_AXIS, AXIS_NORMAL, MAP_RELATIVE);
+//				}
+
+
+
+			SetSCurve(&HCougar, JOYX,
+			0, //Left Deadzone
+			Mouse_DZ_FLCS, //Center Deadzone
+			0, //Right Deadzone
+			Mouse_Curve_J, //Curve
+			0 //Scale/zoom
+			);			
+				
+			SetSCurve(&HCougar, JOYY,
+			0, //Left Deadzone
+			Mouse_DZ_FLCS, //Center Deadzone
+			0, //Right Deadzone
+			Mouse_Curve_J, //Curve
+			0 //Scale/zoom
+			);	
+			}
+		else
+			{
+			MapAxis(&HCougar, JOYX, DX_X_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
+			MapAxis(&HCougar, JOYY, DX_Y_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
+			SetSCurve(&HCougar, JOYX, 0, 0, 0, 0, 0	);			
+			SetSCurve(&HCougar, JOYY, 0, 0, 0, 0, 0	);
+			}
+	}
+printf("Done!\xa");
+}
+

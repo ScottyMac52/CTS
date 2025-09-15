@@ -1,0 +1,219 @@
+//======================================================================
+//			Master file for controlling LEDs on Cougar MFDs.
+//						base code  by ivanwfr
+//						with edits by Home Fries
+//						last updated: 31JAN2019
+//
+//	Change Log:
+//	0.1		Initial Beta Release
+//	0.2		Refined flashing code
+//	0.3		Added MFD Backlighting
+//	1.0		Added delay to macro lighting to reduce likelihood of crash
+//	1.01	Added DeferCall capable routines for backlighting
+//	2.29	Added Lights_Four()
+//
+//======================================================================
+
+//	Ideas for Future Implementation:
+//		A way to switch state (e.g. LED^) via GameOutput to reduce overhead on software
+
+//MFD Lighting Base Code
+//LFMD LED 1
+int Lights_LLED1(int state) // {{{
+{
+    if(state)
+		{
+		if(state==2)	GameOutput(&LMFD, OUT_ID_LED_1, 2);		// toggle
+		else 			GameOutput(&LMFD, OUT_ID_LED_1, 1);		// on
+		}	
+    else			GameOutput(&LMFD, OUT_ID_LED_1, 0);			// off
+}
+//LFMD LED 2
+int Lights_LLED2(int state) // {{{
+{
+    if(state)
+		{
+		if(state==2)	GameOutput(&LMFD, OUT_ID_LED_2, 2);		// toggle
+		else 			GameOutput(&LMFD, OUT_ID_LED_2, 1);		// on
+		}
+    else			GameOutput(&LMFD, OUT_ID_LED_2, 0);			// off
+}
+//RMFD LED 1
+int Lights_RLED1(int state) // {{{
+{
+    if(state)
+		{
+		if(state==2)	GameOutput(&RMFD, OUT_ID_LED_1, 2);		// toggle
+		else 			GameOutput(&RMFD, OUT_ID_LED_1, 1);		// on
+		}
+    else			GameOutput(&RMFD, OUT_ID_LED_1, 0);			// off
+}
+//RMFD LED 2
+int Lights_RLED2(int state) // {{{
+{
+    if(state)
+		{
+		if(state==2)	GameOutput(&RMFD, OUT_ID_LED_2, 2);		// toggle
+		else 			GameOutput(&RMFD, OUT_ID_LED_2, 1);		// on
+		}
+    else			GameOutput(&RMFD, OUT_ID_LED_2, 0);			// off
+}
+
+
+// LED FLASHING MODULE 
+
+int    flashing_L1 =			0;
+int    flashing_L2 =			0;
+int    flashing_R1 =			0;
+int    flashing_R2 =			0;
+
+
+//LMFD LED1
+int flashLLED1(int state=-1, int ms = 500) 
+{
+	if(state    < 0) flashing_L1 = (flashing_L1 == 0); // toggle
+	else			 flashing_L1 = state;			 // ...or comply
+	if(flashing_L1 > 0) flashingLLED1(ms);
+} 
+int flashingLLED1(int ms) 
+{
+	if(flashing_L1 > 0) {
+		GameOutput(&LMFD, OUT_ID_LED_1, 2);			// TOGGLE
+		DeferCall(ms, &flashingLLED1, ms);	// go on flashing
+	} else {
+		GameOutput(&LMFD, OUT_ID_LED_1, 0);			// STOP
+	}
+}
+
+//LMFD LED2
+int flashLLED2(int state=-1, int ms = 500) 
+{
+	if(state    < 0) flashing_L2 = (flashing_L2 == 0); // toggle
+	else			 flashing_L2 = state;			 // ...or comply
+	if(flashing_L2 > 0) flashingLLED2(ms);
+} 
+int flashingLLED2(int ms) 
+{
+	if(flashing_L2 > 0) {
+		GameOutput(&LMFD, OUT_ID_LED_2, 2);			// TOGGLE
+		DeferCall(ms, &flashingLLED2, ms);	// go on flashing
+	} else {
+		GameOutput(&LMFD, OUT_ID_LED_2, 0);			// STOP
+	}
+}
+
+//RMFD LED1
+int flashRLED1(int state=-1, int ms = 500) 
+{
+	if(state    < 0) flashing_R1 = (flashing_R1 == 0); // toggle
+	else			 flashing_R1 = state;			 // ...or comply
+	if(flashing_R1 > 0) flashingRLED1(ms);
+} 
+int flashingRLED1(int ms) 
+{
+	if(flashing_R1 > 0) {
+		GameOutput(&RMFD, OUT_ID_LED_1, 2);			// TOGGLE
+		DeferCall(ms, &flashingRLED1, ms);	// go on flashing
+	} else {
+		GameOutput(&RMFD, OUT_ID_LED_1, 0);			// STOP
+	}
+}
+
+//RMFD LED2
+int flashRLED2(int state=-1, int ms = 500) 
+{
+	if(state    < 0) flashing_R2 = (flashing_R2 == 0); // toggle
+	else			 flashing_R2 = state;			 // ...or comply
+	if(flashing_R2 > 0) flashingRLED2(ms);
+} 
+int flashingRLED2(int ms) 
+{
+	if(flashing_R2 > 0) {
+		GameOutput(&RMFD, OUT_ID_LED_2, 2);			// TOGGLE
+		DeferCall(ms, &flashingRLED2, ms);	// go on flashing
+	} else {
+		GameOutput(&RMFD, OUT_ID_LED_2, 0);			// STOP
+	}
+}
+
+//MFD Backlighting (added in 0.3)
+int MFD_Backlight(alias o, int intensity)
+{
+    GameOutput(&o, OUT_ID_LED_INTENSITY, intensity);
+    GameOutput(&o, OUT_ID_LED_BACKLIGHT, 1); //Sleep(500);
+}
+
+
+//End Base Code
+
+
+//Macro States
+int flashLLED1_250(int state)	//added to allow 250ms cycle time with DeferCall
+{
+flashLLED1(state,250);
+}
+int flashLLED2_250(int state)	//added to allow 250ms cycle time with DeferCall
+{
+flashLLED2(state,250);
+}
+int flashRLED1_250(int state)	//added to allow 250ms cycle time with DeferCall
+{
+flashRLED1(state,250);
+}
+int flashRLED2_250(int state)	//added to allow 250ms cycle time with DeferCall
+{
+flashRLED2(state,250);
+}
+
+//Left MFD
+int Lights_LMFD(int state, int delay=50)
+{
+	Lights_LLED1(state);
+	DeferCall(delay,&Lights_LLED2,state);
+}
+
+//Right MFD
+int Lights_RMFD(int state, int delay=50)
+{
+	Lights_RLED1(state);
+	DeferCall(delay,&Lights_RLED2,state);
+}
+
+//Both MFDs
+int Lights_ALL(int state, int delay=50)
+{
+	Lights_LLED1(state);
+	DeferCall(delay, &Lights_LLED2, state);
+	DeferCall(2*delay,&Lights_RLED1,state);
+	DeferCall(3*delay,&Lights_RLED2,state);
+}	
+
+int Lights_Four(int l1, int l2, int r1, int r2, int defer=0, int delay=50)	//allows dynamic assignment.  Defer allows for defercall without requiring 4 arguments
+{
+	DeferCall(defer, &Lights_RLED1,	r1);
+	DeferCall(defer+delay, &Lights_RLED2, r2);
+	DeferCall(defer+2*delay,&Lights_LLED2,l2);
+	DeferCall(defer+3*delay,&Lights_LLED1,l1);	
+}
+
+//Backlighting DeferCalls
+int LMFD_Backlight(int intensity)
+{
+MFD_Backlight(&LMFD,intensity);
+}
+int RMFD_Backlight(int intensity)
+{
+MFD_Backlight(&RMFD,intensity);
+}
+//End Generic Light States
+
+
+//Timing Routine to prevent overlap
+int LED_Clock;
+
+int LED_Clock_Countdown(int delay=50)
+{
+LED_Clock = LED_Clock-delay;
+if (LED_Clock < 0) LED_Clock = 0;
+if (Script_Debug > 0) printf("LED_Clock = %i\xa",LED_Clock);
+}

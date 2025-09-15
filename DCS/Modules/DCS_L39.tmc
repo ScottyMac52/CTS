@@ -1,0 +1,988 @@
+//====================================================================
+//	DCS World MiG-15bis Fagot for HOTAS Cougar and Cougar MFDs
+//					by Don "Home Fries" Heumphreus
+//						last updated: 27OCT2021
+//
+//	Change Log:
+//	1.54	Initial Release
+//	1.56	Enabled WAV files for aircraft selection
+//	1.61	Added Warthog Lighting init
+//	1.66	Moved L-39 CommState_Off routines here
+//			Added MapKeyR for ROSB13-14 for compatibilty with Spitfire
+//	1.69	Updated CommState_Off() call
+//	2.02	Set FkeyPress=1 on init to prevent Commswitch activation on profile load
+//	2.10	Added VAICOM support
+//	2.21	Added NS430 compatibility
+//	2.28	Removed DX22/23 in favor of macro for SRS deconfliction (Cougar)
+//	2.29	Added MFDisplay module selection
+//			Replaced 4 MFD Led functions with Lights_Four()
+//	2.30	Added CurrentStation() to Init (force, no key)
+//	2.43	Removed Snapviews for VR (replacement function TBD)
+//			Added JF-17 to L39 Airbrake routines
+//			Increased Dim for czavar to 3 for end/null
+//			Added ability to switch stations on default load
+//	2.44	Added VR and Spyglass Zoom to VR
+//			Applied Acft Swap to S3+T9/SPDB Long instead of brake change if MFD_Count = 0 or VR.
+//	2.44a	Adjusted L39 airbrake routines to account for JF-17 and VR/No MFD
+//	2.46	Moved ROSB20 to MFD_Init()
+//	2.50b	Removed duplicate MapKeyR(0) mappings to free stack space.
+//	2.51	Removed Script_Debug print commands to free stack space.
+//	2.54	Removed LED flashing with momentary airbrake for profile stabilty.
+//	2.63	Added WHIdle_Enabled parameter to WH Idle commands
+//
+//
+//====================================================================
+
+//	Free DX 12-14 (HC only), (11 in use for gear center)
+
+int	Airbrake_Def_L39;
+int	L39_Cpt_Lts_Array;
+int	L39_Cpt_Lts_Cur;
+int	L39Z_Bombs_Armed;
+int L39Z_Rkt_Armed;
+
+int	DCS_L39C_Init()
+{
+DCS_L39_Init(2039);
+}
+int	DCS_L39ZA_Init()
+{
+DCS_L39_Init(2040);
+}
+
+
+
+int DCS_L39(int led, int sp, int prof = 2039, int stn = 1)
+{
+int dly;
+int sdly;
+
+if (TriggerZoom_state)
+	{
+	ProfileSwapDelay = 250;
+	TriggerZoom_toggle(0,1,0);
+	}
+else ProfileSwapDelay = 0;
+
+if (Adjust_Backlighting > 0)
+	{
+	MFD_Backlight(&LMFD,X(MFD_Lt,2));
+	MFD_Backlight(&RMFD,X(MFD_Lt,2));
+	}
+
+if (prof == 2040)
+	{
+	dly = 1950;
+	printf("DCS L-39ZA Albatross");
+	if (WarthogStick > 0)
+		{
+		if (stn > 1)	MapKeyR(&Joystick, S2,	EXEC("DCS_L39_Init(2040,2);"));
+		else			MapKeyR(&Joystick, S2,	EXEC("DCS_L39_Init(2040,1);"));
+		}
+	else
+		{
+		if (stn > 1)	MapKeyR(&HCougar, S2,	EXEC("DCS_L39_Init(2040,2);"));
+		else			MapKeyR(&HCougar, S2,	EXEC("DCS_L39_Init(2040,1);"));
+		}
+	if (sp > 0)	PlayWav("l39za.wav");
+	if (led > 0)		Lights_Four(0,1,1,1,	ProfileSwapDelay+LED_Delay);
+	}
+else
+	{
+	dly = 1500;
+	printf("DCS L-39C Albatross");
+	if (WarthogStick > 0)
+		{
+		if (stn > 1)	MapKeyR(&Joystick, S2,	EXEC("DCS_L39_Init(2039,2);"));
+		else			MapKeyR(&Joystick, S2,	EXEC("DCS_L39_Init(2039,1);"));
+		}
+	else
+		{
+		if (stn > 1)	MapKeyR(&HCougar, S2,	EXEC("DCS_L39_Init(2039,2);"));
+		else			MapKeyR(&HCougar, S2,	EXEC("DCS_L39_Init(2039,1);"));
+		}
+	if (sp > 0)	PlayWav("l39c.wav");
+	if (led > 0)		Lights_Four(0,0,1,1,	ProfileSwapDelay+LED_Delay);
+	}
+sdly = dly + 500;
+if (stn > 1)
+	{
+	printf(" (Rear)\xa");
+	DefaultStation_L39 = 2;	
+	if (sp > 0)
+		{
+		DeferCall(dly, &PlayWav,"station.wav");
+		DeferCall(sdly,&PlayWav,"2.wav");
+		}
+	}
+else
+	{
+	printf("\xa");
+	DefaultStation_L39 = 1;
+	}
+//if (led > 0)
+//	{
+//	DeferCall(ProfileSwapDelay+3*LED_Delay,&Lights_LLED1,0);
+//	DeferCall(ProfileSwapDelay+LED_Delay,&Lights_RLED1,1);
+//	DeferCall(ProfileSwapDelay+2*LED_Delay,&Lights_RLED2,1);
+//	}
+//Lights_LMFD(1);
+}
+
+
+int	SetMenu_L39C()
+{
+Set_Acft_Array_Cur(2039);
+}
+int	SetMenu_L39ZA()
+{
+Set_Acft_Array_Cur(2040);
+}
+
+int DCS_L39_Init(int prof = 2039, int stn = 1)
+{
+char czavar;Dim(&czavar,3);
+if (prof == 2040)
+	{
+//	Dim(&czavar,2);
+	sprintf(&czavar,"ZA");
+	NS430_Enabled		=	NS430_Installed*NS430_Enabled_L39ZA;	//added in 2.21
+	}
+else
+	{
+//	Dim(&czavar,1);
+	sprintf(&czavar,"C");
+	NS430_Enabled		=	NS430_Installed*NS430_Enabled_L39C;	//added in 2.21
+	}
+	
+Determine_Differential_Braking(0);
+
+//Declare Values
+FkeyPress			=	1;	//added in 2.02 to prevent Commswitch key activation on profile load.
+GraceFlag			=	0;
+Eng_Start_x			=	IdleDetentLow;
+Eng_Stop_x			=	IdleDetentLow;
+Starter_Ind_x		=	Engine_Shutdown_Ind_Time;	//Starter_Ind_MiG21;
+MFD_Eng_Start		=	0;
+ProfID				=	prof;
+FixedGear			=	0;
+Helicopter			=	0;
+T6WheelBrake		=	0;
+BrakeOnCycleTime	=	Airbrake_Out_L39;
+BrakeOffCycleTime	=	Airbrake_In_L39;
+GearCycleTimeUp		=	Gear_Retract_L39;
+GearCycleTimeDn		=	Gear_Deploy_L39;
+TriggerZoomEnabled	=	1;	
+S4AnalogBrake		=	AnalogPaddleBrake;	//added in 1.33
+AnalogParkingBrake	=	0;					//added in 1.33; JoyY Parking Brake disabled for MiG-15
+S4asNWS				=	0;					//added in 1.33
+S3holdNWS 			= 	0;	//added in 2.05
+Force_GearLock		=	0;	//added in 1.34
+XYAxisTrim			=	0;	//added in 1.34
+DMS_SnapView		=	1;	//added in 1.34
+WheelBrakeFull		=	1;	//added in 1.35
+ToeBrakesAvailable	=	0;	//added in 1.40
+NVG_Capable			=	0;	//added in 1.61 (late entry)
+AB_Capable			=	0;	//added in 1.61
+Adjust_Backlighting	=	0;	//added in 1.62
+CrewCount			=	2;
+StationChangeModifier	=	0;
+//BrakeOffCycleTime 	= 	1500;
+WH_Use_TQS			=	0;	//added in 2.43
+Analog_TDC			=	1;	//added in 2.43
+EngineCount			=	1;	//added in 2.43
+Airbrake_Type_Cur	=	Airbrake_Type_L39;	//added in 2.43
+Airbrake_Swap		=	0;	//dummy value as L39 has custom swap routine
+CommInitType		=	1;	//0 for none/custom, 1 for single channel (P-51), 2 for simple (dual channel), 3 for complex (3 channel).  added in 2.43
+StnCheckDisabled	=	StnCheckDisabled_L39;	//added in 2.43.  Forced for single seat
+CurrentStation 		= 	stn;
+
+
+L39_Cpt_Lts_Array	=	SEQ(	L39_Cpt_Lts_Red,
+								L39_Cpt_Lts_White	);
+								
+						
+
+
+
+printf("Done\xa Execute DCS L-39%s Albatross Config (Profile v%i.%i):\xa",&czavar,MajorVersion,MinorVersion);
+PlayWavSel(ProfID,abs(Init_Run - 1),DCSFP_Enabled,MFDisplayEnabled);	//added in 1.61, DCSFP added in 2.05, MFDisplay added in 2.29
+StationCheck(ProfID, CurrentStation,1,0);	//1 forces, 0 bypasses keystroke
+L39_Switch_Init();	//incl CurrentStation = 1;
+Pause_TrackIR(0);
+AnalogBrakePoll(0);	//added in 1.23
+//MiG15_Switch_Posit_Init(GearDn_Ind_Default);
+AirBrake_Init(0);	//moved to individual modules in 1.22; set to 0 for MiG-15 because actual indicator light is steady state.  Will flash for momentary
+MFD_Init(ProfID);
+	printf("   Map HOTAS Cougar/Warthog for DCS L-39%s Config:\xa",&czavar);
+	DCS_Axis_Init(ProfID,EngineCount,Analog_TDC);
+
+
+		printf("      Button Mapping:\xa");
+			printf("         Shift Commands: S3 momentary...");
+			if (WarthogStick > 0)
+				{
+				if (WarthogThrottle > 0) 	SetShiftButton(&Joystick, S3, &Throttle, 0, 0);
+				else						SetShiftButton(&Joystick, S3, &HCougar, 0, 0);
+				MapKey	(&Joystick, S3, BTN_S3P);		
+				MapKeyR	(&Joystick, S3, BTN_S3R);	
+				}				
+			else
+				{
+				SetShiftButton(&HCougar, S3, &HCougar, 0, 0);
+				MapKey	(&HCougar, S3, BTN_S3P);		
+				MapKeyR	(&HCougar, S3, BTN_S3R);		
+				}				
+			printf("Done!\xa");		
+			printf("         Stick Buttons...");	
+
+				
+				
+				//S1 as momentary airbrake
+				if (WarthogStick > 0)
+					{
+					MapKeyIO(&Joystick, TG1, CHAIN(DX1,EXEC("TriggerZoom_toggle(-1,AirBrkFlash,GearState);")), CHAIN(DX1,EXEC("TriggerZoom_in();"))	);
+					MapKeyRIO(&Joystick,TG1, UP+DX1, EXEC("ActKey(ZoomIn_slow); DeferCall(KBDelay,&TriggerZoom_out,0);"));				//ActKey(DX1) added in 1.21 to force DX1 release if stuck
+					//MapKeyIO(&Joystick,	TG1, 0,DX1);
+					//MapKeyR	(&Joystick,	TG1, 0);
+	
+					MapKey	(&Joystick, TG2,DX6);
+//					MapKeyR	(&Joystick, TG2,0);				
+					
+					
+					MapKeyIO(&Joystick, S1,	DX1,	Trim_Reset);		// /I toggle trigger safety w/o TGZ 
+//					MapKeyR	(&Joystick, S1,	0);	
+					
+					MapKey	(&Joystick,	S2,	BTN_S2);
+					MapKeyR	(&Joystick,	S2, 0);
+					
+					MapKeyIO(&Joystick, S4, BTN_S4PI,BTN_S4PO_NoDiff );	
+					MapKeyR	(&Joystick, S4, BTN_S4R_NoDiff);	
+						
+					}
+					
+				else
+					{
+					MapKeyIO(&HCougar, TG1, CHAIN(DX1,EXEC("TriggerZoom_toggle(-1,AirBrkFlash,GearState);")), CHAIN(DX1,EXEC("TriggerZoom_in();"))	);
+					MapKeyRIO(&HCougar,TG1, UP+DX1, EXEC("ActKey(ZoomIn_slow); DeferCall(KBDelay,&TriggerZoom_out,0);"));				//ActKey(DX1) added in 1.21 to force DX1 release if stuck
+					//MapKeyIO(&HCougar,	TG1, 0,DX1);
+					//MapKeyR	(&HCougar,	TG1, 0);
+	
+					MapKey	(&HCougar, TG2,DX6);
+//					MapKeyR	(&HCougar, TG2,0);		
+					
+					MapKey	(&HCougar, S1, DX1,	Trim_Reset);		// /I toggle trigger safety w/o TGZ 
+//					MapKeyR	(&HCougar, S1, 0);
+					MapKey	(&HCougar, S2, BTN_S2);
+					MapKeyR	(&HCougar,	S2, 0);
+
+					MapKeyIO(&HCougar, S4, BTN_S4PI,BTN_S4PO_NoDiff );	
+					MapKeyR	(&HCougar, S4, BTN_S4R_NoDiff);	
+					}
+			printf("...Done!\xa");	
+						
+			H1_Init(TrackIR, PadlockEnabled, ProfID);	//moved to individual routines in 1.27 for trim reset removal on helos	; WH sort added to routine in 1.40
+			CommState_Off(1,ProfID,0,1,1);	//sets hats 2-4 to DX functions	; WH sort added to routine in 1.40
+
+//Throttle
+
+			P51D_CommState_Init(ProfID, 1, 0, TS3_Radio);						//Set Comms routine (DX21 plus whatever options selected); WH sort added to routine in 1.40 (?)
+			if (WarthogThrottle > 0)
+				{
+				printf("         Warthog Throttle Buttons\xa");	
+		
+				//MS covered in P51D_CommState_Init()
+				
+				MapKey	(&Throttle,	CSU,	L39_Tgt_Dist_Decr_DX);	//Range adjust
+				MapKey	(&Throttle,	CSD,	L39_Tgt_Dist_Incr_DX);	//shift for sight angle
+				MapKey 	(&Throttle,	CSL,	L39_Tgt_Wing_Decr_DX);	//Tgt Wingspan
+				MapKey 	(&Throttle,	CSR,	L39_Tgt_Wing_Incr_DX);	//shift for sight intensity
+
+				if (AirBrkFlash)
+					{
+					MapKey	(&Throttle,	SC,	CHAIN(MiG15_Stick_Airbrake, EXEC("flashLLED1(1,250);"))	);	//momentary brake w/ flash
+					MapKeyR	(&Throttle,	SC,	CHAIN(UP+MiG15_Stick_Airbrake,EXEC("flashLLED1(0);"))	);	//up command to ensure no stickiness w/ other buttons
+					}
+				else
+					{
+					MapKey	(&Throttle,	SC,	MiG15_Stick_Airbrake);
+					MapKeyR	(&Throttle,	SC,	UP+MiG15_Stick_Airbrake	);
+					}
+				
+				MapKey	(&Throttle,	PSF,	PULSE+L39_Ldg_Light_Land);		
+				MapKey	(&Throttle,	PSM,	TEMPO(0, PULSE+L39_Ldg_Light_Off,DoubleTap));
+				MapKey	(&Throttle,	PSB,	PULSE+L39_Ldg_Light_Taxi);
+
+				MapKey	(&Throttle,	BSF,	0);	
+				MapKey	(&Throttle,	BSB,	0);
+				MapKey	(&Throttle,	BSM,	TEMPO(0,0,DoubleTap));
+				
+				MapKeyIO(&Throttle,	LTB,	L39_Pitot_Sel_Left,L39_Pitot_Sel_Right);
+//				MapKeyR	(&Throttle,	LTB, 	0);			
+				
+//				MapKey	(&Throttle,	IDLERON,	0);
+//				MapKey	(&Throttle,	IDLEROFF,	0);
+
+			if (WHIdle_Enabled > 0)
+				{
+				MapKey	(&Throttle,	IDLELON,	PULSE+Engine_Left_Stop);
+				MapKey	(&Throttle,	IDLELOFF,	PULSE+Engine_Left_Start);
+				}
+				
+
+			printf("...Base Switches\xa");				
+				MapKeyIO(&Throttle,	FLAPU,		0, PULSE+Gear_Up);
+//				MapKeyR	(&Throttle,	FLAPU,		0);
+//				MapKeyR	(&Throttle,	FLAPD,		0);	//normal FLAPD in TriggerZoom_MapGearDn_WH()
+				MapKey	(&Throttle, FLAPM,		TEMPO(0,PULSE+L39_Gear_Neutral, DoubleTap));				//Terminates gear cycling indication if returned to center before timeout);	//Terminates gear cycling indication if returned to center before timeout
+
+				MapKeyIO(&Throttle,	LDGH,		TEMPO(0,EXEC("EjectCheckLDGH(ProfID);"), DefTempo),	TEMPO(CHAIN(DX31,D(ModDelay),DX19),	L39_Fire_Ext_Btn,	LongTempo)	);		//I Long Eject/Toggle Gearstate, /O capped fire extinguisher button
+				MapKeyIO(&Throttle,	APENG,		TEMPO(L39_Pitot_Heat_Left_Off,	L39_Pitot_Heat_Left_On,		DefTempo),
+												TEMPO(L39_Pitot_Heat_Right_Off,	L39_Pitot_Heat_Right_On,	DefTempo)				);	//Pitot Heat
+				
+				MapKey	(&Throttle,	APPAT,		PULSE+L39_U16_S2);	
+				MapKey	(&Throttle,	APAH,		TEMPO(0,	PULSE+L39_U16_Auto, DoubleTap)	);
+				MapKey	(&Throttle,	APALT,		PULSE+L39_U16_S4);	
+				
+				MapKey	(&Throttle,	EFLNORM,	PULSE+L39_Heat_On);
+//				MapKeyR	(&Throttle,	EFLNORM,	0);
+				MapKey	(&Throttle,	EFLOVER,	PULSE+L39_Heat_Off);
+				MapKey	(&Throttle,	EFRNORM,	PULSE+L39_Glow_On);
+				MapKey	(&Throttle,	EFROVER,	PULSE+L39_Glow_Off);
+//				MapKeyR	(&Throttle,	EFROVER,	0);
+				
+
+
+				MapKey	(&Throttle,	APUON,		PULSE+L39_Pylon_Port_Sel);
+				MapKey	(&Throttle,	APUOFF,		PULSE+L39_Pylon_Stbd_Sel);
+				
+
+				if (prof == 2039)
+					{
+					MapKey	(&Throttle,	CHF,	L39C_Msl_Tone_Vol_Incr);
+					MapKey	(&Throttle,	CHB,	L39C_Msl_Tone_Vol_Decr);
+					
+					MapKey	(&Throttle,	EOLIGN,		L39_Emer_Jett_Arm_Sw_Toggle);
+					MapKey	(&Throttle,	EOLNORM,	PULSE+L39_Emer_Jett_Arm_Cover_Open);
+					MapKey	(&Throttle,	EOLMOTOR,	PULSE+L39_Emer_Jett_Arm_Cover_Close);
+					MapKey	(&Throttle,	EORIGN,		L39C_Emer_Jett_Sw_Toggle);
+					MapKey	(&Throttle,	EORNORM,	PULSE+L39C_Emer_Jett_Cover_Open);
+					MapKey	(&Throttle,	EORMOTOR,	PULSE+L39C_Emer_Jett_Cover_Close);
+					
+					MapKey	(&Throttle,	RDRNRM,		PULSE+L39C_U16_On);
+					MapKey	(&Throttle,	RDRDIS,		PULSE+L39C_U16_Off);
+				
+					MapKeyIO(&Throttle,	EACON,		PULSE+L39C_Sight_On,	PULSE+L39C_Arms_On);		
+					MapKeyIO(&Throttle,	EACOFF,		PULSE+L39C_Sight_Off,	PULSE+L39C_Arms_Off);
+					}
+				else
+					{
+					MapKey	(&Throttle,	CHF,	L39Z_Msl_Tone_Vol_Incr);
+					MapKey	(&Throttle,	CHB,	L39Z_Msl_Tone_Vol_Decr);
+					
+					MapKey	(&Throttle,	EOLIGN,		L39Z_Outer_Stn_Jett_Sw_Toggle);
+					MapKey	(&Throttle,	EOLNORM,	PULSE+L39Z_Outer_Stn_Jett_Cover_Open);
+					MapKey	(&Throttle,	EOLMOTOR,	PULSE+L39Z_Outer_Stn_Jett_Cover_Close);
+					MapKey	(&Throttle,	EORIGN,		L39Z_Inner_Stn_Jett_Sw_Toggle);
+					MapKey	(&Throttle,	EORNORM,	PULSE+L39Z_Inner_Stn_Jett_Cover_Open);
+					MapKey	(&Throttle,	EORMOTOR,	PULSE+L39Z_Inner_Stn_Jett_Cover_Close);
+					
+					MapKey	(&Throttle,	RDRNRM,		PULSE+L39Z_Bomb_Sel_Train);
+					MapKey	(&Throttle,	RDRDIS,		PULSE+L39Z_Bomb_Sel_Salvo);
+
+					MapKeyIO(&Throttle,	EACON,		PULSE+L39Z_Sight_On,	PULSE+L39Z_Arms_On);		
+					MapKeyIO(&Throttle,	EACOFF,		PULSE+L39Z_Sight_Off,	PULSE+L39Z_Arms_Off);
+					}
+//				MapKeyR	(&Throttle,	CHF,	0);	//Added for F-86 in 1.69
+//				MapKeyR	(&Throttle,	CHB,	0);	//Added for F-86 in 1.69
+				}
+			else
+				{
+				printf("         TQS Buttons\xa");	
+//Temporary T2/T3 mapping
+				if (VAC > 0)
+					{
+					MapKeyIO(&HCougar, T2,	CHAIN(X(Mic_Sw_Fwd,0),D(KBDelay+ModDelay),	EXEC("CommState_On(CommStateAllow);")),
+											CHAIN(X(Mic_Sw_Fwd,1),D(KBDelay+ModDelay),	EXEC("CommState_On(CommStateVAC);"))	);		//temporary - cycles comm menu w/o PTT (added in 1.32)
+					MapKeyRIO(&HCougar,T2,	EXEC("CommState_Off(CommStateAllow, ProfID);"), EXEC("CommState_Off(CommStateVAC, ProfID);"));	
+					}
+				else
+					{
+					MapKey	(&HCougar, T2, CHAIN(PULSE+X(Mic_Sw_Fwd,TS3_DX),D(KBDelay+ModDelay),	EXEC("CommState_On(CommStateVAC);"))	);		//temporary - cycles comm menu w/o PTT (added in 1.32)
+					MapKeyR	(&HCougar, T2, EXEC("CommState_Off(CommStateVAC, ProfID);"));	
+					}
+				if (TARS_PTT_Common) 	MapKey	(&HCougar, T3, PTT_Common);		//temporary	; if-else added in 1.32
+				else					MapKey	(&HCougar, T3, TS3_DX);
+				MapKeyR	(&HCougar, T3, 0);	
+//end temporary				
+			
+				MapKey	(&HCougar, T4, L39_Rdo_Ch_Next);	//changed from DX in 2.28
+				MapKeyR	(&HCougar, T4, 0);
+				MapKey	(&HCougar, T5, L39_Rdo_Ch_Prev);	//changed from DX in 2.28
+				MapKeyR	(&HCougar, T5, 0);
+						
+				MapKeyIO(&HCougar,	T6, TEMPO(DX24, EXEC("EjectCheckT6(ProfID);"), DefTempo),	DX24);		//Will check for ejection parameters if held for 500ms.
+				}
+			L39_Airbrake_Map_Set(Airbrake_Type_Cur,prof,AirBrkFlash,0);	//L-39 has its own airbrake routine	very similar to MiG-15
+			L39_DF_Init(WarthogThrottle);
+			if (WarthogThrottle == 1)	TriggerZoom_MapGearDn_WH(0, prof);
+
+
+			printf("...Done!\xa");
+	printf("   HOTAS Mapping Complete.\xa\xa");	
+
+
+//MiG21_MFD_Init();
+
+TriggerZoom_state  = 0;			//reset TriggerZoom
+FlapState	=	2;				//2 is neutral (3 up, 0, 1 down
+//Lights_ALL(0);				//Says Init complete
+	Backlight_Max_Init(0);
+	DeferCall(4*LED_Delay,&Lights_RLED1,0);
+	DeferCall(5*LED_Delay,&Lights_RLED2,0);
+	//DeferCall(6*LED_Delay,&Lights_LLED2,0);
+	if (WarthogThrottle > 0) DeferCall(6*LED_Delay,&WHT_Lights_Dn_D,0);
+	
+	
+ActKey(DX1);				//just in case DX1 lingers from trigger activation
+if (Init_Run == 0) Gear_Ind_Init(GearDn_Ind_Default,FixedGear,Helicopter,AirBrkFlash);	
+
+
+printf("\xa DCS L-39%s Albatross Init Complete!\xa",&czavar);	
+
+}
+
+int L39_Map_TGZ(int stn)
+{
+if (stn > 1) //back seat has no TGZ
+	{
+	if (WarthogStick > 0) 
+		{
+		MapKey	(&Joystick, TG1, 0	);
+		MapKeyR	(&Joystick,TG1, BTN_TG1RI_TGZ);				//force DX1 release if stuck
+		
+		}
+		
+	else
+		{
+		MapKey	(&HCougar, TG1, 0);
+		MapKeyR	(&HCougar,TG1, BTN_TG1RI_TGZ);				//ActKey(DX1) added in 1.21 to force DX1 release if stuck
+		}
+	}
+else	//front seat
+	{
+	if (WarthogStick > 0)
+		{
+		MapKeyIO(&Joystick, TG1, BTN_TG1PI_TGZ, BTN_TG1PO_TGZ	);
+		MapKeyRIO(&Joystick,TG1, BTN_TG1RI_TGZ, BTN_TG1RO_TGZ	);				//ActKey(DX1) added in 1.21 to force DX1 release if stuck
+		}
+	else
+		{
+		MapKeyIO(&HCougar, TG1, BTN_TG1PI_TGZ, BTN_TG1PO_TGZ	);
+		MapKeyRIO(&HCougar,TG1, BTN_TG1RI_TGZ, BTN_TG1RO_TGZ	);				//ActKey(DX1) added in 1.21 to force DX1 release if stuck
+		}
+	}	
+if (WarthogStick > 0)	TriggerZoom_MapGearDn_WH(TriggerZoom_state,ProfID);
+else 					TriggerZoom_MapGearDn(TriggerZoom_state,ProfID);
+}
+
+int L39_HCS_Init(int stn = 1, int prof = 3039)
+{
+//		if (Script_Debug) printf("         Hat2 (TMS)...");	
+			MapKey(&HCougar, 	H2U,	DX7);
+			MapKeyIO(&HCougar, 	H2R,	DX8,	TEMPO(DX8,	L39_U16_S4,		DefTempo));	//shift dx can be used either for rockets or bombs (depending on acft)
+			MapKeyIO(&HCougar, 	H2D,	DX9,	TEMPO(DX9,	L39_U16_Auto,	DefTempo));
+			MapKeyIO(&HCougar, 	H2L,	DX10,	TEMPO(DX10,	L39_U16_S2,		DefTempo));
+//		if (Script_Debug) printf("...Done!\xa");	
+//		if (Script_Debug) printf("         Hat3 (");
+			if (TrackIR < 2)
+				{			
+				MapKeyIO(&HCougar,		H3U,	Std_SnapView7,	Std_SnapView9);	//20/30 degree dive sighting
+				MapKeyIO(&HCougar,		H3R,	Std_SnapView4,	Std_SnapView3);	
+				MapKeyIO(&HCougar,		H3L,	Std_SnapView8,	Std_SnapView1);	
+				MapKeyIO(&HCougar,		H3D,	Std_SnapView6,	Std_SnapView2);	// /i CB Panel Center Pillar
+				}
+			else	//VR Function TBD
+				{			
+				MapKey	(&HCougar,		H3U,	VR_Zoom_kb);	
+				MapKey	(&HCougar,		H3R,	0);	
+				MapKey	(&HCougar,		H3L,	0);	
+				MapKey	(&HCougar,		H3D,	VR_Spyglass);	
+				}
+//		if (Script_Debug) printf("...Done!\xa");	
+//		if (Script_Debug) printf("         Hat4 (RSBN)...");	
+			MapKey	(&HCougar,	H4U,	L39_RSBN_Ch_Next);
+//			MapKeyR	(&HCougar,	H4U, 	0);			//added to cancel helo trim
+			MapKey	(&HCougar,	H4R,	L39_PRMG_Ch_Next);
+			MapKey	(&HCougar,	H4D,	L39_RSBN_Ch_Prev);
+//			MapKeyR	(&HCougar,	H4D,	0);			//added to cancel helo trim
+			MapKey	(&HCougar,	H4L,	L39_PRMG_Ch_Prev);
+//		if (Script_Debug) printf("...Done!\xa");				
+}
+int L39_WHS_Init(int stn = 1, int prof = 3039)
+{
+//		if (Script_Debug) printf("         Hat2 (TMS)...");	
+			MapKey(&Joystick, 		H2U,	DX7);
+			MapKeyIO(&Joystick, 	H2R,	DX8,	TEMPO(DX8,	L39_U16_S4,		DefTempo));	//shift dx can be used either for rockets or bombs (depending on acft)
+			MapKeyIO(&Joystick, 	H2D,	DX9,	TEMPO(DX9,	L39_U16_Auto,	DefTempo));
+			MapKeyIO(&Joystick, 	H2L,	DX10,	TEMPO(DX10,	L39_U16_S2,		DefTempo));
+//		if (Script_Debug) printf("...Done!\xa");	
+//		if (Script_Debug) printf("         Hat3 (");
+			if (TrackIR < 2)
+				{			
+				MapKeyIO(&Joystick,		H3D,	Std_SnapView6,	Std_SnapView2);	// /i CB Panel Center Pillar
+				MapKeyIO(&Joystick,		H3U,	Std_SnapView7,	Std_SnapView9);	//20/30 degree dive sighting
+				MapKeyIO(&Joystick,		H3R,	Std_SnapView4,	Std_SnapView3);	
+				MapKeyIO(&Joystick,		H3L,	Std_SnapView8,	Std_SnapView1);	
+				}
+			else	//VR Function TBD
+				{			
+				MapKey	(&Joystick,		H3D,	VR_Spyglass);	
+				MapKey	(&Joystick,		H3U,	VR_Zoom_kb);	
+//				MapKey	(&Joystick,		H3R,	0);	
+//				MapKey	(&Joystick,		H3L,	0);	
+				}
+//		if (Script_Debug) printf("...Done!\xa");	
+//		if (Script_Debug) printf("         Hat4 (RSBN)...");	
+			MapKey	(&Joystick,	H4U,	L39_RSBN_Ch_Next);
+//			MapKeyR	(&Joystick,	H4U, 	0);			//added to cancel helo trim
+			MapKey	(&Joystick,	H4R,	L39_PRMG_Ch_Next);
+			MapKey	(&Joystick,	H4D,	L39_RSBN_Ch_Prev);
+//			MapKeyR	(&Joystick,	H4D,	0);			//added to cancel helo trim
+			MapKey	(&Joystick,	H4L,	L39_PRMG_Ch_Prev);
+			MapKey	(&Joystick,	H4P,	DX19);
+//		if (Script_Debug) printf("...Done!\xa");				
+}
+
+int L39_DF_Init(int wh, int stn = 1)
+{
+if (wh)	//function TBD
+	{
+	MapKeyIO(&Throttle,	BSB, PULSE+L39_Nav_Brt_100,	PULSE+L39_Nav_Lts_Steady);	
+//	MapKeyR	(&Throttle,	BSB, 0);
+	MapKeyIO(&Throttle,	BSF, PULSE+L39_Nav_Brt_60,	PULSE+L39_Nav_Lts_Flash);
+//	MapKeyR	(&Throttle,	BSF, 0);
+	MapKeyIO(&Throttle,	BSM, TEMPO(0,PULSE+L39_Nav_Brt_30, DoubleTap), TEMPO(0,PULSE+L39_Nav_Lts_Off, DoubleTap));	//Only enables gear neutral if in backseat.  may not be necessary
+	}
+else	//TQS Landing Gear
+	{
+	if (WarthogStick > 0)	TriggerZoom_MapGearDn_WH(TriggerZoom_state,ProfID,0,1);
+	else					TriggerZoom_MapGearDn(TriggerZoom_state,ProfID,0,1);
+	MapKeyIO(&HCougar,	T7, 0, PULSE+Gear_Up);	
+	MapKeyR	(&HCougar,	T7, 0);
+	//MapKeyIO(&HCougar,	T8, 0, PULSE+L39_Gear_Dn_DX);
+	MapKeyR	(&HCougar,	T8, 0);
+	//if (stn > 0)
+	MapKeyIO(&HCougar, 	DFM,0, TEMPO(0,PULSE+L39_Gear_Neutral, DoubleTap));	//Only enables gear neutral if in backseat.  may not be necessary
+	//else				MapKey	(&HCougar, 	DFM,0);
+	}
+}
+
+int L39_MFD_Init(int prof)
+{
+//===================================
+//		Standard MFD Buttons
+//===================================
+
+	printf("   Map Cougar Left  MFD (DX31)...");	
+//LOSB 1 in Init
+			if (prof == 2039)
+					{
+					MapKeyIO(&LMFD,	OSB02,	L39_Fire_Ext_Btn,				TEMPO(CHAIN(DX31,D(ModDelay),DX2),	L39_Fire_Ext_Btn,					LongTempo)	);	//Fire Ext
+					MapKeyIO(&LMFD,	OSB03,	CHAIN(DX31,D(ModDelay),DX3),	TEMPO(CHAIN(DX31,D(ModDelay),DX3),	CHAIN(DX30,DX31,D(ModDelay),DX3),	DefTempo)	);	//Turbo
+					MapKeyIO(&LMFD,	OSB04,	L39_Emer_Fuel_Sw_Toggle,		TEMPO(CHAIN(DX31,D(ModDelay),DX4),	CHAIN(DX30,DX31,D(ModDelay),DX4),	DefTempo)	);	//Emer Fuel Sw toggle
+					MapKeyIO(&LMFD,	OSB05,	CHAIN(DX31,D(ModDelay),DX5),	TEMPO(CHAIN(DX31,D(ModDelay),DX5),	CHAIN(DX30,DX31,D(ModDelay),DX5),	DefTempo)	);	//Engine Sw	
+					}
+			else			
+					{
+					MapKeyIO(&LMFD,	OSB02,	CHAIN(DX31,D(ModDelay),DX2),	TEMPO(CHAIN(DX31,D(ModDelay),DX2),	CHAIN(DX30,DX31,D(ModDelay),DX2),	DefTempo)	);	//PK3+GS
+					MapKeyIO(&LMFD,	OSB03,	L39Z_Charge_Guns_Outer_Toggle,	TEMPO(CHAIN(DX31,D(ModDelay),DX3),	L39Z_Outer_Stn_Sel,	DefTempo)	);	//Wep/Guns out
+					MapKeyIO(&LMFD,	OSB04,	L39Z_Charge_Guns_Inner_Toggle,	TEMPO(CHAIN(DX31,D(ModDelay),DX4),	L39Z_Inner_Stn_Sel,	DefTempo)	);	//Wep/Guns In
+					MapKey	(&LMFD,	OSB05,	CHAIN(DX31,D(ModDelay),DX5));																			//Expl Chg GS
+					}
+//					MapKeyR	(&LMFD,	OSB04,	0);	//for A-10C and F-5E
+//					MapKeyR	(&LMFD,	OSB05,	0);	//For F-5E			
+
+//LOSB 6-10
+					MapKey	(&LMFD,	OSB06,	CHAIN(DX31,D(ModDelay),DX6));
+					MapKey	(&LMFD,	OSB07,	CHAIN(DX31,D(ModDelay),DX7));
+//					MapKeyR	(&LMFD,	OSB07,	0);	//for Bf109
+					MapKey	(&LMFD,	OSB08,	CHAIN(DX31,D(ModDelay),DX8));
+					MapKey	(&LMFD,	OSB09,	CHAIN(DX31,D(ModDelay),DX9));
+					MapKey	(&LMFD,	OSB10,	CHAIN(DX31,D(ModDelay),DX10));
+
+//LOSB 11-15
+			if (prof == 2039)
+					{
+					MapKeyIO(&LMFD,	OSB11,	CHAIN(DX31,D(ModDelay),DX11,EXEC("L39_LCON_Map(0);")),	TEMPO(CHAIN(DX31,D(ModDelay),DX11,EXEC("L39_LCON_Map(0);")),	CHAIN(DX30,DX31,D(ModDelay),DX11),	DefTempo)	);
+					MapKeyIO(&LMFD,	OSB12,	CHAIN(DX31,D(ModDelay),DX12,EXEC("L39_LCON_Map(0);")),	TEMPO(CHAIN(DX31,D(ModDelay),DX12,EXEC("L39_LCON_Map(0);")),	CHAIN(DX30,DX31,D(ModDelay),DX12),	DefTempo)	);
+					MapKeyIO(&LMFD,	OSB13,	CHAIN(DX31,D(ModDelay),DX13),	TEMPO(CHAIN(DX31,D(ModDelay),DX13),	CHAIN(DX30,DX31,D(ModDelay),DX13),	DefTempo)	);						
+					}					
+			else
+					{
+					MapKeyIO(&LMFD,	OSB11,	CHAIN(DX31,D(ModDelay),DX11),	TEMPO(CHAIN(DX31,D(ModDelay),DX11),	CHAIN(DX30,DX31,D(ModDelay),DX11),	DefTempo)	);
+					MapKeyIO(&LMFD,	OSB12,	CHAIN(DX31,D(ModDelay),DX12),	TEMPO(CHAIN(DX31,D(ModDelay),DX12),	CHAIN(DX30,DX31,D(ModDelay),DX12),	DefTempo)	);
+					MapKeyIO(&LMFD,	OSB13,	CHAIN(DX31,D(ModDelay),DX13,EXEC("L39_LCON_Map(2);")),	TEMPO(CHAIN(DX31,D(ModDelay),DX13,EXEC("L39_LCON_Map(2);")),	CHAIN(DX30,DX31,D(ModDelay),DX13,EXEC("L39_LCON_Map(-2);")),	DefTempo)	);	//bomb sw
+					MapKeyIO(&LMFD,	OSB14,	CHAIN(DX31,D(ModDelay),DX14),	TEMPO(CHAIN(DX31,D(ModDelay),DX14),	CHAIN(DX30,DX31,D(ModDelay),DX14),	DefTempo)	);
+					}
+					MapKeyIO(&LMFD,	OSB14,	CHAIN(DX31,D(ModDelay),DX14,EXEC("L39_LCON_Map(1);")),	TEMPO(CHAIN(DX31,D(ModDelay),DX14,EXEC("L39_LCON_Map(1);")),	CHAIN(DX30,DX31,D(ModDelay),DX14,EXEC("L39_LCON_Map(-1);")),	DefTempo)	);	//rocket in both cases
+					MapKeyIO(&LMFD,	OSB15,	CHAIN(DX31,D(ModDelay),DX15),	TEMPO(CHAIN(DX31,D(ModDelay),DX15),	CHAIN(DX30,DX31,D(ModDelay),DX15),	DefTempo)	);
+
+//LOSB 16-19
+			if(prof == 2039)
+					{
+					MapKeyIO(&LMFD,	OSB16,	CHAIN(DX31,D(ModDelay),DX16),	TEMPO(L39_Pitot_Heat_Left_Off,	L39_Pitot_Heat_Left_On,	DefTempo)	);
+					MapKeyIO(&LMFD,	OSB17,	CHAIN(DX31,D(ModDelay),DX17),	TEMPO(L39_Pitot_Heat_Right_Off,	L39_Pitot_Heat_Right_On,DefTempo)	);
+					MapKeyIO(&LMFD,	OSB18,	CHAIN(DX31,D(ModDelay),DX18),	TEMPO(L39_Pitot_Sel_Right,	L39_Pitot_Sel_Left,			DefTempo)	);
+					MapKey	(&LMFD,	OSB19,	CHAIN(DX31,D(ModDelay),DX19));
+					}
+			else
+					{
+					MapKeyIO(&LMFD,	OSB16,	CHAIN(DX31,D(ModDelay),DX16),	TEMPO(L39Z_Arms_Off,	L39Z_Arms_On,	DefTempo)	);
+					MapKeyIO(&LMFD,	OSB17,	CHAIN(DX31,D(ModDelay),DX17),	TEMPO(L39_Heat_Off,		L39_Heat_On,	DefTempo)	);
+					MapKeyIO(&LMFD,	OSB18,	CHAIN(DX31,D(ModDelay),DX18),	TEMPO(L39_Glow_Off,		L39_Glow_On,	DefTempo)	);
+					MapKeyIO(&LMFD,	OSB19,	CHAIN(DX31,D(ModDelay),DX19),	TEMPO(L39Z_GS_Safe, 	L39Z_GS_Arm,	DefTempo)	);
+					}
+//LMFD 20 in Init
+
+
+//Left Rocker Switches
+//SYM (free dx31+21/22)
+		MapKey	(&LMFD,	SYMU,	KB_LSYMU);
+		MapKey	(&LMFD,	SYMD,	KB_LSYMD);
+//		MapKeyIO(&LMFD,	SYMU,	CHAIN(R_CTL,DX31,D(ModDelay),DX21),	CHAIN(DX31,D(ModDelay),DX21));	//R_CTL added to /I in 1.36 to deconflict with brake+mic = equal function
+//		MapKeyIO(&LMFD,	SYMD,	CHAIN(R_CTL,DX31,D(ModDelay),DX22),	CHAIN(DX31,D(ModDelay),DX22));
+
+//CON mapped in L39_LCON_Map() and activated in L39_Switch_Init()	
+
+//BRT
+		MapKeyIO(&LMFD,	BRTD,	L39_EKSR46_Pwr_Off,	TEMPO(L39_Ldg_Light_Taxi,	L39_Ldg_Light_Off,	DefTempo)	);	//landing light, shift for flare power
+		MapKeyIO(&LMFD,	BRTU,	L39_EKSR46_Pwr_On,	TEMPO(L39_Ldg_Light_Land,	L39_Ldg_Light_Off,	DefTempo)	);
+//GAIN in Init
+
+
+	printf("Done!\xa");
+
+	printf("   Map Cougar Right MFD (DX32)...");
+
+//ROSB 1-10
+		MapKeyIO(&RMFD,	OSB01,	L39_Fire_Ext_Btn,				TEMPO(CHAIN(DX32,D(ModDelay),DX1),	L39_Fire_Ext_Btn,					LongTempo)	);	//Fire Ext
+		MapKeyIO(&RMFD,	OSB02,	CHAIN(DX32,D(ModDelay),DX2),	TEMPO(CHAIN(DX32,D(ModDelay),DX2),	CHAIN(DX30,DX32,D(ModDelay),DX2),	DefTempo)	);
+		MapKeyIO(&RMFD,	OSB03,	CHAIN(DX32,D(ModDelay),DX3),	TEMPO(CHAIN(DX32,D(ModDelay),DX3),	CHAIN(DX30,DX32,D(ModDelay),DX3),	DefTempo)	);
+		MapKeyIO(&RMFD,	OSB04,	CHAIN(DX32,D(ModDelay),DX4),	TEMPO(CHAIN(DX32,D(ModDelay),DX4),	CHAIN(DX30,DX32,D(ModDelay),DX4),	DefTempo)	);
+		MapKey	(&RMFD,	OSB05,	CHAIN(DX32,D(ModDelay),DX5)		);
+//		MapKeyR	(&RMFD,	OSB05,	0);
+		MapKeyIO(&RMFD,	OSB06,	L39_Canopy_Jettison,			TEMPO(0,							L39_Canopy_Jettison,				LongTempo)	);	//either shifted or tempo long
+		MapKey	(&RMFD,	OSB07,	CHAIN(DX32,D(ModDelay),DX7)		);
+//		MapKeyR	(&RMFD,	OSB07,	0);
+		MapKey	(&RMFD,	OSB08,	CHAIN(DX32,D(ModDelay),DX8)		);
+		MapKey	(&RMFD,	OSB09,	CHAIN(DX32,D(ModDelay),DX9)		);
+		MapKey	(&RMFD,	OSB10,	CHAIN(DX32,D(ModDelay),DX10)	);	
+//ROSB 11-15
+		MapKeyIO(&RMFD,	OSB11,	CHAIN(DX32,D(ModDelay),DX11),	TEMPO(CHAIN(DX32,D(ModDelay),DX11),	CHAIN(DX30,DX32,D(ModDelay),DX11),	DefTempo)	);
+		MapKey	(&RMFD,	OSB12,	CHAIN(DX32,D(ModDelay),DX12)	);
+		MapKey	(&RMFD,	OSB13,	CHAIN(DX32,D(ModDelay),DX13)	);
+		MapKey	(&RMFD,	OSB14,	CHAIN(DX32,D(ModDelay),DX14)	);	
+		MapKey	(&RMFD,	OSB15,	CHAIN(DX32,D(ModDelay),DX15)	);
+//		MapKeyR	(&RMFD,	OSB13,	0);	//for Spitfire Engine Start	
+//		MapKeyR	(&RMFD,	OSB14,	0);	//for Spitfire Engine Start				
+//ROSB 16-20
+		MapKey	(&RMFD,	OSB16,	CHAIN(DX32,D(ModDelay),DX16)	);
+		MapKey	(&RMFD,	OSB17,	CHAIN(DX32,D(ModDelay),DX17)	);
+		MapKeyIO(&RMFD,	OSB18,	CHAIN(DX32,D(ModDelay),DX18),	TEMPO(CHAIN(DX32,D(ModDelay),DX18),	CHAIN(DX30,DX32,D(ModDelay),DX18),	DefTempo)	);
+		MapKey	(&RMFD,	OSB19,	CHAIN(DX32,D(ModDelay),DX19)	);
+//		MapKey	(&RMFD,	OSB20,	CHAIN(DX32,D(ModDelay),DX24)	);
+
+
+//Right Rocker Switches
+//SYM
+		MapKeyIO(&RMFD,	SYMU,	TEMPO(L39_Nav_Brt_60, L39_Nav_Brt_30, DefTempo),	TEMPO(L39_Nav_Lts_Flash, L39_Nav_Lts_Off, DefTempo)	);	//use key macro instead of dx30 to prevent mic+brake
+		MapKeyIO(&RMFD,	SYMD,	TEMPO(L39_Nav_Brt_100,L39_Nav_Brt_30, DefTempo),	TEMPO(L39_Nav_Lts_Steady,L39_Nav_Lts_Off, DefTempo)	);	//use key macro instead of dx30 to prevent mic+brake
+//		MapKeyR	(&RMFD,	SYMU,	0);	//added in 1.61 to account for context sensitive R in M2000C
+//		MapKeyR	(&RMFD,	SYMD,	0);
+		
+//CON
+		MapKeyIO(&RMFD,	CONU,	KB_RCONU,	TEMPO(KB_RCONU,CHAIN(DX30,KB_RCONU),DefTempo)	);	//RSBN Mode Sel
+		MapKeyIO(&RMFD,	COND,	KB_RCOND,	TEMPO(KB_RCOND,CHAIN(DX30,KB_RCOND),DefTempo)	);
+//		MapKeyR	(&RMFD,	CONU,	0);	//added in 1.24 to account for context sensitive R in UH-1
+//		MapKeyR	(&RMFD,	COND,	0);
+		
+//BRT
+		MapKeyIO(&RMFD,	BRTU,	KB_RBRTU,	TEMPO(KB_RBRTU,CHAIN(DX30,KB_RBRTU),DefTempo)	);	//Anti-Ice
+		MapKeyIO(&RMFD,	BRTD,	KB_RBRTD,	TEMPO(KB_RBRTD,CHAIN(DX30,KB_RBRTD),DefTempo)	);
+
+//GAIN
+		MapKey	(&RMFD,	GAINU,	KB_RGAINU);
+		MapKey	(&RMFD,	GAIND,	KB_RGAIND);
+
+	printf("Done!\xa");	
+}
+
+int	L39_LCON_Map(int rkt)
+{
+if ((ProfID == 2040) & (rkt < 0))	//- number means checkdown (ZA only), 1 for rockets 2 for bombs
+	{
+	if ((rkt == -1) & (L39Z_Bombs_Armed)) rkt = 2;
+	else if ((rkt == -2) & (L39Z_Rkt_Armed)) rkt = 1;
+	else rkt = 0;
+	}
+if (	((ProfID == 2039)|(ProfID == 2040)) & (rkt > 0) & ((WarthogThrottle == 0) | (WH_L39C_LCON_Dynamic))	)	//rockets enabled and Cougar or Warthog with option (only on C model)
+	{
+	if ((ProfID == 2040) & (rkt == 2))
+		{
+		MapKey	(&LMFD, CONU,	L39Z_Bomb_Sel_I,	TEMPO(L39Z_Bomb_Sel_I,	L39Z_Bomb_Sel_Train,	DefTempo)	);
+		MapKey	(&LMFD, COND,	L39Z_Bomb_Sel_I,	TEMPO(L39Z_Bomb_Sel_I,	L39Z_Bomb_Sel_Salvo,	DefTempo)	);
+		L39Z_Bombs_Armed = 1;
+		}
+	else 	//if (rkt == 1)
+		{
+		MapKey	(&LMFD, CONU,	L39_U16_Auto,	TEMPO(L39_U16_Auto,	L39_U16_S2,	DefTempo)	);
+		MapKey	(&LMFD, COND,	L39_U16_Auto,	TEMPO(L39_U16_Auto,	L39_U16_S4,	DefTempo)	);
+		if (ProfID == 2040) L39Z_Rkt_Armed = 1;
+		}
+	}
+else
+	{
+	MapKey	(&LMFD, CONU,	KB_LCONU,	TEMPO(KB_LCONU,	CHAIN(DX30,KB_LCONU),	DefTempo)	);
+	MapKey	(&LMFD, COND,	KB_LCOND,	TEMPO(KB_LCOND,	CHAIN(DX30,KB_LCOND),	DefTempo)	);
+	}
+}
+
+int	L39_Switch_Init()
+{
+L39_Cpt_Lts_Cur = 0;
+CurrentStation = 1;
+L39_LCON_Map(0);
+}
+
+int	L39_Cpt_Lts_Cycle(int posit)
+{
+if ((posit < 0) | (posit > 1))	posit = abs(L39_Cpt_Lts_Cur-1);	//forces toggle
+ActKey(KEYON+PULSE+X(L39_Cpt_Lts_Array,posit));
+L39_Cpt_Lts_Cur = posit;
+}
+
+int	L39_Fire_Ext_Engage()	//note: this does not close out the keypress; need closure on MapKeyR; this routine is not in use
+{
+if (!Fire_Ext_Cover_Cur)
+	{
+	ActKey(KEYON+PULSE+L39_Fire_Ext_Cover_Open);
+	DeferCall(Switch_Delay,&ActKey,KEYON+L39_Fire_Ext_Btn);
+	}
+else ActKey(KEYON+L39_Fire_Ext_Btn);
+}
+
+
+//Airbrake
+//Note: the L-39 routine is very similar to the MiG-15 routine (type 0 is indentical)
+
+int L39_Airbrake_Map_Set(int type, int prof = 2039, int led = 1, int wav = 1)	//led removed for AirBrkFlash and prof added in 2.43
+{
+int mbrk;	//momentary brake
+char acft;Dim(&acft,6);	//aircraft name
+int t9il;	//T9 /I Long (either airbrake type set or profile selectio)
+int t9it;	//T9 TEMPO
+
+if (prof == 2117)
+	{
+	mbrk = Airbrake;				//B for hold
+	sprintf(&acft,"JF-17");
+	}
+else
+	{
+	mbrk = MiG15_Stick_Airbrake;	//L39 uses DX5 like MiG15
+	sprintf(&acft,"L-39");
+	}
+
+
+if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1)	)
+		{
+		t9il = EXEC("DCS_AcftSel(1);");
+		t9it = SwapTempo;
+		}
+else	
+		{
+		t9il = EXEC("L39_Airbrake_Type_Set(-1);");
+		t9it = 1000;
+		}
+
+if ((WarthogThrottle > 0) & (!WH_Use_TQS)) L39_Airbrake_Map_Set_WH(type,prof,led,wav);
+else if (type > 1)	//on T9 short, momentary T9 long, off T10
+		{
+//		if (AirBrkFlash)	//removed in 2.54 for stability
+//			{
+//			MapKeyIO(&HCougar, T9,				TEMPO(Binary_AirbrakeOn,	t9il,	t9it),	
+//												TEMPO(Binary_AirbrakeOn,	CHAIN(mbrk, EXEC("flashLLED1(1,250);")),	ModTempo)	);
+//			MapKeyR	(&HCougar, T9,				CHAIN(UP+mbrk,EXEC("flashLLED1(0);"))	);
+//			}
+//		else
+//			{		
+			MapKeyIO(&HCougar, T9,				TEMPO(Binary_AirbrakeOn,	t9il,	t9it),	
+												TEMPO(Binary_AirbrakeOn,	mbrk,	ModTempo)	);
+			MapKeyR	(&HCougar, T9,				UP+mbrk	);
+//			}
+		MapKey	(&HCougar, T10,				Binary_AirbrakeOff);		
+//		MapKeyR	(&HCougar, T10,				0);
+		
+		printf("      Type %i (L-39 Binary-Discrete with Tempo) Airbrake Set.\xa", type);
+		if (	(led > 0) & !(	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1)	)	)
+			{	
+			flashLLED1(1,1000);
+			DeferCall(1000,&flashLLED1,0);
+			}
+		if (wav) PlayWav("t2bt.wav");
+		}
+else if (type == 1)	//on T9, off T10
+		{
+		MapKeyIO(&HCougar, T9,				TEMPO(UP+mbrk,t9il,t9it),	Binary_AirbrakeOn);		//State Toggle Shift+T9.  
+//		MapKeyR	(&HCougar, T9,				0);
+		MapKey	(&HCougar, T10,				Binary_AirbrakeOff);		
+//		MapKeyR	(&HCougar, T10,				0);
+		
+		printf("      Type %i (L-39 Binary-Discrete) Airbrake Set.\xa", type);
+		if (	(led > 0) & !(	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1)	)	)
+			{	
+			flashLLED1(1,250);
+			DeferCall(1000,&flashLLED1,0);
+			}
+		if (wav) PlayWav("t1bd.wav");
+		}
+else			//momentary T9, full switch T10
+		{
+//		if (AirBrkFlash)	//removed in 2.54 for stability
+//			{
+//			MapKeyIO(&HCougar, T9,			TEMPO(UP+mbrk,t9il,t9it),	CHAIN(mbrk, EXEC("flashLLED1(1,250);"))	);		//State Toggle Shift+T9.  
+//			MapKeyRIO(&HCougar, T9,			0,EXEC("flashLLED1(0);")	);
+//			}
+//		else
+//			{
+			MapKeyIO(&HCougar, T9,			TEMPO(UP+mbrk,t9il,t9it),	mbrk);		//State Toggle Shift+T9.  
+			MapKeyR	(&HCougar, T9,			0);
+//			}		
+
+		MapKey	(&HCougar, T10,				Binary_AirbrakeOn);		
+		MapKeyR	(&HCougar, T10,				Binary_AirbrakeOff);
+
+		printf("      Type %i (L-39 Binary-Momentary) Airbrake Set.\xa", type);
+		if (	(led > 0) & !(	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1)	)	)
+			{	
+			flashLLED1(1,500);
+			DeferCall(1000,&flashLLED1,0);
+			}
+		if (wav) PlayWav("t0bm.wav");
+		}
+
+}
+
+
+int L39_Airbrake_Map_Set_WH(int type, int prof = 2039, int led = 1, int wav = 1)	//led removed for AirBrkFlash and prof added in 2.43
+{
+int mbrk;				//momentary brake
+char acft;Dim(&acft,6);	//aircraft name
+int t9il;	//SPDB /I Long (either airbrake type set or profile selectio)
+int t9it;	//SPDB TEMPO
+
+
+if (prof == 2117)
+	{
+	mbrk = Airbrake;				//B for hold
+	sprintf(&acft,"JF-17");
+	}
+else
+	{
+	mbrk = MiG15_Stick_Airbrake;	//L39 uses DX5 like MiG15
+	sprintf(&acft,"L-39");
+	}
+
+
+if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1)	)	
+		{
+		t9il = EXEC("DCS_AcftSel(1);");
+		t9it = SwapTempo;
+		}
+else	
+		{
+		t9il = EXEC("L39_Airbrake_Type_Set(-1);");
+		t9it = 1000;
+		}
+
+
+if (type > 1)		//on T9 short, momentary T9 long, off T10
+		{
+//		if (AirBrkFlash > 0)	//removed in 2.54 for stability
+//			{
+//			MapKeyIO(&Throttle,	SPDB,			TEMPO(Binary_AirbrakeOn,	t9il,	t9it),	
+//												TEMPO(Binary_AirbrakeOn,	CHAIN(mbrk, EXEC("flashLLED1(1,250);")),	ModTempo)	);
+//			MapKeyR	(&Throttle,	SPDB,			CHAIN(UP+mbrk,EXEC("flashLLED1(0);"))	);
+//			}
+//		else
+//			{		
+			MapKeyIO(&Throttle,	SPDB,			TEMPO(Binary_AirbrakeOn,	t9il,	t9it),	
+												TEMPO(Binary_AirbrakeOn,	mbrk,	ModTempo)	);
+			MapKeyR	(&Throttle,	SPDB,			UP+mbrk	);
+//			}
+		MapKey	(&Throttle, SPDF,				Binary_AirbrakeOff);		
+		MapKeyR	(&Throttle, SPDF,				0);
+		
+		printf("      Type %i (%s Binary-Discrete with Tempo) Airbrake Set.\xa", type,&acft);
+		if (	(led > 0) & !(	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1)	)	)
+			{	
+			flashLLED1(1,1000);
+			DeferCall(1000,&flashLLED1,0);
+			}
+		if (wav) PlayWav("t2bt.wav");
+		}
+else if (type == 1)	//on T9, off T10
+		{
+		MapKeyIO(&Throttle,	SPDB,				TEMPO(UP+mbrk,t9il,t9it),	Binary_AirbrakeOn);		//State Toggle Shift+T9.  
+		MapKeyR	(&Throttle,	SPDB,				0);
+		MapKey	(&Throttle,	SPDF,				Binary_AirbrakeOff);		
+		MapKeyR	(&Throttle,	SPDF,				0);
+		
+		printf("      Type %i (%s Binary-Discrete) Airbrake Set.\xa", type,&acft);
+		if (	(led > 0) & !(	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1)	)	)
+			{	
+			flashLLED1(1,250);
+			DeferCall(1000,&flashLLED1,0);
+			}
+		if (wav) PlayWav("t1bd.wav");
+		}
+else			//momentary T9, full switch T10
+		{
+//		if (AirBrkFlash > 0)	//removed in 2.54 for stability
+//			{
+//			MapKeyIO(&Throttle, SPDB,		TEMPO(UP+mbrk,t9il,t9it),	CHAIN(mbrk, EXEC("flashLLED1(1,250);"))	);		//State Toggle Shift+T9.  
+			//MapKeyRIO(&&Throttle, SPDB,		0,EXEC("DeferCall(Airbrake_In_MiG15, &flashLLED1, 0);")	);
+//			MapKeyRIO(&Throttle, SPDB,		0,EXEC("flashLLED1(0);")	);
+//			}
+//		else
+//			{
+			MapKeyIO(&Throttle, SPDB,		TEMPO(UP+mbrk,t9il,t9it),	mbrk);		//State Toggle Shift+T9.  
+			MapKeyR	(&Throttle, SPDB,		0);
+//			}		
+
+		MapKey	(&Throttle, SPDF,			Binary_AirbrakeOn);		
+		MapKeyR	(&Throttle, SPDF,			Binary_AirbrakeOff);
+
+		printf("      Type %i (%s Binary-Momentary) Airbrake Set.\xa", type,&acft);
+		if (	(led > 0) & !(	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1)	)	)
+			{	
+			flashLLED1(1,500);
+			DeferCall(1000,&flashLLED1,0);
+			}
+		if (wav) PlayWav("t0bm.wav");
+		}
+
+}
+
+int L39_Airbrake_Type_Set(int type, int index = 2)	//calls other functions in order with delay to force timing values prior to init
+//type is airbrake type, index for upper boundary of array (start at 0; allows for function expansion) and should always be last argument
+//index set to 2 to allow for binary types 0 and 1 and combo type 2 (changed to 2 in 2.43).
+//MiG-15 uses its own brake routine similar to the binary types, but with a specific momentary key
+{
+if ((type < 0) | (type > index)) type = (Airbrake_Type_Cur + 1)%(index+1);	//allows toggle/cycle
+
+if (	((WarthogThrottle > 1) & (!WH_Use_TQS))	|	(WarthogThrottle < 1)	)	L39_Airbrake_Map_Set(type,ProfID,AirBrkFlash,1);	//adjusted in 2.44
+else L39_Airbrake_Map_Set_WH(type,ProfID,AirBrkFlash,1);	//no second argument because hotswap is automatic
+Airbrake_Type_Cur = type; 		//syncs airbrake type with current config
+}

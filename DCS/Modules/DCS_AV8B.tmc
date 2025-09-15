@@ -1,0 +1,1484 @@
+//=============================================================================
+//			DCS AV-8B Harrier for HOTAS Cougar/Warthog and Cougar MFDs
+//					by Don "Home Fries" Heumphreus
+//						last updated: 27OCT2021
+//
+//	Change Log:
+//	2.00	Initial Release
+//	2.01	Added AV8_Analog_TDC argument to call DCS_Axis_Init() until analog TDC axes ingame.
+//	2.01a	Swapped MM_Nav and MM_VSTOL (LSYM)
+//			Swapped Anti-Coll and Aux Lights (Warthog Throttle Base)
+//	2.02	AV8_ACP_Sw_Cycle() to WHS/HCS Init routines
+//			Set FkeyPress=1 on init to prevent Commswitch activation on profile load
+//	2.03	Added S3_NWS() and set S4asNWS=NWSwithBrake
+//	2.04	Introduced enhanced controls
+//			Fixed Sensor Select Switch for HOTAS Cougar
+//	2.05	Added Combat Thrust for enhanced controls
+//			Removed H3L/R TEMPO for SSw Push (allows in-game TEMPO for TPOD)
+//	2.10	Improved VAICOM/SRS Compatibility
+//			Added Autopilot Commands to LMFD and relocated Emergency Jettison
+//	2.13	Fixed /I/O assignment for S1 with Warthog
+//	2.13a	Forced IDLERON/OFF to 0
+//	2.21	Added DX switches for H2O, switched Combat Thrust from DX19 to DX9
+//			Added NS430 to RMFD
+//	2.23	Added Discrete STO Stop settings (with LED indications)
+//			Added DX10 for Taxi Light
+//	2.28	Reassigned Flap Reset to DX18 to clear DX23, DX6 to Action and DX1 to Trigger (TG1 DX unmapped)
+//			fixed RMFD night/day mapping
+//			Added DCS Scratchpad to ROSB17
+//	2.29	Switched Master Caution and NS430/DCS Scratchpad assignments (ROSB 17 and 20).
+//			Added MFDisplay module selection
+//			Replaced 4 MFD Led functions with Lights_Four()
+//	2.34	Added TDC Designate and Cage/Uncage to H2U/D, removed 2 Snapviews and relocated Combat Panel view.
+//	2.35	Added option to put Master Mode on DF/Boat Switch
+//			Added support for F-18 Stick
+//	2.35a	Fixed APU switch mapping when custom lua not activated
+//	2.43	Removed SnapViews for VR, applied H2L/R as SSw Push for Warthog
+//			Added hooks for D/E Snapview optional if MFD_Count > 2
+//			Moved 2xMFD Export to S3+H4P Long to free S1 for JDAM
+//	2.43a	Fixed H3L (SSw Press) for Warthog base with F-18 Stick
+//	2.44	Added Rudder Trim, VR and Spyglass Zoom to VR
+//			Applied discrete Refuel Probe command instead of toggle (if no controller lua mod)
+//			Reversed orientation of NWS (APU) Switch
+//	2.45	Added option to use H4P as SSw Push
+//	2.46	Moved ROSB20 to MFD_Init()
+//	2.47	Removed code for AV-8B Throttle RPM LEDs to free up stack space
+//	2.50b	Removed duplicate MapKeyR(0) mappings to free stack space.
+//	2.50c	Removed Script_Debug print commands to free stack space.
+//	2.51	Re-added MapKey(APAH,0).
+//	2.54	Allow DF_MM_AV8 < 0 to force off for VR and 0 MFD users.
+//	2.56	Added MapKeyR() for CHF/B throttle stop.
+//	2.57d	Added discrete Master Arm for RMFD
+//	2.61a	Updated airbrake to analog momentary
+//	2.63	Added WHIdle_Enabled parameter to WH Idle commands
+//
+//
+//=============================================================================
+
+// Free 19 (Unshifted only, shf for NWS)
+//DX7,8 used for Water
+//DX1 now used for Trigger, DX6 for action (TG1 DX unmapped)
+//DX10 Taxi Light
+//DX12,18 Flap Power
+//DX25-6 for Ext Lght Master Sw
+//DX15 for Master Arm
+//DX16/17 Flaps
+//DX11 Anticoll
+//DX13 NWS
+//DX14 Refuel Probe
+//DX9 CMBT Thrust
+
+
+
+int	AV8_Analog_TDC = 1;
+
+
+int ACP_L1;	//ACP LED States
+int ACP_L2;
+int ACP_R1;
+int ACP_R2;
+int	ACPActive;	//added in 2.05
+
+int	AV8_ACP_Sw_Cur;
+
+int	AV8_Posit_Lt_Sw_Cur;
+int	AV8_Land_Lt_Sw_Cur;
+int	AV8_Ext_Master_Sw_Cur;
+int	AV8_Water_Sw_Cur;
+int	AV8_NoAction;	//state of TDC NoAction toggle
+
+int	AV8_STO_Stop_Discrete_Array;	//added in 2.22
+int	AV8_STO_Stop_Discrete_Cur;
+
+int AV8_Array_Init(int gear = 1)
+{
+ACP_L1 = 0;
+ACP_L2 = 0;
+ACP_R1 = 0;
+ACP_R2 = 0;
+
+AV8_ACP_Sw_Cycle(7);	//sets ACP switch to ARMT
+AV8_Posit_Lt_Sw_Cur = 0;
+AV8_Land_Lt_Sw_Cur = 0;
+AV8_Ext_Master_Sw_Cur = 0;
+AV8_Water_Sw_Cur = 1;	//center posit
+AV8_NoAction = 0;
+AV8_STO_Stop_Discrete_Cur = 0;
+
+if (gear)	FlapState = 0;	//defaults to up (not needed unless change later)
+else		FlapState = 0;
+}
+
+
+
+
+int DCS_AV8B(int led, int sp)
+{
+printf("DCS AV-8B N/A Harrier II\xa");
+
+
+
+if (WarthogStick > 0)
+	{
+	MapKeyR(&Joystick, S2, EXEC("DCS_AV8B_Init();"));
+	}
+else
+	{
+	MapKeyR(&HCougar, S2, EXEC("DCS_AV8B_Init();"));
+	}
+if (sp > 0)	PlayWav("av8b.wav");
+if (led > 0)
+	{
+	//should see * 0 0 0 to indicate that A-10C has been selected.
+	//Lights_RMFD(1);
+	Lights_Four(1,0,0,0,	ProfileSwapDelay+LED_Delay);
+//	DeferCall(ProfileSwapDelay+LED_Delay,&Lights_LLED1,1);	//Changed to Binary 4 in 1.28
+//	DeferCall(ProfileSwapDelay+2*LED_Delay,&Lights_LLED2,0);
+//	DeferCall(ProfileSwapDelay+3*LED_Delay,&Lights_RLED1,0);
+//	DeferCall(ProfileSwapDelay+4*LED_Delay,&Lights_RLED2,0);
+	}
+}
+
+int	SetMenu_AV8B()
+{
+Set_Acft_Array_Cur(2508);
+}
+
+//program startup
+int DCS_AV8B_Init()
+{
+							
+Determine_Differential_Braking(DiffBraking_Enabled,CougarToeBrakes);
+
+FkeyPress			=	1;	//added in 2.02 to prevent Commswitch key activation on profile load.
+GraceFlag			=	0;
+Eng_Start_x			=	0;
+Eng_Stop_x			=	0;
+Starter_Ind_x		=	0;	//Starter_Ind_AV8B;
+MFD_Eng_Start		=	0;
+ProfID				=	2508;
+FixedGear			=	0;
+Helicopter			=	0;
+T6WheelBrake		=	0;
+TriggerZoomEnabled	=	2;	//Value at 2 forces DX30 with KP*/ and KPENT
+GearCycleTimeUp		=	Gear_Retract_AV8B;
+GearCycleTimeDn		=	Gear_Deploy_AV8B;
+BrakeOnCycleTime	=	Airbrake_Out_AV8B;
+BrakeOffCycleTime	=	Airbrake_In_AV8B;
+S4AnalogBrake		=	JoyAsAnalogBrake;	//added in 1.33
+AnalogParkingBrake	=	JoyYParkingBrake;	//added in 1.33
+S4asNWS				=	NWSwithBrake;			//added in 1.33 for analog braking with NWS engaged
+S3holdNWS 			= 	1;	//added in 2.05
+XYAxisTrim			=	0;	//added in 1.34
+DMS_SnapView		=	0;	//added in 1.34
+WheelBrakeFull		=	1;	//added in 1.35
+ToeBrakesAvailable	=	2;	//added in 1.40; 2 applies a modifier to deconflict with SC
+NVG_Capable			=	0;	//added in 1.40, set to 0 (not necessary) because it uses its own NVG routine (different osbs)
+AB_Capable			=	0;	//added in 1.61
+Adjust_Backlighting	=	Adjust_Backlight_AV8B;	//added in 1.62
+TriggerZoom_state  	= 	0;		//reset TriggerZoom
+NS430_Enabled		=	NS430_Installed*NS430_Enabled_AV8B;	//added in 2.21
+CrewCount			=	1;
+StationChangeModifier	=	0;
+WH_Use_TQS				=	0;	//added in 2.43
+Analog_TDC			=	AV8_Analog_TDC;	//moved from standalone variable to global in 2.43
+EngineCount			=	2;	//axes used for vector
+Airbrake_Type_Cur	=	3;	//added in 2.43, changed from binary 1 to analog momentary 3 in 2.61a
+CommInitType		=	2;	//0 for none/custom, 1 for single channel (P-51), 2 for simple (dual channel), 3 for complex (3 channel).  added in 2.43
+StnCheckDisabled	=	2;	//added in 2.43.  Forced for single seat
+CurrentStation 		=	1;	//moved here in 2.43
+
+
+AV8_STO_Stop_Discrete_Array = SEQ(	AV8_STO_Stop_Stow,
+									AV8_STO_Stop_82,
+									AV8_STO_Stop_60,
+									AV8_STO_Stop_55,
+									AV8_STO_Stop_50
+									);
+
+printf("DCS AV-8B N/A Harrier II Config (Profile v%i.%i):\xa",MajorVersion,MinorVersion);
+PlayWavSel(ProfID,abs(Init_Run - 1),DCSFP_Enabled,MFDisplayEnabled);	//added in 1.61, DCSFP added in 2.05, MFDisplay added in 2.29
+Pause_TrackIR(0);
+AirBrake_Init(AirBrkFlash);	//moved to individual modules in 1.22
+MFD_Init(ProfID);
+	printf("   Map HOTAS for DCS AV-8B N/A Harrier II:\xa");
+
+//Set 0 to 1 once Analog TDC Enabled
+	DCS_Axis_Init(ProfID,EngineCount,Analog_TDC);	//uses 2 engine for left throttle as nozzle angle.
+
+		printf("      Button Mapping:\xa");
+			printf("         Shift Commands: S3 momentary...");
+			if (WarthogStick > 0)
+				{
+				if (WarthogThrottle > 0) SetShiftButton (&Joystick, S3, &Throttle, 0, 0);
+				else SetShiftButton (&Joystick, S3, &HCougar, 0, 0);
+				//MapKey	(&Joystick, S3, BTN_S3P);		//DX3 short, long(er) for modifier and eject check, moved here in 0.53, removed S4 and changed argument to "RudderPedals"
+				MapKeyR	(&Joystick, S3, BTN_S3R);		//added in 0.53 to release "RudderPedals" argument in S3Shifted
+				}
+			else SetShiftButton(&HCougar, S3, &HCougar, 0, 0);
+				//MapKey	(&HCougar, S3, BTN_S3P);		//DX3 short, long(er) for modifier and eject check, moved here in 0.53, removed S4 and changed argument to "RudderPedals"
+				MapKeyR	(&HCougar, S3, BTN_S3R);		//added in 0.53 to release "RudderPedals" argument in S3Shifted
+			S3_NWS(GearDn_Ind_Default,ProfID);
+			printf("Done!\xa");	
+			printf("         Stick Buttons...");
+			if (WarthogStick > 0)	
+				{
+				MapKeyIO(&Joystick, TG1, EXEC("if (ACPActive) AV8_ACP_Sw_Cycle(7); TriggerZoom_toggle(-1,AirBrkFlash,GearState,ACPActive);"), EXEC("TriggerZoom_in();")	);	//ACPActive for flaps argument to deconflict LLED2; DX1 removed in 2.28 as remapped to Trigger
+				MapKeyRIO(&Joystick,TG1, 0, EXEC("ActKey(ZoomIn_slow); DeferCall(KBDelay,&TriggerZoom_out,0);"));				//ActKey(DX1) removed in 2.28 as remapped to Trigger
+
+				MapKey(&Joystick, TG2, DX1);
+//				MapKeyR(&Joystick, TG2, 0);
+				MapKeyIO(&Joystick, S1, TEMPO(M2k_Hide_Stick, M2k_Hide_Throttle, DefTempo),	DX5);	//M2k_Hide_Throttle now maps to hide body
+				MapKey(&Joystick, S2, DX2);
+				MapKeyR	(&Joystick,	S2, 0);
+				MapKeyIO(&Joystick, S4, EXEC("S3S4Shifted();"), EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,0);"));	//allows DX4 or wheelbrakes; diffbraking added in 0.24, dx 30 removed for test in 26, DX4 incorporated into DiffBraking in 0.32
+				MapKeyRIO(&Joystick, S4, 0, EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,1);"));
+				}
+			else
+				{
+				MapKeyIO(&HCougar, TG1, EXEC("if (ACPActive) AV8_ACP_Sw_Cycle(7);TriggerZoom_toggle(-1,AirBrkFlash,GearState,ACPActive);"), CHAIN(DX1,EXEC("TriggerZoom_in();"))	);	//ACPActive for flaps argument to deconflict LLED2; DX1 removed in 2.28 as remapped to Trigger
+				MapKeyRIO(&HCougar,TG1, UP+DX1, EXEC("ActKey(ZoomIn_slow); DeferCall(KBDelay,&TriggerZoom_out,0);"));				//ActKey(DX1) removed in 2.28 as remapped to Trigger
+
+				MapKey(&HCougar, TG2, DX1);
+//				MapKeyR(&HCougar, TG2, 0);
+				MapKeyIO(&HCougar, S1, TEMPO(M2k_Hide_Stick, M2k_Hide_Throttle, DefTempo),	DX5);	//M2k_Hide_Throttle now maps to hide body
+				MapKey(&HCougar, S2, DX2);
+				MapKeyR	(&HCougar,	S2, 0);
+				MapKeyIO(&HCougar, S4, EXEC("S3S4Shifted();"), EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,0);"));	//allows DX4 or wheelbrakes; diffbraking added in 0.24, dx 30 removed for test in 26, DX4 incorporated into DiffBraking in 0.32
+				MapKeyRIO(&HCougar, S4, 0, EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,1);"));
+				}
+			printf("Done!\xa");	
+			
+			H1_Init(TrackIR, PadlockEnabled, ProfID);	//moved to individual routines in 1.27 for trim reset removal on helos
+			CommState_Off(1,ProfID,1,0,1); //Maps Hats 2-4
+			AV8B_Throttle_Init();
+
+printf("Done.\xa");
+
+printf(" DCS AV-8B Harrier II Init Complete!\xa");	
+
+ActKey(DX1);				//just in case DX1 lingers from trigger activation
+//Lights_ALL(0);				//Says Init Complete
+//	DeferCall(LED_Delay,&Lights_RLED1,0);	//changed to binary in 1.28
+//	DeferCall(2*LED_Delay,&Lights_RLED2,0);
+//	DeferCall(3*LED_Delay,&Lights_LLED1,0);
+
+if (Init_Run == 0) Gear_Ind_Init(GearDn_Ind_Default,FixedGear,Helicopter,AirBrkFlash);
+
+//if (Adjust_Backlighting > 0)		//Night remmed out because day is default state.
+//	{
+//	if (MFD_Default_Setting > 1)	//until power/brt available
+//		{
+//		LMFD_Backlight(X(MFD_Lt,1));
+//		DeferCall(LED_Delay,&RMFD_Backlight,X(MFD_Lt,1));
+//		LMFD_Pwr_State = 1;
+//		RMFD_Pwr_State = 1;
+//		DeferCall(2*LED_Delay,&WHT_Power,1);	//added in 1.61
+//		}
+//	else	//default
+//		{
+//		LMFD_Backlight(X(MFD_Lt,MFD_Default_Setting));
+//		DeferCall(LED_Delay,&RMFD_Backlight,X(MFD_Lt,MFD_Default_Setting));
+//		LMFD_Pwr_State = MFD_Default_Setting;
+//		RMFD_Pwr_State = MFD_Default_Setting;
+//		DeferCall(2*LED_Delay,&WHT_Power,MFD_Default_Setting);	//added in 1.61
+//		}
+//	}
+//else 
+DeferCall(LED_Delay,&Backlight_Max_Init,0);
+
+if (WarthogThrottle > 0) DeferCall(3*LED_Delay,&WHT_Lights_Dn_D,0);
+
+if (GearDn_Ind_Default > 0) Map_Cougar_ToeBrakes(ToeBrakesAvailable);//added in 1.40;
+else
+	{
+	//CMSP_Mode_Cur = 3;		//added in 0.52: Defaults CMSP Mode to Semi if gear defaults to up (air start)
+	Map_Cougar_ToeBrakes(0);//added in 1.40
+	}
+	
+AV8_Array_Init(GearDn_Ind_Default);	
+
+printf("DCS AV-8B MFD Defaults (%i,%i):\xa",LMFD_Pwr_State,RMFD_Pwr_State);
+printf("AV-8B N/A Harrier II Config Complete!\xa");	
+Set_Acft_Array_Cur(ProfID);
+
+//DeferCall(LED_Delay,&flashRLED2,1);	//added in 1.28 since you can't see LED shift after profile selection
+//DeferCall(LED_Delay+2000,&flashRLED2,0);
+}
+
+
+int	AV8B_Throttle_Init()
+{
+if (WarthogThrottle > 0)
+	{		
+				printf("         Throttle Buttons...");	
+				//MapKey	(&Throttle,	SC,	DX6);
+				if (WHIdle_Enabled > 0)	AV8_Throttle_Cutoff_Set(Throttle[IDLERON],1,0);
+//				MapKeyR	(&Throttle, SC, 0);							//Added in 0.51 to prevent P-51D CommState Release.
+
+				MapKey	(&Throttle,	LTB,	DX24);
+//				MapKeyR	(&Throttle,	LTB,	0);
+
+//Poss change if TDC keys/DX changes
+				MapKeyIO(&Throttle,	CSU,	AV8_TDC_Up,	AV8_ECM_Up);
+				MapKeyIO(&Throttle,	CSD,	AV8_TDC_Dn,	AV8_ECM_Dn);
+				MapKeyIO(&Throttle,	CSL,	AV8_TDC_Lt,	AV8_ECM_Lt);
+				MapKeyIO(&Throttle,	CSR,	AV8_TDC_Rt,	AV8_ECM_Rt);
+				//Simple_Comm_Init(ProfID,1,0);			//Set Comms routine (DX21, PTTLED, and simple commmenu (\)
+			printf("continued...");
+				//MapKey	(&Throttle,	CHF,	); //factored with TriggerZoom_MapGearDn_WH()
+				if (WH_IdleStop_AV8B > 1)		//discrete STO
+					MapKeyIO(&Throttle,	CHB,	TEMPO(0,Gear_Up,GearUpTempo),	TEMPO(EXEC("AV8_STO_Set_Discrete(-1);"),	EXEC("AV8_Nozzle_Adjust(1,0);"),	DefTempo)	);
+				else	
+					MapKeyIO(&Throttle,	CHB,	TEMPO(0,Gear_Up,GearUpTempo),	EXEC("AV8_Nozzle_Adjust(1,0);")	);
+					
+				MapKeyRIO(&Throttle,CHF,	0,	EXEC("AV8_Nozzle_Adjust(0,1);")	);	
+				MapKeyRIO(&Throttle,CHB,	0,	EXEC("AV8_Nozzle_Adjust(0,0);")	);	
+						
+			//	else if (STO_Stop_Rate_AV8B > KBDelay)
+			//			{
+			//			MapKeyIO(&Throttle,	CHB,	TEMPO(0,Gear_Up,GearUpTempo),	REXEC(6, STO_Stop_Rate_AV8B, "ActKey(KEYON+PULSE+AV8_STO_Stop_Dn);")	);
+			//			MapKeyRIO(&Throttle,CHF,	0,	EXEC("StopAutoRepeat(6);")	);	
+			//			MapKeyRIO(&Throttle,CHB,	0,	EXEC("StopAutoRepeat(6);")	);	
+			//			}
+			//	else 	{
+			//			MapKeyIO(&Throttle,	CHB,	TEMPO(0,Gear_Up,GearUpTempo),	AV8_STO_Stop_Dn);
+			//			MapKeyR	(&Throttle,	CHF,	0);	//Added for F-86 in 1.69
+			//			MapKeyR	(&Throttle,	CHB,	0);	//Added for F-86 in 1.69						
+			//			}
+				//TriggerZoom_MapGearDn_WH(0, ProfID, 0, 1);	//triggerzoom here (forced) to map CHF since TGZ currently disabled
+
+				MapKey	(&Throttle,	EACON,	DX15);	//Master Arm
+//				MapKey	(&Throttle,	EACOFF,	0);	
+
+				MapKey	(&Throttle,	FLAPU,	DX16);
+//				MapKey	(&Throttle,	FLAPM,	0);
+				MapKey	(&Throttle,	FLAPD,	DX17);
+					
+//				MapKey	(&Throttle,	APUON,	0);	
+				MapKey	(&Throttle,	APUOFF,	DX13);
+
+				MapKeyIO(&Throttle,	APENG,	DX9,	TEMPO(EXEC("FC3_Autopilot_Set('a');"), EXEC("FC3_Autopilot_Set('h');"),DefTempo));	
+
+				if (AV8B_Custom_LUA > 0)
+					{
+
+					
+//					MapKey	(&Throttle,	EACON,	DX15);	//Master Arm
+//					MapKey	(&Throttle,	EACOFF,	0);	
+
+//					MapKey	(&Throttle,	FLAPU,	DX16);
+//					MapKey	(&Throttle,	FLAPM,	0);
+//					MapKey	(&Throttle,	FLAPD,	DX17);
+					
+					MapKey	(&Throttle,	RDRNRM,	DX14);	//Refuel
+//					MapKey	(&Throttle,	RDRDIS,	0);
+
+					MapKey	(&Throttle,	EFRNORM,	DX10);
+//					MapKey	(&Throttle,	EFROVER,	0);
+					
+					MapKey	(&Throttle,	EFLNORM,	DX11);	//Anti-coll
+//					MapKey	(&Throttle,	EFLOVER,	0);		
+//					MapKeyIO(&Throttle,	EFRNORM,	0,	PULSE+AV8_Aux_Lt_Sw);		//PULSE+AV8_Refuel_Lt_Sw);	//CHAIN(PULSE+AV8_Refuel_Lt_Sw,D(2*KBDelay),PULSE+AV8_Refuel_Probe));	//light first because probe is a chain
+//					MapKeyIO(&Throttle,	EFROVER,	0,	PULSE+AV8_Aux_Lt_Sw);		//PULSE+AV8_Refuel_Lt_Sw);	//CHAIN(PULSE+AV8_Refuel_Lt_Sw,D(2*KBDelay),PULSE+AV8_Refuel_Probe));
+				
+//					MapKey	(&Throttle,	APUON,	DX13);	
+//					MapKey	(&Throttle,	APUOFF,	0);
+
+//					MapKeyIO(&Throttle,	APENG,	TEMPO(EXEC("FC3_Autopilot_Set('a');"), EXEC("FC3_Autopilot_Set('h');"),DefTempo), 	DX19);	
+					}
+				else
+					{
+//					MapKeyIO(&Throttle,	EACON,	0,	PULSE+AV8_MasterArm);
+//					MapKeyIO(&Throttle,	EACOFF,	0,	PULSE+AV8_MasterArm);
+					
+//					MapKeyIO(&Throttle,	FLAPU,	0,			EXEC("AV8_Flaps_Sel(0,Switch_Delay);")	);
+//					MapKeyIO(&Throttle,	FLAPM,	0,	TEMPO(0,EXEC("AV8_Flaps_Sel(1,Switch_Delay);"),DoubleTap));
+//					MapKeyIO(&Throttle,	FLAPD,	0,			EXEC("AV8_Flaps_Sel(2,Switch_Delay);")	);
+					
+					MapKeyIO(&Throttle,	RDRNRM,	0,	PULSE+AV8_Refuel_Probe_Out);	//PULSE+AV8_Refuel_Probe);
+					MapKeyIO(&Throttle,	RDRDIS,	0,	PULSE+AV8_Refuel_Probe_In);		//PULSE+AV8_Refuel_Probe);
+
+					MapKeyIO(&Throttle,	EFRNORM,	0,	PULSE+AV8_Aux_Lt_Sw);
+					MapKeyIO(&Throttle,	EFROVER,	0,	PULSE+AV8_Aux_Lt_Sw);
+					
+					MapKeyIO(&Throttle,	EFLNORM,	0,	PULSE+AV8_AntiColl_Sw);		//AV8_JPTL);
+					MapKeyIO(&Throttle,	EFLOVER,	0,	PULSE+AV8_AntiColl_Sw);		//AV8_JPTL);
+//					MapKeyIO(&Throttle,	EFRNORM,	0,	PULSE+AV8_Aux_Lt_Sw);		//PULSE+AV8_Refuel_Lt_Sw);	//CHAIN(PULSE+AV8_Refuel_Lt_Sw,D(2*KBDelay),PULSE+AV8_Refuel_Probe));	//light first because probe is a chain
+//					MapKeyIO(&Throttle,	EFROVER,	0,	PULSE+AV8_Aux_Lt_Sw);		//PULSE+AV8_Refuel_Lt_Sw);	//CHAIN(PULSE+AV8_Refuel_Lt_Sw,D(2*KBDelay),PULSE+AV8_Refuel_Probe));
+				
+//					MapKeyIO(&Throttle,	APUON,	0,	PULSE+AV8_AntiColl_Sw);
+//					MapKeyIO(&Throttle,	APUOFF,	0,	PULSE+AV8_AntiColl_Sw);
+				
+//					MapKeyIO(&Throttle,	APENG,	EXEC("FC3_Autopilot_Set('h');"),TEMPO(EXEC("FC3_Autopilot_Set('a');"), EXEC("FC3_Autopilot_Set('h');"),DefTempo));	//identical to F-15C
+					}
+
+//				MapKeyR	(&Throttle,	FLAPU,	0);
+//				MapKeyR	(&Throttle,	FLAPD,	0);
+				
+//				MapKeyR	(&Throttle,	EFLNORM,	0);
+//				MapKeyR	(&Throttle,	EFRNORM,	0);
+			if (WHIdle_Enabled > 0)
+				{			
+				MapKeyIO(&Throttle,	IDLERON,	EXEC("AV8_Throttle_Cutoff_Set(1,1,0);"),	EXEC("AV8_Throttle_Cutoff_Set(1,1);"));	//Can use Idle stop to prevent inadvertent throttle movement prior to start
+				MapKey	(&Throttle,	IDLEROFF,	EXEC("AV8_Throttle_Cutoff_Set(0,1);"));
+				}
+//				if (Script_Debug) printf("\xa WH_IdleStop_AV8B = %i\xa",WH_IdleStop_AV8B);
+				if ((WH_IdleStop_AV8B > 0) & (WHIdle_Enabled > 0))
+					{
+					//if (Script_Debug) printf(" IdleStop STO Set");
+
+					if (AV8B_Custom_LUA > 0)
+						{
+//						if (Script_Debug)
+//							{
+//							printf(" (Discrete");
+//							if (WH_LED_AV8B > 0) printf(", LED)\xa");	//was WH_LED_AV8B > 1 prior to 2.47
+//							else printf(")\xa");
+//							printf(" WH_LED_AV8B = %i\xa", WH_LED_AV8B);
+//							}
+						MapKeyIO(&Throttle,	IDLELON,	0,	EXEC("AV8_STO_Set_Discrete(0);"));
+						MapKeyIO(&Throttle,	IDLELOFF,	0,	EXEC("AV8_STO_Set_Discrete(1);"));
+						}
+					else
+						{
+						//if (Script_Debug) printf("\xa");
+						MapKeyIO(&Throttle,	IDLELON,	0,	EXEC("AV8_STO_Set(0,11,KBDelay);"));
+						MapKeyIO(&Throttle,	IDLELOFF,	0,	EXEC("AV8_STO_Set(1,STO_Stop_Increment_AV8B,KBDelay);"));
+						}
+					}
+				else
+					{
+					//if (Script_Debug) printf(" No IdleStop STO\xa");
+					MapKey	(&Throttle,	IDLELON,	0);
+					MapKey	(&Throttle,	IDLELOFF,	0);
+					}
+				
+				MapKeyIO(&Throttle,	LDGH,	TEMPO(M2k_EmerJett,EXEC("EjectCheckLDGH(ProfID);"), DefTempo),
+											TEMPO(AV8_MasterCaution, AV8_Flare_Salvo, DefTempo));
+				
+			printf("Base Switches...");
+				MapKeyIO(&Throttle,	EOLIGN,		0,	EXEC("AV8_Posit_Lt_Sw_Sel(2,Switch_Delay);	if (!IgnLState){ Grace_Flag(1); IgnLState = 1;}")	);
+				MapKeyIO(&Throttle,	EOLNORM,	0,	EXEC("if (!IgnLState) AV8_Posit_Lt_Sw_Sel(1,Switch_Delay);")	);
+				MapKeyIO(&Throttle,	EOLMOTOR,	0,	EXEC("AV8_Posit_Lt_Sw_Sel(0,Switch_Delay);	IgnLState = 0;")	);
+								
+				MapKeyIO(&Throttle,	EORIGN,		0,	EXEC("AV8_Land_Lt_Sw_Sel(2,Switch_Delay);		if (!IgnRState){ Grace_Flag(1); IgnRState = 1;}")	);
+				MapKeyIO(&Throttle,	EORNORM,	0,	EXEC("if (!IgnRState) AV8_Land_Lt_Sw_Sel(1,Switch_Delay);")	);
+				MapKeyIO(&Throttle,	EORMOTOR,	0,	EXEC("AV8_Land_Lt_Sw_Sel(0,Switch_Delay);		IgnRState = 0;")	);
+	
+				MapKeyRIO(&Throttle,EOLIGN,		EXEC("IgnLState = 1;"),	EXEC("if ((IgnLState) & (!GraceFlag)) IgnLState = 0; else Grace_Flag(0);")	);
+				MapKeyRIO(&Throttle,EORIGN,		EXEC("IgnRState = 1;"),	EXEC("if ((IgnRState) & (!GraceFlag)) IgnRState = 0; else Grace_Flag(0);")	);
+				
+//				MapKeyIO(&Throttle,	APPAT,	0,			EXEC("AV8_Water_Sw_Sel(2,Switch_Delay);")	);
+//				MapKeyIO(&Throttle,	APAH,	0,	TEMPO(0,EXEC("AV8_Water_Sw_Sel(1,Switch_Delay);"),DoubleTap));	
+//				MapKeyIO(&Throttle,	APALT,	0,			EXEC("AV8_Water_Sw_Sel(0,Switch_Delay);")	);
+
+				MapKey	(&Throttle,	APPAT,	DX7	);
+				MapKey	(&Throttle,	APAH,	0	);	
+				MapKey	(&Throttle,	APALT,	DX8	);
+
+//change candidate				
+		
+			printf("...Done!\xa");
+	printf("   HOTAS Warthog Throttle Mapping Complete.\xa\xa");			
+	}
+else
+	{
+			printf("         TQS Buttons...");	
+
+				MapKey	(&HCougar, T1, DX6);	//ProfID added to release in 1.35
+//				MapKeyR	(&HCougar, T1, 0);							//Added in 0.51 to prevent P-51D CommState Release.
+
+
+//				MapKeyIO(&HCougar,	T6, TEMPO(AV8_MasterCaution, 	EXEC("EjectCheckT6(ProfID);"), DefTempo),
+//										TEMPO(AV8_Uncage, 			EXEC("EjectCheckT6(ProfID);"), DefTempo)	);		//Will check for ejection parameters if held for 500ms., airstart in ejectcheckt6()
+				AV8_Throttle_Cutoff_Set(0,0);
+				MapKeyR	(&HCougar,	T6, UP+DX24);
+			//TriggerZoom_MapGearDn(0, ProfID,0,1);	//triggerzoom here (forced) to map H3D since TGZ currently disabled
+			printf("Switch Initial Check...");
+				//AV8B_Switch_Initial_Check();
+			printf("...Done!\xa");
+	printf("   HOTAS Cougar Mapping Complete.\xa\xa");			
+	}
+//			printf("comm init...");
+Simple_Comm_Init(ProfID,1,0);			//Set Comms routine (DX21, PTTLED, and simple commmenu (\)
+Airbrake_Map_Set(Airbrake_Type_Cur,0);	//binary discrete with no swap (dont change without updating 2508 specifics in Airbrake_Map_Set()
+AV8B_DF_Init(WarthogThrottle);
+AV8MapEbrk(GearDn_Ind_Default,ProfID);
+}
+
+int AV8B_HCS_Init(int prof = 2508, int force = 0)	//force added in 1.69 as passthru to allow for initial TGZ_MapGearDn if TGZ disabled.
+{
+if ((HornetStick > 0) & (HornetStick_Default > 0))	//added in 2.35
+	{
+//		if (Script_Debug) printf("         Hat2 (SSw)...");	
+			if (TrackIR < 2)
+				{
+				if ((MFD_Count > (2+NS430_Enabled)) & (!DirectEntry_AV8))
+						MapKeyIO(&HCougar, 	H2U,	Std_SnapView8,	AV8_SSw_Up);
+				else	MapKeyIO(&HCougar, 	H2U,	A10C_SnapView8,	AV8_SSw_Up);
+				MapKeyIO(&HCougar, 	H2R,	Std_SnapView3,	AV8_SSw_Rt);
+				MapKeyIO(&HCougar, 	H2L,	Std_SnapView1,	AV8_SSw_Lt);
+				MapKeyIO(&HCougar,	H2D,	Std_SnapView2,	AV8_SSw_Dn);
+				}
+			else
+				{
+				MapKeyIO(&HCougar, 	H2U,	VR_Zoom_kb,		AV8_SSw_Up);
+				MapKeyIO(&HCougar, 	H2R,	RudderTrimRt_DX,AV8_SSw_Rt);
+				MapKeyIO(&HCougar, 	H2L,	RudderTrimLt_DX,AV8_SSw_Lt);
+				MapKeyIO(&HCougar,	H2D,	VR_Spyglass,	AV8_SSw_Dn);
+				}
+			MapKey	(&HCougar, 	H3L,	AV8_SSw_Push);		
+//		if (Script_Debug) printf("...Done!\xa");	
+		
+//		if (Script_Debug) printf("         Hat3 (CMS)...");		
+			MapKeyIO(&HCougar, 	H3U,	Gear_Flaps_Up_AV8,	AV8_ECM_Up	);					
+			MapKeyIO(&HCougar, 	H3R,	AV8_ECM_Lt,			AV8_ECM_Rt	);
+			//MapKeyIO(&HCougar, 	H3L,	AV8_SSw_Push,		AV8_SSw_Lt	);	
+			TriggerZoom_MapGearDn(TriggerZoom_state, prof, 0, force);		//restore force when TGZ enabled
+//		if (Script_Debug) printf("...Done!\xa");
+	}	
+else
+	{
+//		if (Script_Debug) printf("         Hat2 (CMS)...");	
+			if (TrackIR < 2)
+				{
+				if ((MFD_Count > (2+NS430_Enabled)) & (!DirectEntry_AV8))
+						MapKeyIO(&HCougar, 	H2U,	Std_SnapView8,	AV8_SSw_Up);
+				else	MapKeyIO(&HCougar, 	H2U,	A10C_SnapView8,	AV8_SSw_Up);
+				MapKeyIO(&HCougar, 	H2U,	A10C_SnapView8,	AV8_ECM_Up);
+				MapKeyIO(&HCougar, 	H2R,	Std_SnapView3,	AV8_ECM_Rt);
+				MapKeyIO(&HCougar, 	H2L,	Std_SnapView1,	AV8_ECM_Lt);
+				MapKeyIO(&HCougar,	H2D,	Std_SnapView2,	AV8_ECM_Dn);
+				}
+			else
+				{
+				MapKeyIO(&HCougar, 	H2U,	VR_Zoom_kb,		AV8_ECM_Up);
+				MapKeyIO(&HCougar, 	H2R,	RudderTrimRt_DX,AV8_ECM_Rt);
+				MapKeyIO(&HCougar, 	H2L,	RudderTrimLt_DX,AV8_ECM_Lt);
+				MapKeyIO(&HCougar,	H2D,	VR_Spyglass,	AV8_ECM_Dn);
+				}
+//		if (Script_Debug) printf("...Done!\xa");	
+//		if (Script_Debug) printf("         Hat3 (SSw)...");		
+			MapKeyIO(&HCougar, 	H3U,	Gear_Flaps_Up_AV8,	AV8_SSw_Up	);					
+			MapKeyIO(&HCougar, 	H3R,	AV8_SSw_Push,		AV8_SSw_Rt	);
+			MapKeyIO(&HCougar, 	H3L,	AV8_SSw_Push,		AV8_SSw_Lt	);	
+			TriggerZoom_MapGearDn(TriggerZoom_state, prof, 0, force);		//restore force when TGZ enabled
+//		if (Script_Debug) printf("...Done!\xa");
+	}	
+//		if (Script_Debug) printf("         Hat4 (Armament)...");	
+			MapKeyIO(&HCougar, 	H4U,	AV8_MM_AA_Cannon,	AV8_MM_AA_Bore);
+			MapKeyIO(&HCougar, 	H4D,	AV8_MM_AA_Cannon,	AV8_MM_AA_SEAM);
+			AV8_ACP_Sw_Cycle(AV8_ACP_Sw_Cur);
+//		if (Script_Debug) printf("...Done!\xa");		
+}
+int AV8B_WHS_Init(int prof = 2508, int force = 0)	//force added in 1.69 as passthru to allow for initial TGZ_MapGearDn if TGZ disabled. must force if no wh throttle
+{
+if ((HornetStick > 0) & (HornetStick_Default > 0))	//added in 2.35
+	{
+//		if (Script_Debug) printf("         Hat2 (SSw)...");	
+			if (TrackIR < 2)
+				{
+				if ((MFD_Count > (2+NS430_Enabled)) & (!DirectEntry_AV8))
+						MapKeyIO(&Joystick, 	H2U,	Std_SnapView8,	AV8_SSw_Up);
+				else	MapKeyIO(&Joystick, 	H2U,	A10C_SnapView8,	AV8_SSw_Up);
+				MapKeyIO(&Joystick, 	H2R,	Std_SnapView3,	AV8_SSw_Rt);
+				MapKeyIO(&Joystick, 	H2L,	Std_SnapView1,	AV8_SSw_Lt);
+				MapKeyIO(&Joystick,		H2D,	Std_SnapView2,	AV8_SSw_Dn);
+				}
+			else
+				{
+				MapKeyIO(&Joystick, 	H2U,	VR_Zoom_kb,		AV8_SSw_Up);
+				MapKeyIO(&Joystick, 	H2R,	RudderTrimRt_DX,AV8_SSw_Rt);
+				MapKeyIO(&Joystick, 	H2L,	RudderTrimLt_DX,AV8_SSw_Lt);
+				MapKeyIO(&Joystick,		H2D,	VR_Spyglass,	AV8_SSw_Dn);
+				}	
+			MapKey	(&Joystick, 	H3L,	AV8_SSw_Push);
+//		if (Script_Debug) printf("...Done!\xa");	
+		
+//		if (Script_Debug) printf("         Hat3 (TMS)...");		
+			MapKey	(&Joystick, 	H3R,	DX6	);	// /i cage/uncage /o tdc designate
+			TriggerZoom_MapGearDn_WH(TriggerZoom_state, prof, 0, force);	//restore force when TGZ enabled
+//		if (Script_Debug) printf("...Done!\xa");
+	}	
+else
+	{
+//		if (Script_Debug) printf("         Hat2 (SnapViews)...");	
+			if (TrackIR < 2)
+				{
+				if ((MFD_Count > (2+NS430_Enabled)) & (!DirectEntry_AV8))
+						MapKeyIO(&Joystick, 	H2U,	Std_SnapView8,	DX6);	//changed in 2.34 to TDC Designate			//SnapView8 UFC DE
+				else	MapKeyIO(&Joystick, 	H2U,	A10C_SnapView8,	DX6);			
+				MapKeyIO(&Joystick,	H2R,	Std_SnapView6,	Shift_SnapView3);		
+				MapKeyIO(&Joystick, H2L,	Std_SnapView4,	Shift_SnapView1);	//changed in 2.34 to Combat panel (SnapView1)
+				MapKeyIO(&Joystick,	H2D,	Std_SnapView2,	CHAIN(DX30,D(ModDelay),DX6));	//Shift_SnapView1);		changed in 2.34 to Cage/Uncage
+				}
+			else
+				{
+				MapKeyIO(&Joystick, H2U,	VR_Zoom_kb,		DX6);			
+				MapKeyIO(&Joystick,	H2R,	RudderTrimRt_DX,AV8_SSw_Push);		
+				MapKeyIO(&Joystick, H2L,	RudderTrimLt_DX,AV8_SSw_Push);
+				MapKeyIO(&Joystick,	H2D,	VR_Spyglass,	CHAIN(DX30,D(ModDelay),DX6));	
+				}
+//		if (Script_Debug) printf("...Done!\xa");	
+//		if (Script_Debug) printf("         Hat3 (SSw)...");		
+			MapKeyIO(&Joystick, 	H3R,	AV8_SSw_Push,	AV8_SSw_Rt	);
+			MapKeyIO(&Joystick, 	H3L,	AV8_SSw_Push,	AV8_SSw_Lt	);
+			TriggerZoom_MapGearDn_WH(TriggerZoom_state, prof, 0, force);	//restore force when TGZ enabled
+//		if (Script_Debug) printf("...Done!\xa");
+	}
+//		if (Script_Debug) printf("         Hat4 (Armament)...");	
+			AV8_ACP_Sw_Cycle(AV8_ACP_Sw_Cur);
+			if (H4P_SCSP_AV8 > 0)
+				{
+				MapKeyIO(&Joystick, 	H4U,	TEMPO(AV8_MM_AA_Bore,AV8_MM_AA_Cannon,DefTempo),	AV8_MM_AA_Bore);
+				MapKeyIO(&Joystick, 	H4D,	TEMPO(AV8_MM_AA_SEAM,AV8_MM_AA_Cannon,DefTempo),	AV8_MM_AA_SEAM);
+				MapKeyIO(&Joystick, 	H4P,	TEMPO(AV8_MM_AA_Cannon,CHAIN(PULSE+AV8_LMFD_Export,D(2*KBDelay),PULSE+AV8_RMFD_Export),DefTempo), AV8_SSw_Push	);		//moved/changed in 2.45	
+				}
+			else
+				{
+				MapKeyIO(&Joystick, 	H4U,	AV8_MM_AA_Cannon,	AV8_MM_AA_Bore);
+				MapKeyIO(&Joystick, 	H4D,	AV8_MM_AA_Cannon,	AV8_MM_AA_SEAM);			
+				MapKeyIO(&Joystick,		H4P,	TEMPO(0,CHAIN(PULSE+AV8_LMFD_Export,D(2*KBDelay),PULSE+AV8_RMFD_Export),DefTempo),	AV8_MM_AA_Cannon);
+				}
+							
+//		if (Script_Debug) printf("...Done!\xa");		
+}
+
+int	AV8B_DF_Init(int wh)
+{
+if (	((TrackIR > 1) | (MFD_Count < 1) | (DF_MM_AV8 > 0))	&	(DF_MM_AV8 >= 0)	)	//added >= 0 in 2.54 to allow -1 to force off.
+	{
+	if (wh > 0)
+		{
+		MapKeyIO(&Throttle,	BSB,	0,PULSE+AV8_MM_AG);
+		MapKeyIO(&Throttle,	BSF,	0,PULSE+AV8_MM_VSTOL);
+		MapKeyIO(&Throttle,	BSM,	0,TEMPO(0,	PULSE+AV8_MM_NAV, DoubleTap));			
+		
+		
+		
+		if (AV8B_Custom_LUA > 0)
+			{
+			MapKey	(&Throttle,	PSF,	DX26	);	//lighting switch
+			MapKey	(&Throttle,	PSB,	DX25	);
+			MapKey	(&Throttle,	PSM,	0		);	
+					
+			MapKeyIO(&LMFD,		SYMU,	KB_LSYMU,	CHAIN(UP+DX18,DOWN+DX12)	);	//Flap Power
+			MapKeyIO(&LMFD,		SYMD,	KB_LSYMD,	TEMPO(CHAIN(UP+DX12,UP+DX18),	CHAIN(UP+DX12,DOWN+DX18), DefTempo)	);
+			}
+		else
+			{
+			MapKeyIO(&Throttle,	PSF,	0,	EXEC("AV8_Ext_Master_Sw_Sel(0,Switch_Delay);")	);
+			MapKeyIO(&Throttle,	PSB,	0,	EXEC("AV8_Ext_Master_Sw_Sel(2,Switch_Delay);")	);
+			MapKeyIO(&Throttle,	PSM,	0,	TEMPO(0,EXEC("AV8_Ext_Master_Sw_Sel(1,Switch_Delay);"),DoubleTap));	
+			
+			MapKeyIO(&LMFD,		SYMU,	KB_LSYMU,	TEMPO(AV8_MM_AG,	AV8_MM_VSTOL, 			DefTempo)	);
+			MapKeyIO(&LMFD,		SYMD,	KB_LSYMD,	TEMPO(AV8_MM_NAV,	AV8_MM_VSTOL, 			DefTempo)	);
+			}		
+		}
+	else
+		{
+		MapKeyIO(&HCougar,	T7, 	0,PULSE+AV8_MM_AG);
+		MapKeyIO(&HCougar,	T8, 	0,PULSE+AV8_MM_VSTOL);
+		MapKeyIO(&HCougar,	DFM,	0,TEMPO(0,	PULSE+AV8_MM_NAV, DoubleTap));	
+		
+		if (AV8B_Custom_LUA > 0)
+			{
+			MapKeyIO(&LMFD,	SYMU,	KB_LSYMU,	CHAIN(UP+DX25,DOWN+DX26)		);	//lighting switch
+			MapKeyIO(&LMFD,	SYMD,	KB_LSYMD,	TEMPO(CHAIN(UP+DX26,UP+DX25),	CHAIN(UP+DX26,DOWN+DX25), DefTempo)	);
+			}
+		else
+			{
+			MapKeyIO(&LMFD,	SYMU,	KB_LSYMU,	TEMPO(EXEC("AV8_Ext_Master_Sw_Sel(0,Switch_Delay);"),	EXEC("AV8_Ext_Master_Sw_Sel(1,Switch_Delay);"), DefTempo)	);
+			MapKeyIO(&LMFD,	SYMD,	KB_LSYMD,	TEMPO(EXEC("AV8_Ext_Master_Sw_Sel(2,Switch_Delay);"),	EXEC("AV8_Ext_Master_Sw_Sel(1,Switch_Delay);"), DefTempo)	);
+			}
+		}
+
+	}
+else
+	{
+	if (wh > 0)
+		{
+		if (AV8B_Custom_LUA > 0)
+			{
+			MapKey	(&Throttle,	BSB,	DX25	);
+			MapKey	(&Throttle,	BSF,	DX26	);
+			MapKey	(&Throttle,	BSM,	0		);	
+			
+			MapKey	(&Throttle,	PSF,	DX12	);
+			MapKey	(&Throttle,	PSB,	DX18	);
+			MapKey	(&Throttle,	PSM,	0		);				
+			}
+		else
+			{
+			MapKeyIO(&Throttle,	BSB,	0,	EXEC("AV8_Ext_Master_Sw_Sel(0,Switch_Delay);")	);
+			MapKeyIO(&Throttle,	BSF,	0,	EXEC("AV8_Ext_Master_Sw_Sel(2,Switch_Delay);")	);
+			MapKeyIO(&Throttle,	BSM,	0,	TEMPO(0,EXEC("AV8_Ext_Master_Sw_Sel(1,Switch_Delay);"),DoubleTap));	
+			
+			MapKeyIO(&Throttle,	PSF,	0,	EXEC("AV8_Ext_Master_Sw_Sel(0,Switch_Delay);")	);
+			MapKeyIO(&Throttle,	PSB,	0,	EXEC("AV8_Ext_Master_Sw_Sel(2,Switch_Delay);")	);
+			MapKeyIO(&Throttle,	PSM,	0,	TEMPO(0,EXEC("AV8_Ext_Master_Sw_Sel(1,Switch_Delay);"),DoubleTap));	
+			}
+		MapKeyR	(&Throttle,	BSB,	0);
+		MapKeyR	(&Throttle,	BSF,	0);
+		}
+	else
+		{
+		if (AV8B_Custom_LUA > 0)
+			{
+			MapKey	(&HCougar,	T7, DX25	);
+			MapKey	(&HCougar,	T8, DX26	);
+			MapKey	(&HCougar,	DFM,0		);	
+			}
+		else
+			{
+			MapKeyIO(&HCougar,	T7, 0,	EXEC("AV8_Ext_Master_Sw_Sel(2,Switch_Delay);")	);
+			MapKeyIO(&HCougar,	T8, 0,	EXEC("AV8_Ext_Master_Sw_Sel(0,Switch_Delay);")	);
+			MapKeyIO(&HCougar,	DFM,0,	TEMPO(0,EXEC("AV8_Ext_Master_Sw_Sel(1,Switch_Delay);"),DoubleTap));	
+			}
+		MapKeyR	(&HCougar,	T7, 0);
+		MapKeyR	(&HCougar,	T8,	0);	
+		}
+	MapKeyIO(&LMFD,	SYMU,	KB_LSYMU,	TEMPO(AV8_MM_AG,	AV8_MM_VSTOL, DefTempo)	);
+	MapKeyIO(&LMFD,	SYMD,	KB_LSYMD,	TEMPO(AV8_MM_NAV,	AV8_MM_VSTOL, DefTempo)	);
+	}
+}
+
+
+int	AV8B_MFD_Init()
+{
+//===================================
+//		Standard MFD Buttons
+//===================================
+
+	printf("   Map Cougar Left  MFD (DX31)...");	
+//LOSB 1 in Init
+					MapKeyIO(&LMFD, OSB02,	AV8_UFC_WOF,	TEMPO(CHAIN(DX31,D(ModDelay),DX2),AV8_UFC_IFF, DefTempo));
+					MapKeyIO(&LMFD, OSB03,	AV8_UFC_BCN,	TEMPO(CHAIN(DX31,D(ModDelay),DX3),AV8_UFC_TCN, DefTempo));
+					MapKeyIO(&LMFD, OSB04,	AV8_UFC_ALT,	TEMPO(CHAIN(DX31,D(ModDelay),DX4),AV8_UFC_AWL, DefTempo));
+//					MapKeyR	(&LMFD,	OSB04,	0);	//for A-10C
+					MapKeyIO(&LMFD, OSB05,	AV8_UFC_EMCON,	TEMPO(CHAIN(DX31,D(ModDelay),DX5),AV8_UFC_WPN, DefTempo));
+//					MapKeyR	(&LMFD,	OSB05,	0);	//For F-5E			
+//LOSB 6-9
+					MapKeyIO(&LMFD,	OSB06,	AV8_ODU1,	TEMPO(CHAIN(DX31,D(ModDelay),DX6),AV8_ODU1,DefTempo));
+					MapKeyIO(&LMFD,	OSB07,	AV8_ODU2,	TEMPO(KB_LOSB07,AV8_ODU2,DefTempo));
+//					MapKeyR	(&LMFD,	OSB07,	0);	//for Bf109
+					MapKeyIO(&LMFD,	OSB08,	AV8_ODU3,	TEMPO(KB_LOSB08,AV8_ODU3,DefTempo));
+					MapKeyIO(&LMFD,	OSB09,	TEMPO(EXEC("FC3_Autopilot_Set('a');"), EXEC("FC3_Autopilot_Set('h');"),DefTempo),	
+											TEMPO(KB_LOSB09,DX9, LongTempo)	);	//long for combat thrust
+					
+//LOSB 10
+					MapKeyIO(&LMFD,	OSB10,	EXEC("AV8_ACP_Sw_Cycle(6);"),	TEMPO(CHAIN(DX31,D(ModDelay),DX10),	AV8_ACP_WpnStn7, DefTempo));
+
+								
+//LOSB11-17 (switch deconflict)
+//				if (AV8B_Custom_LUA > 0)
+//					{
+					MapKeyIO(&LMFD,	OSB11,	EXEC("AV8_ACP_Sw_Cycle(5);"),	TEMPO(KB_LOSB11,	AV8_ACP_WpnStn6, DefTempo));
+					MapKeyIO(&LMFD,	OSB12,	EXEC("AV8_ACP_Sw_Cycle(4);"),	TEMPO(KB_LOSB12,	AV8_ACP_WpnStn5, DefTempo));
+					MapKeyIO(&LMFD,	OSB13,	EXEC("AV8_ACP_Sw_Cycle(3);"),	TEMPO(KB_LOSB13,	AV8_ACP_WpnStn4, DefTempo));					
+					MapKeyIO(&LMFD,	OSB14,	EXEC("AV8_ACP_Sw_Cycle(2);"),	TEMPO(KB_LOSB14,	AV8_ACP_WpnStn3, DefTempo));				
+					MapKeyIO(&LMFD,	OSB15,	EXEC("AV8_ACP_Sw_Cycle(1);"),	TEMPO(KB_LOSB15,	AV8_ACP_WpnStn2, DefTempo));
+					MapKeyIO(&LMFD,	OSB16,	EXEC("AV8_ACP_Sw_Cycle(0);"),	TEMPO(KB_LOSB16,	AV8_ACP_WpnStn1, DefTempo));
+					MapKeyIO(&LMFD,	OSB17,	TEMPO(0,M2k_EmerJett,DefTempo),	TEMPO(KB_LOSB17,	AV8_Flare_Salvo, DefTempo));
+//					}
+//				else
+//					{
+//					MapKeyIO(&LMFD,	OSB11,	EXEC("AV8_ACP_Sw_Cycle(5);"),	TEMPO(CHAIN(DX31,D(ModDelay),DX11),	AV8_ACP_WpnStn6, DefTempo));
+//					MapKeyIO(&LMFD,	OSB12,	EXEC("AV8_ACP_Sw_Cycle(4);"),	TEMPO(CHAIN(DX31,D(ModDelay),DX12),	AV8_ACP_WpnStn5, DefTempo));
+//					MapKeyIO(&LMFD,	OSB13,	EXEC("AV8_ACP_Sw_Cycle(3);"),	TEMPO(CHAIN(DX31,D(ModDelay),DX13),	AV8_ACP_WpnStn4, DefTempo));					
+//					MapKeyIO(&LMFD,	OSB14,	EXEC("AV8_ACP_Sw_Cycle(2);"),	TEMPO(CHAIN(DX31,D(ModDelay),DX14),	AV8_ACP_WpnStn3, DefTempo));
+//					MapKeyIO(&LMFD,	OSB15,	EXEC("AV8_ACP_Sw_Cycle(1);"),	TEMPO(CHAIN(DX31,D(ModDelay),DX15),	AV8_ACP_WpnStn2, DefTempo));
+//					MapKeyIO(&LMFD,	OSB16,	EXEC("AV8_ACP_Sw_Cycle(0);"),	TEMPO(CHAIN(DX31,D(ModDelay),DX16),	AV8_ACP_WpnStn1, DefTempo));
+//					MapKeyIO(&LMFD,	OSB17,	M2k_EmerJett,					TEMPO(CHAIN(DX31,D(ModDelay),DX17),	AV8_Flare_Salvo, DefTempo));
+//					}
+//LOSB18-19			
+					MapKeyIO(&LMFD,	OSB18,	AV8_ODU5,	TEMPO(KB_LOSB18, AV8_ODU5, DefTempo));	//changed to KB in 2.28 for DX18 flap reset
+					MapKeyIO(&LMFD,	OSB19,	AV8_ODU4,	TEMPO(CHAIN(DX31,D(ModDelay),DX19),	AV8_ODU4, DefTempo));	//No deconfliction necessary since no /I DX19	
+//LMFD 20 in Init
+
+//Left Rocker Switches
+//SYM (master mode) in AV8B_DF_Init()
+
+//CON (jettison sel sw)
+//		if (AV8B_Custom_LUA > 0)
+//			{
+			MapKeyIO(&LMFD,	CONU,	KB_LCONU,	TEMPO(AV8_Jett_Sel_Sw_Lt, AV8_Jett_Btn, LongTempo)	);
+			MapKeyIO(&LMFD,	COND,	KB_LCOND,	TEMPO(AV8_Jett_Sel_Sw_Rt, AV8_Jett_Btn, LongTempo)	);
+//			}
+//		else
+//			{
+//			MapKeyIO(&LMFD,	CONU,	CHAIN(DX31,D(ModDelay),DX23),	TEMPO(AV8_Jett_Sel_Sw_Lt, AV8_Jett_Btn, LongTempo)	);
+//			MapKeyIO(&LMFD,	COND,	CHAIN(DX31,D(ModDelay),DX24),	TEMPO(AV8_Jett_Sel_Sw_Rt, AV8_Jett_Btn, LongTempo)	);
+//			}		
+//BRT
+//assigned in AV8_ACP_Sw_Cycle()
+		//MapKeyIO(&LMFD,	BRTU,	CHAIN(DX31,D(ModDelay),DX25),	CHAIN(DX31,D(ModDelay),DX25));	
+		//MapKeyIO(&LMFD,	BRTD,	CHAIN(DX31,D(ModDelay),DX26),	CHAIN(DX31,D(ModDelay),DX26));
+		
+
+	printf("Done!\xa");
+
+	printf("   Map Cougar Right MFD (DX32)...");
+
+//ROSB 1-10 at first part of routine
+		MapKey	(&RMFD,	OSB01,	CHAIN(DX32,D(ModDelay),DX1));
+		MapKey	(&RMFD,	OSB02,	CHAIN(DX32,D(ModDelay),DX2));
+		MapKey	(&RMFD,	OSB03,	CHAIN(DX32,D(ModDelay),DX3));
+		MapKey	(&RMFD,	OSB04,	CHAIN(DX32,D(ModDelay),DX4));
+		MapKey	(&RMFD,	OSB05,	CHAIN(DX32,D(ModDelay),DX5));					//Assign A-10C OSB5 Shifted to CMSP Switches
+//		MapKeyR	(&RMFD,	OSB05,	0);
+		MapKey	(&RMFD,	OSB06,	CHAIN(DX32,D(ModDelay),DX6));
+		MapKey	(&RMFD,	OSB07,	KB_ROSB07);
+//		MapKeyR	(&RMFD,	OSB07,	0);
+		MapKey	(&RMFD,	OSB08,	KB_ROSB08);
+		MapKey	(&RMFD,	OSB09,	KB_ROSB09);
+		if (AV8B_Custom_LUA > 0)
+				MapKeyIO(&RMFD,	OSB10,	AV8_ECM_STBY,	TEMPO(CHAIN(DX32,D(ModDelay),DX10),AV8_ECM_STBY,DefTempo)	);	
+		else	MapKey	(&RMFD,	OSB10,	CHAIN(DX32,D(ModDelay),DX10)	);	
+
+//ROSB 11-16
+//	if (AV8B_Custom_LUA > 0)
+//		{	
+		MapKey	(&RMFD,	OSB11,	KB_ROSB11);
+		MapKey	(&RMFD,	OSB12,	KB_ROSB12);
+		MapKey	(&RMFD,	OSB13,	KB_ROSB13);
+		MapKey	(&RMFD,	OSB14,	KB_ROSB14);
+		MapKey	(&RMFD,	OSB15,	KB_ROSB15);	
+		MapKeyIO(&RMFD,	OSB16,	TEMPO(NVG_Toggle, AV8_NVGVisorSwap, DefTempo),
+								TEMPO(KB_ROSB16, NVG_Toggle, DefTempo)	);
+								
+
+			
+//		}		
+//	else
+//		{
+//		MapKey	(&RMFD,	OSB11,	CHAIN(DX32,D(ModDelay),DX11));
+//		MapKey	(&RMFD,	OSB12,	CHAIN(DX32,D(ModDelay),DX12));
+//		MapKey	(&RMFD,	OSB13,	CHAIN(DX32,D(ModDelay),DX13));
+//		MapKey	(&RMFD,	OSB14,	CHAIN(DX32,D(ModDelay),DX14));
+//		MapKey	(&RMFD,	OSB15,	CHAIN(DX32,D(ModDelay),DX15));	
+//		MapKeyIO(&RMFD,	OSB16,	TEMPO(NVG_Toggle, AV8_NVGVisorSwap, DefTempo),
+//								TEMPO(CHAIN(DX32,D(ModDelay),DX16), NVG_Toggle, DefTempo)	);
+//		MapKey	(&RMFD,	OSB17,	CHAIN(DX32,D(ModDelay),DX17));
+//		}
+//		MapKeyR	(&RMFD,	OSB13,	0);	//for Spitfire Engine Start	
+//		MapKeyR	(&RMFD,	OSB14,	0);	//for Spitfire Engine Start
+
+//ROSB 17-20		Master Caution and NS430/Scratchpad (17 and 20) swapped in 2.29
+		MapKeyIO(&RMFD,	OSB17,	AV8_MasterCaution,	TEMPO(KB_ROSB17, AV8_MasterCaution, DefTempo)	);
+		MapKey	(&RMFD,	OSB18,	KB_ROSB18);	//changed to KB in 2.28 for DX18 flap reset
+		MapKeyIO(&RMFD,	OSB19,	M2k_Flashlight,CHAIN(DX32,D(ModDelay),DX19));	//if no shifted command, 0 prevents inadvertent undesignate if S3 pressed
+
+//		if ((NS430_Enabled) & (MFD_Count < 3))
+//			MapKeyIO(&RMFD,	OSB20,	NS430_Toggle,		TEMPO(CHAIN(DX32,D(ModDelay),DX24),	NS430_Toggle,		DefTempo)	);	
+//		else if (Scratchpad_Enabled)
+//			MapKeyIO(&RMFD,	OSB20,	Scratchpad_Hotkey,	TEMPO(CHAIN(DX32,D(ModDelay),DX24),	Scratchpad_Hotkey,	DefTempo)	);	
+//		else
+//			MapKey	(&RMFD,	OSB20,	CHAIN(DX32,D(ModDelay),DX24));	
+			
+//Right Rocker Switches
+//SYM
+		MapKeyIO(&RMFD,	SYMU,	KB_RSYMU,	TEMPO(AV8_HUD_Mode_Up, M2k_HUD_Altim_Low, DefTempo));	//Baro; Low used since RSHIFT+H already in use (NVG)
+		MapKeyIO(&RMFD,	SYMD,	KB_RSYMD,	TEMPO(AV8_HUD_Mode_Dn, M2k_HUD_Altim_Rdr, DefTempo));	//Was AV8_HUD_Altim, changed to discrete in 2.51
+//		MapKeyR	(&RMFD,	SYMU,	0);	//added in 1.61 to account for context sensitive R in M2000C
+//		MapKeyR	(&RMFD,	SYMD,	0);
+		
+//CON/BRT
+		if (AV8B_Custom_LUA > 0)
+		{
+		MapKeyIO(&RMFD,	CONU,	KB_RCONU,	TEMPO(AV8_ECM_RCV,KB_RCONU,DefTempo)	);		//leave here until fuel selector mapped
+		MapKeyIO(&RMFD,	COND,	KB_RCOND,	TEMPO(AV8_ECM_RPT,KB_RCOND,DefTempo)	);
+		}
+		else
+		{
+		MapKey	(&RMFD,	CONU,	KB_RCONU);		//leave here until fuel selector mapped
+		MapKey	(&RMFD,	COND,	KB_RCOND);
+		}		
+		MapKeyIO(&RMFD,	BRTU,	KB_RBRTU,	NVG_Gain_Incr);	//use for NVG_Gain_Incr unshifted, no DX to deconflict with DF/Boat switch states
+		MapKeyIO(&RMFD,	BRTD,	KB_RBRTD,	NVG_Gain_Decr);	//use for NVG_Gain_Decr	unshifted
+//		}
+//		else
+//		{
+//		MapKey	(&RMFD,	CONU,	CHAIN(DX32,D(ModDelay),DX23));
+//		MapKey	(&RMFD,	COND,	CHAIN(DX32,D(ModDelay),DX24));
+//		MapKeyIO(&RMFD,	BRTU,	CHAIN(DX32,D(ModDelay),DX25),	NVG_Gain_Incr);	//use for NVG_Gain_Incr unshifted, no DX to deconflict with DF/Boat switch states
+//		MapKeyIO(&RMFD,	BRTD,	CHAIN(DX32,D(ModDelay),DX26),	NVG_Gain_Decr);	//use for NVG_Gain_Decr	unshifted
+//		}		
+//		MapKeyR	(&RMFD,	CONU,	0);	//added in 1.24 to account for context sensitive R in UH-1
+//		MapKeyR	(&RMFD,	COND,	0);
+		
+//GAIN
+	if (AV8B_Custom_LUA > 0)
+		{
+		MapKeyIO(&RMFD,	GAINU,	CHAIN(AV8_RMFD_Day,  EXEC("RMFD_Power(2,1);"),D(LED_Delay),EXEC("WHT_Power_Check(LMFD_Pwr_State, 2);")),
+								TEMPO(AV8_HUD_Rej_Up, DOWN+DX15, DefTempo)	);
+		MapKeyIO(&RMFD,	GAIND,	CHAIN(AV8_RMFD_Night,EXEC("RMFD_Power(1,1);"),D(LED_Delay),EXEC("WHT_Power_Check(LMFD_Pwr_State, 1);")),
+								TEMPO(AV8_HUD_Rej_Dn, UP+DX15,	 DefTempo)	);
+		}
+	else
+		{
+		MapKeyIO(&RMFD,	GAINU,	CHAIN(AV8_RMFD_Day,  EXEC("RMFD_Power(2,1);"),D(LED_Delay),EXEC("WHT_Power_Check(LMFD_Pwr_State, 2);")),
+								TEMPO(AV8_HUD_Rej_Up, AV8_MasterArm_On, DefTempo)	);
+		MapKeyIO(&RMFD,	GAIND,	CHAIN(AV8_RMFD_Night,EXEC("RMFD_Power(1,1);"),D(LED_Delay),EXEC("WHT_Power_Check(LMFD_Pwr_State, 1);")),
+								TEMPO(AV8_HUD_Rej_Dn, AV8_MasterArm_Off, DefTempo)	);
+		}
+	printf("Done!\xa");	
+}
+
+
+int AV8MapEbrk(int state, int prof = 2508)
+{
+//if (Script_Debug) printf("Map AV-8B E-Brake\xa GearState = %i\xa ProfID = %i\xa Warthog = %i\xa",state,prof,WarthogThrottle);
+if (WarthogThrottle > 0) AV8MapSPDF(state,prof);
+else AV8MapT10(state,prof);
+}
+int AV8MapSPDF(int state, int prof = 2508)
+{
+if (state > 0)
+	{
+//	if (Script_Debug) printf("Analog Momentary Brake (Gear Down)");	//for test purposes
+	if (prof == 2508)
+			{
+			MapKeyIO(&Throttle,	SPDF, 	CHAIN(PULSE+A10C_E_Brake_DX, EXEC("AV8_Throttle_Cutoff_Set(1,1,0);")),		Analog_AirbrakeOff);
+			MapKeyRIO(&Throttle,SPDF, 	CHAIN(PULSE+AV8_E_Brake_Rel, EXEC("AV8_Throttle_Cutoff_Set(0,1);")),		Analog_AirbrakeStop);
+			}
+	else	
+			{
+			MapKeyIO(&Throttle,	SPDF, 	PULSE+A10C_E_Brake_DX,	Analog_AirbrakeOff);
+			MapKeyRIO(&Throttle,SPDF, 	0,						Analog_AirbrakeStop);
+			}
+	}
+else
+	{
+//	if (Script_Debug) printf("Analog Momentary Brake (Gear Up)");		//for test purposes
+	MapKey	(&Throttle,	SPDF, 						Analog_AirbrakeOff);
+	MapKeyR	(&Throttle,	SPDF, 						Analog_AirbrakeStop);
+	}
+}
+int AV8MapT10(int state, int prof = 2508)	//state is gear state (allows e-brake on ground
+{
+if (state > 0)
+	{
+//	if (Script_Debug) printf("Analog Momentary Brake (Gear Down)");	//for test purposes
+	if (prof == 2508)
+			{
+			MapKeyIO(&HCougar,	T10, 	CHAIN(PULSE+A10C_E_Brake_DX,	EXEC("AV8_Throttle_Cutoff_Set(1,0);")),		Analog_AirbrakeOff);
+			MapKeyRIO(&HCougar,	T10, 	CHAIN(PULSE+AV8_E_Brake_Rel,	EXEC("AV8_Throttle_Cutoff_Set(0,0);")),		CHAIN(Analog_AirbrakeStop,EXEC("AV8_Throttle_Cutoff_Set(0,0);"))	);
+			}
+	else	{
+			MapKeyIO(&HCougar,	T10, 	PULSE+A10C_E_Brake_DX,	Analog_AirbrakeOff);
+			MapKeyRIO(&HCougar,	T10, 	0,						Analog_AirbrakeStop);
+			}
+	}
+else
+	{
+//	if (Script_Debug) printf("Analog Momentary Brake (Gear Up)");		//for test purposes
+	MapKey	(&HCougar,	T10, 				Analog_AirbrakeOff);
+	MapKeyR	(&HCougar,	T10, 				Analog_AirbrakeStop);
+	}
+}
+
+//*************************************************
+//			Boat Switch and Pinky Switch
+//*************************************************
+int	AV8B_Switch_Initial_Check()
+{
+//if (WarthogThrottle > 0) 	A10C_Initial_WH_Switch_Check();
+//else						A10C_Initial_Dogfight_Check();
+}
+
+int	AV8B_Initial_WH_Switch_Check()
+{
+//if	(Throttle[BSB]) 	ActKey(KEYON+PULSE+DX25);
+//else if(Throttle[BSF]) 	ActKey(KEYON+PULSE+DX26);
+//else 					ActKey(KEYON+PULSE+BoatSwitch_Ctr);	//changed to key macro in 1.24
+
+//if	(Throttle[PSB]) 		ActKey(KEYON+PULSE+PinkySwitch_Aft);		
+//else if (Throttle[PSF]) 	ActKey(KEYON+PULSE+PinkySwitch_Fwd);	
+//else						ActKey(KEYON+PULSE+PinkySwitch_Ctr);		//Keep as regular key to prevent timing dependencies
+
+//if	(Throttle[APPAT])		ActKey(KEYON+PULSE+A10C_APPAT);
+//else if (Throttle[APALT])	ActKey(KEYON+PULSE+A10C_APALT);
+//else						ActKey(KEYON+PULSE+A10C_APAH);
+
+}
+
+int AV8B_Initial_Dogfight_Check()
+{
+//if(HCougar[T7]) ActKey(KEYON+PULSE+DX25);
+//if(HCougar[T8]) ActKey(KEYON+PULSE+DX26);
+//else 			ActKey(KEYON+PULSE+BoatSwitch_Ctr);	//changed to key macro in 1.24
+
+//if (GearDn_Ind_Default) ActKey(KEYON+PULSE+PinkySwitch_Aft);		//default for ground ops
+//else					ActKey(KEYON+PULSE+PinkySwitch_Ctr);		//Keep as regular key to prevent timing dependencies
+}
+
+
+int AV8B_Switch_Posit(int num)	//obsolete in 0.33
+{
+//ActKey(KEYON+PULSE+X(SwitchPosit,num));
+//if ((num == 1) | (num == 4)) PinkyCenterState=1;
+//else PinkyCenterState=0;
+}
+
+
+//	Emergency Brake Toggle
+int AV8B_E_Brake_Set(int state)
+{
+if (	(state < 0)	|	(state > 1)	) state = abs(A10C_E_Brake_Curr-1);	//toggle if OOB
+if (state != A10C_E_Brake_Curr)
+	{
+	ActKey(KEYON+PULSE+A10C_E_Brake);
+	A10C_E_Brake_Curr = state;
+	}
+}
+
+
+//CDU/AAP Array Routines
+
+int	AV8_ACP_Sw_Cycle(int posit, int loop = 1, int index = 7)		//posit is array position, index is max array size(starting with 1).  7 is for ARMT
+{
+if ((TriggerZoom_state) & ((HCougar[TG1]) | (Joystick[TG1]))	) printf("Release Trigger before cycling Armament Panel.\xa");	//added in 2.05
+else
+	{
+	if (Script_Debug) printf("ACP Switch Cycle:\xa Current: %i\xa new: %i\xa",AV8_ACP_Sw_Cur,posit);
+	if (		(loop) & ((posit > index) | (posit < 0))	)
+		{
+		if (posit > index)		AV8_ACP_Sw_Cur = (AV8_ACP_Sw_Cur+1)%index;			//posit > index will cycle by +1 (not index-1 because last value OOB)
+		else if (posit < 0)		AV8_ACP_Sw_Cur = (AV8_ACP_Sw_Cur+index-1)%index;	//posit < 0 will cycle by -1 
+		}
+	else if (	(!loop) & ((posit > index) | (posit < 0))	)
+		{
+		if ((posit > index) & (AV8_ACP_Sw_Cur < index))	AV8_ACP_Sw_Cur = (AV8_ACP_Sw_Cur+1)%index;			//posit > index will cycle by +1 (not index-1 because last value OOB)
+		else if ((posit < 0) & (AV8_ACP_Sw_Cur > 0))	AV8_ACP_Sw_Cur = (AV8_ACP_Sw_Cur+index-1)%index;	//posit < 0 will cycle by -1 
+		}
+	else	AV8_ACP_Sw_Cur = posit;									//posit in bounds will be discrete function call
+	
+	if ((TriggerZoom_state) & (AirBrkFlash))	//added in 2.05 to force TriggerZoom off for ACP LEDs
+		{
+		TriggerZoom_toggle(0);
+		AV8_ACP_Sw_Map(AV8_ACP_Sw_Cur,1,LED_Delay,250);	//250 delay to allow for TGZ LED flash to recover
+		}
+	else AV8_ACP_Sw_Map(AV8_ACP_Sw_Cur);
+	}
+}
+
+int AV8_ACP_Sw_Map(int posit, int led = 1, int delay = 50, int time = 0)	//time added to allow for initial delay with TriggerZoom
+{
+if (Script_Debug) printf("ACP Switch Map to %i\xa",posit);
+int swu;
+int swd;
+//l1 removed because LLED1 is reserved for airbrake
+int l2;
+int r1;
+int r2;
+//int time = 0;
+
+ACPActive = 1;	//added for TriggerZoom in 2.05
+if (posit == 0)
+	{
+	swu = AV8_ACP_FUZ_Up;
+	swd = AV8_ACP_FUZ_Dn;
+	l2 = 1;
+	r1 = 0;
+	r2 = 0;
+	}
+else if (posit == 1)
+	{
+	swu = AV8_ACP_QTY10_Up;
+	swd = AV8_ACP_QTY10_Dn;
+	l2 = 1;
+	r1 = 1;
+	r2 = 0;
+	}
+else if (posit == 2)
+	{
+	swu = AV8_ACP_QTY01_Up;
+	swd = AV8_ACP_QTY01_Dn;
+	l2 = 0;
+	r1 = 1;
+	r2 = 0;
+	}
+else if (posit == 3)
+	{
+	swu = AV8_ACP_MULT_Up;
+	swd = AV8_ACP_MULT_Dn;
+	l2 = 1;
+	r1 = 0;
+	r2 = 1;
+	}
+else if (posit == 4)
+	{
+	swu = AV8_ACP_INTV100_Up;
+	swd = AV8_ACP_INTV100_Dn;
+	l2 = 1;
+	r1 = 1;
+	r2 = 1;
+	}
+else if (posit == 5)
+	{
+	swu = AV8_ACP_INTV010_Up;
+	swd = AV8_ACP_INTV010_Dn;
+	l2 = 0;
+	r1 = 1;
+	r2 = 1;
+	}
+else if (posit == 6)
+	{
+	swu = AV8_ACP_INTV001_Up;
+	swd = AV8_ACP_INTV001_Dn;
+	l2 = 0;
+	r1 = 0;
+	r2 = 1;
+	}
+else
+	{
+	swu = AV8_ACP_ARMT_Up;
+	swd = AV8_ACP_ARMT_Dn;
+	l2 = 0;
+	r1 = 0;
+	r2 = 0;
+	ACPActive = 0;
+	}
+MapKeyIO(&LMFD,	BRTU,	KB_LBRTU,	TEMPO(swu,EXEC("AV8_ACP_Sw_Cycle(7);"),DefTempo)	);
+MapKeyIO(&LMFD,	BRTD,	KB_LBRTD,	TEMPO(swd,EXEC("AV8_ACP_Sw_Cycle(7);"),DefTempo)	);
+
+if (WarthogStick > 0)
+	{
+	MapKeyIO(&Joystick,	H4L,	TEMPO(EXEC("AV8_ACP_Sw_Cycle(-1);"),EXEC("AV8_ACP_Sw_Cycle(7);"),DefTempo),	TEMPO(swd,AV8_LMFD_Export,DefTempo));
+	MapKeyIO(&Joystick,	H4R,	TEMPO(EXEC("AV8_ACP_Sw_Cycle(8);"), EXEC("AV8_ACP_Sw_Cycle(7);"),DefTempo),	TEMPO(swu,AV8_RMFD_Export,DefTempo));
+	}
+else
+	{
+	MapKeyIO(&HCougar,	H4L,	TEMPO(EXEC("AV8_ACP_Sw_Cycle(-1);"),EXEC("AV8_ACP_Sw_Cycle(7);"),DefTempo),	TEMPO(swd,AV8_LMFD_Export,DefTempo));
+	MapKeyIO(&HCougar,	H4R,	TEMPO(EXEC("AV8_ACP_Sw_Cycle(8);"), EXEC("AV8_ACP_Sw_Cycle(7);"),DefTempo),	TEMPO(swu,AV8_RMFD_Export,DefTempo));
+	}
+if (led)
+	{
+	if (l2 != ACP_L2)
+		{
+		DeferCall(time,&Lights_LLED2,l2);
+		ACP_L2 = l2;
+		time = time+delay;
+		}
+	if (r1 != ACP_R1)
+		{
+		DeferCall(time,&Lights_RLED1,r1);
+		ACP_R1 = r1;
+		time = time+delay;
+		}
+	if (r2 != ACP_R2)
+		{
+		DeferCall(time,&Lights_RLED2,r2);
+		ACP_R2 = r2;
+		//time = time+delay;
+		}
+		
+	}
+}
+
+
+//3 Position Switch Cycle Routines
+
+int	AV8_Posit_Lt_Sw_Sel(int posit, int delay = 200, int index=3)
+{
+int time = 0;
+//if (Script_Debug) printf("AV8_Posit_Lt_Sw Cur: %i  posit: %i  \xa",AV8_Posit_Lt_Sw_Cur,posit);
+if (	(posit > index-1) | (posit < 0)	)
+	{
+	if (posit > index-1) 
+		{
+		posit = (AV8_Posit_Lt_Sw_Cur+1);					//no out of bounds
+		if (posit > index-1) posit = index-1;
+		}
+	else if (posit < 0)
+		{
+		posit = (AV8_Posit_Lt_Sw_Cur-1);				//no out of bounds
+		if (posit < 0) posit = 0;
+		}
+	}
+
+while (AV8_Posit_Lt_Sw_Cur != posit)					//do loop with if/then based on </>
+	{
+	if (AV8_Posit_Lt_Sw_Cur > posit)					
+		{
+		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+AV8_Posit_Lt_Sw_Dn);	
+		AV8_Posit_Lt_Sw_Cur = (AV8_Posit_Lt_Sw_Cur-1);
+		if (AV8_Posit_Lt_Sw_Cur < 0) AV8_Posit_Lt_Sw_Cur = 0;
+		}
+	else if (AV8_Posit_Lt_Sw_Cur < posit)
+		{
+		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+AV8_Posit_Lt_Sw_Up);	
+		AV8_Posit_Lt_Sw_Cur = (AV8_Posit_Lt_Sw_Cur+1);
+		if (AV8_Posit_Lt_Sw_Cur > index-1) AV8_Posit_Lt_Sw_Cur = index-1;
+		}
+//	if (Script_Debug) printf("AV8_Posit_Lt_Sw Cur: %i  posit: %i  delay: %i  time: %i \xa",AV8_Posit_Lt_Sw_Cur,posit,delay,time);
+	time = time + delay;
+	}
+}
+
+int	AV8_Land_Lt_Sw_Sel(int posit, int delay = 200, int index=3)
+{
+int time = 0;
+//if (Script_Debug) printf("AV8_Land_Lt_Sw Cur: %i  posit: %i  \xa",AV8_Land_Lt_Sw_Cur,posit);
+if (	(posit > index-1) | (posit < 0)	)
+	{
+	if (posit > index-1) 
+		{
+		posit = (AV8_Land_Lt_Sw_Cur+1);					//no out of bounds
+		if (posit > index-1) posit = index-1;
+		}
+	else if (posit < 0)
+		{
+		posit = (AV8_Land_Lt_Sw_Cur-1);				//no out of bounds
+		if (posit < 0) posit = 0;
+		}
+	}
+
+while (AV8_Land_Lt_Sw_Cur != posit)					//do loop with if/then based on </>
+	{
+	if (AV8_Land_Lt_Sw_Cur > posit)					
+		{
+		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+AV8_Land_Lt_Sw_Dn);	
+		AV8_Land_Lt_Sw_Cur = (AV8_Land_Lt_Sw_Cur-1);
+		if (AV8_Land_Lt_Sw_Cur < 0) AV8_Land_Lt_Sw_Cur = 0;
+		}
+	else if (AV8_Land_Lt_Sw_Cur < posit)
+		{
+		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+AV8_Land_Lt_Sw_Up);	
+		AV8_Land_Lt_Sw_Cur = (AV8_Land_Lt_Sw_Cur+1);
+		if (AV8_Land_Lt_Sw_Cur > index-1) AV8_Land_Lt_Sw_Cur = index-1;
+		}
+//	if (Script_Debug) printf("AV8_Land_Lt_Sw Cur: %i  posit: %i  delay: %i  time: %i \xa",AV8_Land_Lt_Sw_Cur,posit,delay,time);
+	time = time + delay;
+	}
+}
+
+int	AV8_Ext_Master_Sw_Sel(int posit, int delay = 200, int index=3)
+{
+int time = 0;
+//if (Script_Debug) printf("AV8_Ext_Master_Sw Cur: %i  posit: %i  \xa",AV8_Ext_Master_Sw_Cur,posit);
+if (	(posit > index-1) | (posit < 0)	)
+	{
+	if (posit > index-1) 
+		{
+		posit = (AV8_Ext_Master_Sw_Cur+1);					//no out of bounds
+		if (posit > index-1) posit = index-1;
+		}
+	else if (posit < 0)
+		{
+		posit = (AV8_Ext_Master_Sw_Cur-1);				//no out of bounds
+		if (posit < 0) posit = 0;
+		}
+	}
+
+while (AV8_Ext_Master_Sw_Cur != posit)					//do loop with if/then based on </>
+	{
+	if (AV8_Ext_Master_Sw_Cur > posit)					
+		{
+		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+AV8_Ext_Master_Sw_Dn);	
+		AV8_Ext_Master_Sw_Cur = (AV8_Ext_Master_Sw_Cur-1);
+		if (AV8_Ext_Master_Sw_Cur < 0) AV8_Ext_Master_Sw_Cur = 0;
+		}
+	else if (AV8_Ext_Master_Sw_Cur < posit)
+		{
+		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+AV8_Ext_Master_Sw_Up);	
+		AV8_Ext_Master_Sw_Cur = (AV8_Ext_Master_Sw_Cur+1);
+		if (AV8_Ext_Master_Sw_Cur > index-1) AV8_Ext_Master_Sw_Cur = index-1;
+		}
+//	if (Script_Debug) printf("AV8_Ext_Master_Sw Cur: %i  posit: %i  delay: %i  time: %i \xa",AV8_Ext_Master_Sw_Cur,posit,delay,time);
+	time = time + delay;
+	}
+}
+
+int	AV8_Flaps_Sel(int posit, int delay = 200, int index=3)
+{
+int time = 0;
+//if (Script_Debug) printf("AV8_Flaps Cur: %i  posit: %i  \xa",FlapState,posit);
+if (	(posit > index-1) | (posit < 0)	)
+	{
+	if (posit > index-1) 
+		{
+		posit = (FlapState+1);					//no out of bounds
+		if (posit > index-1) posit = index-1;
+		}
+	else if (posit < 0)
+		{
+		posit = (FlapState-1);				//no out of bounds
+		if (posit < 0) posit = 0;
+		}
+	}
+
+while (FlapState != posit)					//do loop with if/then based on </>
+	{
+	if (FlapState > posit)					
+		{
+		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+AV8_Flaps_Up);	
+		FlapState = (FlapState-1);
+		if (FlapState < 0) AV8_Flaps_Cur = 0;
+		}
+	else if (FlapState < posit)
+		{
+		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+AV8_Flaps_Dn);	
+		FlapState = (FlapState+1);
+		if (FlapState > index-1) FlapState = index-1;
+		}
+//	if (Script_Debug) printf("AV8_Flaps Cur: %i  posit: %i  delay: %i  time: %i \xa",FlapState,posit,delay,time);
+	time = time + delay;
+	}
+}
+
+int	AV8_Water_Sw_Sel(int posit, int delay = 200, int index=3)	//obsolete in 2.21
+{
+int time = 0;
+//if (Script_Debug) printf("AV8_Water_Sw Cur: %i  posit: %i  \xa",AV8_Water_Sw_Cur,posit);
+if (	(posit > index-1) | (posit < 0)	)
+	{
+	if (posit > index-1) 
+		{
+		posit = (AV8_Water_Sw_Cur+1);					//no out of bounds
+		if (posit > index-1) posit = index-1;
+		}
+	else if (posit < 0)
+		{
+		posit = (AV8_Water_Sw_Cur-1);				//no out of bounds
+		if (posit < 0) posit = 0;
+		}
+	}
+
+while (AV8_Water_Sw_Cur != posit)					//do loop with if/then based on </>
+	{
+	if (AV8_Water_Sw_Cur > posit)					
+		{
+		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+AV8_Water_Sw_Dn);	
+		AV8_Water_Sw_Cur = (AV8_Water_Sw_Cur-1);
+		if (AV8_Water_Sw_Cur < 0) AV8_Water_Sw_Cur = 0;
+		}
+	else if (AV8_Water_Sw_Cur < posit)
+		{
+		if (delay > 0) DeferCall(time, &ActKey, KEYON+PULSE+AV8_Water_Sw_Up);	
+		AV8_Water_Sw_Cur = (AV8_Water_Sw_Cur+1);
+		if (AV8_Water_Sw_Cur > index-1) AV8_Water_Sw_Cur = index-1;
+		}
+//	if (Script_Debug) printf("AV8_Water_Sw Cur: %i  posit: %i  delay: %i  time: %i \xa",AV8_Water_Sw_Cur,posit,delay,time);
+	time = time + delay;
+	}
+}
+int	AV8_STO_Set_Discrete(int posit, int index = 5)
+{
+int trend;
+if ((posit < 0) | (posit > index-1))
+	{
+	if (posit < 0)
+		{
+		posit = AV8_STO_Stop_Discrete_Cur - 1;
+		trend = -1;
+		if (posit < 0)
+			{posit = 0;				//no out of bounds
+			trend = 0;
+			}
+		}
+	else
+		{
+		posit = AV8_STO_Stop_Discrete_Cur + 1;
+		trend = 1;
+		if (posit > index -1)
+			{
+			posit = index-1;	//no OOB
+			trend = 0;
+			}
+		}
+	}
+else trend = 2;	//absolute argument
+
+ActKey(KEYON+PULSE+X(AV8_STO_Stop_Discrete_Array,posit));
+AV8_STO_Stop_Discrete_Cur = posit;
+if (	(WH_LED_AV8B > 0)	)	//was WH_LED_AV8B > 1 prior to 2.47
+	{
+	if (trend == 2) WHT_Light_SelI(AV8_STO_Stop_Discrete_Cur + 1,1,1);	//absolute posit - all lights
+	else if (trend != 0) WHT_Light_SelTI(AV8_STO_Stop_Discrete_Cur + 1,1,1);	//change - update lights (trend = 0 means no change and no light overhead required)
+	}
+}
+
+
+int	AV8_STO_Set(int dir, int repeat, int delay = 60)	//dir: 1 for fwd/ 2 for back, repeat is the number of sequences
+{
+int time = 0;
+int count = 0;
+//if (Script_Debug) printf("AV8_STO_Set(%i,%i,%i)\xa",dir,repeat,delay);
+while (count != repeat)
+	{
+//	if (Script_Debug) printf("   Incrementing STO\xa      time = %i\xa      count = %i\xa",time,count);
+	if (dir)	DeferCall(time, &ActKey, KEYON+PULSE+AV8_STO_Stop_Up);
+	else		DeferCall(time, &ActKey, KEYON+PULSE+AV8_STO_Stop_Dn);
+	time = time + delay;
+	count = count + 1;
+	}
+//if (Script_Debug) printf("   %i = %i\xa   Exiting\xa",count,repeat);
+}
+
+int AV8_Nozzle_Adjust(int state, int dir)	//state is button on (versus release), dir is direction, delay is for REXEC
+{
+if ((Throttle[IDLELON]) & (WH_IdleStop_AV8B > 0) & (WHIdle_Enabled > 0))	//Throttle in Idle Stop (CH for nozzle)
+	{
+	if (state)	//button pressed
+		{
+		if (dir) 	ActKey(KEYON+AV8_Nozzle_Up);
+		else		ActKey(KEYON+AV8_Nozzle_Dn);
+		}
+	else	//button release
+		{
+		if (dir)	ActKey(AV8_Nozzle_Up);
+		else		ActKey(AV8_Nozzle_Dn);		
+		}
+	}
+else if (STO_Stop_Rate_AV8B > KBDelay)	//calls REXEC
+	{
+	if (state)
+		{
+		if (dir)	ActKey(KEYON+PULSE+AV8_STO_Stop_UpR);
+		else		ActKey(KEYON+PULSE+AV8_STO_Stop_DnR);
+		}
+	else StopAutoRepeat(6);
+	}
+else
+	{
+	if (state)	//pulses increment
+		{
+		if (dir)		ActKey(KEYON+PULSE+AV8_STO_Stop_Up);
+		else			ActKey(KEYON+PULSE+AV8_STO_Stop_Dn);
+		}
+	}
+	
+if (	(WH_IdleStop_AV8B > 0) & (WHIdle_Enabled > 0) & (AV8B_Custom_LUA > 0) 	)
+	{
+	if (state) AV8_STO_Stop_Discrete_Cur = -1;	//set OOB to prevent future lights
+	else if (	(WH_LED_AV8B > 0) & (AV8_STO_Stop_Discrete_Cur < 0)	)	WHT_Lights_Dn(0);	//kill lights on release., was WH_LED_AV8B > 1, changed to 0 once led throttle removed in 2.47
+	
+	}
+}
+
+int AV8_Throttle_Cutoff_Set(int state, int wh, int key = 1)
+{
+if (wh > 0)
+	{
+	if (state)
+		{
+		if (key)
+			{
+			ActKey(KEYON+PULSE+AV8_Throttle_Cutoff);
+			DeferCall(Throttle_Cutoff_Delay_AV8B,&ActKey,KEYON+PULSE+AV8_Throttle_Cutoff);
+			}
+		MapKeyIO(&Throttle,	SC,	AV8_Throttle_Cutoff,	TEMPO(0,					AV8_Throttle_Cutoff,			LongTempo)	);	
+		}
+	else	MapKey	(&Throttle,	SC,	DX6);	
+	}
+else
+	{
+	if (state)				MapKeyIO(&HCougar,	T6, TEMPO(AV8_MasterCaution, 	EXEC("EjectCheckT6(ProfID);"), 	DefTempo),
+													TEMPO(0,					AV8_Throttle_Cutoff,			LongTempo)	);		
+	else					MapKeyIO(&HCougar,	T6, TEMPO(AV8_MasterCaution, 	EXEC("EjectCheckT6(ProfID);"), 	DefTempo),
+													TEMPO(AV8_Uncage, 			EXEC("EjectCheckT6(ProfID);"), 	DefTempo)	);		//Will check for ejection parameters if held for 500ms., airstart in ejectcheckt6()
+	}
+}

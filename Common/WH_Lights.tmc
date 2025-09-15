@@ -1,0 +1,751 @@
+//======================================================================
+//			Master file for controlling LEDs on Warthog Throttle.
+//						base code  by ivanwfr
+//						with edits by Home Fries
+//						last updated: 13AUG2018
+//
+//	Change Log:
+//	1.0		Initial Release
+//	1.01	Added macros for cycling sequential LEDs
+//	2.02	Added LED "slider" routines
+//	2.23	Added WHT_Light_SelT() and WHT_Light_SelTI() for adjusting LEDs on either side of selected LED only (for timing)
+//	2.29	Added WH_LED_ArrayUD_OnOff_SetF() functions for when nested EXEC commands won't work, and added key argument to Sliders (0 to force SetF).
+//
+//======================================================================
+
+//	Ideas for Future Implementation:
+//		A way to switch state (e.g. LED^) via GameOutput to reduce overhead on software
+
+int WH_LED_Counter = 0;	//arrays added in 2.02 for sliders
+int WH_LED_ArrayU_On;
+int WH_LED_ArrayD_On;
+int WH_LED_ArrayU_Off;
+int WH_LED_ArrayD_Off;
+int	WH_LED_Slide_Cur;
+
+
+int WH_LED_Array_Init()	//added in 2.02; be sure to load this as part of your main() routine if sliders used
+{
+WH_LED_ArrayD_On 	= SEQ(	EXEC("Lights_WHT1(1);"),
+							EXEC("Lights_WHT2(1);"),
+							EXEC("Lights_WHT3(1);"),
+							EXEC("Lights_WHT4(1);"),
+							EXEC("Lights_WHT5(1);"),
+							0);
+WH_LED_ArrayD_Off 	= SEQ(	0,
+							EXEC("Lights_WHT1(0);"),
+							EXEC("Lights_WHT2(0);"),
+							EXEC("Lights_WHT3(0);"),
+							EXEC("Lights_WHT4(0);"),
+							EXEC("Lights_WHT5(0);")
+							);
+WH_LED_ArrayU_On	= SEQ(	EXEC("Lights_WHT5(1);"),
+							EXEC("Lights_WHT4(1);"),
+							EXEC("Lights_WHT3(1);"),
+							EXEC("Lights_WHT2(1);"),
+							EXEC("Lights_WHT1(1);"),
+							0);
+WH_LED_ArrayU_Off 	= SEQ(	0,
+							EXEC("Lights_WHT5(0);"),
+							EXEC("Lights_WHT4(0);"),
+							EXEC("Lights_WHT3(0);"),
+							EXEC("Lights_WHT2(0);"),
+							EXEC("Lights_WHT1(0);")
+							);
+}
+
+
+
+
+//Warthog Lighting Base Code
+//Throttle LED 1
+int Lights_WHT1(int state) // {{{
+{
+    if(state)
+		{
+		if(state==2)	GameOutput(&Throttle, OUT_ID_LED_1, 2);		// toggle
+		else 			GameOutput(&Throttle, OUT_ID_LED_1, 1);		// on
+		}	
+    else			GameOutput(&Throttle, OUT_ID_LED_1, 0);			// off
+}
+//Throttle LED 2
+int Lights_WHT2(int state) // {{{
+{
+    if(state)
+		{
+		if(state==2)	GameOutput(&Throttle, OUT_ID_LED_2, 2);		// toggle
+		else 			GameOutput(&Throttle, OUT_ID_LED_2, 1);		// on
+		}
+    else			GameOutput(&Throttle, OUT_ID_LED_2, 0);			// off
+}
+//Throttle LED 3
+int Lights_WHT3(int state) // {{{
+{
+    if(state)
+		{
+		if(state==2)	GameOutput(&Throttle, OUT_ID_LED_3, 2);		// toggle
+		else 			GameOutput(&Throttle, OUT_ID_LED_3, 1);		// on
+		}	
+    else			GameOutput(&Throttle, OUT_ID_LED_3, 0);			// off
+}
+//Throttle LED 4
+int Lights_WHT4(int state) // {{{
+{
+    if(state)
+		{
+		if(state==2)	GameOutput(&Throttle, OUT_ID_LED_4, 2);		// toggle
+		else 			GameOutput(&Throttle, OUT_ID_LED_4, 1);		// on
+		}
+    else			GameOutput(&Throttle, OUT_ID_LED_4, 0);			// off
+}
+//Throttle LED 4
+int Lights_WHT5(int state) // {{{
+{
+    if(state)
+		{
+		if(state==2)	GameOutput(&Throttle, OUT_ID_LED_5, 2);		// toggle
+		else 			GameOutput(&Throttle, OUT_ID_LED_5, 1);		// on
+		}
+    else			GameOutput(&Throttle, OUT_ID_LED_5, 0);			// off
+}
+
+// LED FLASHING MODULE 
+
+int    flashing_WHT1 =			0;
+int    flashing_WHT2 =			0;
+int    flashing_WHT3 =			0;
+int    flashing_WHT4 =			0;
+int    flashing_WHT5 =			0;
+
+
+//Throttle LED1
+int flashWHT1(int state=-1, int ms = 500) 
+{
+	if(state    < 0) flashing_WHT1 = (flashing_WHT1 == 0); // toggle
+	else			 flashing_WHT1 = state;			 // ...or comply
+	if(flashing_WHT1 > 0) flashingWHT1(ms);
+} 
+int flashingWHT1(int ms) 
+{
+	if(flashing_WHT1 > 0) {
+		GameOutput(&Throttle, OUT_ID_LED_1, 2);			// TOGGLE
+		DeferCall(ms, &flashingWHT1, ms);	// go on flashing
+	} else {
+		GameOutput(&Throttle, OUT_ID_LED_1, 0);			// STOP
+	}
+}
+//Throttle LED2
+int flashWHT2(int state=-1, int ms = 500) 
+{
+	if(state    < 0) flashing_WHT2 = (flashing_WHT2 == 0); // toggle
+	else			 flashing_WHT2 = state;			 // ...or comply
+	if(flashing_WHT2 > 0) flashingWHT2(ms);
+} 
+int flashingWHT2(int ms) 
+{
+	if(flashing_WHT2 > 0) {
+		GameOutput(&Throttle, OUT_ID_LED_2, 2);			// TOGGLE
+		DeferCall(ms, &flashingWHT2, ms);	// go on flashing
+	} else {
+		GameOutput(&Throttle, OUT_ID_LED_2, 0);			// STOP
+	}
+}
+//Throttle LED3
+int flashWHT3(int state=-1, int ms = 500) 
+{
+	if(state    < 0) flashing_WHT3 = (flashing_WHT3 == 0); // toggle
+	else			 flashing_WHT3 = state;			 // ...or comply
+	if(flashing_WHT3 > 0) flashingWHT3(ms);
+} 
+int flashingWHT3(int ms) 
+{
+	if(flashing_WHT3 > 0) {
+		GameOutput(&Throttle, OUT_ID_LED_3, 2);			// TOGGLE
+		DeferCall(ms, &flashingWHT3, ms);	// go on flashing
+	} else {
+		GameOutput(&Throttle, OUT_ID_LED_3, 0);			// STOP
+	}
+}
+//Throttle LED1
+int flashWHT4(int state=-1, int ms = 500) 
+{
+	if(state    < 0) flashing_WHT4 = (flashing_WHT4 == 0); // toggle
+	else			 flashing_WHT4 = state;			 // ...or comply
+	if(flashing_WHT4 > 0) flashingWHT4(ms);
+} 
+int flashingWHT4(int ms) 
+{
+	if(flashing_WHT4 > 0) {
+		GameOutput(&Throttle, OUT_ID_LED_4, 2);			// TOGGLE
+		DeferCall(ms, &flashingWHT4, ms);	// go on flashing
+	} else {
+		GameOutput(&Throttle, OUT_ID_LED_4, 0);			// STOP
+	}
+}
+//Throttle LED1
+int flashWHT5(int state=-1, int ms = 500) 
+{
+	if(state    < 0) flashing_WHT5 = (flashing_WHT5 == 0); // toggle
+	else			 flashing_WHT5 = state;			 // ...or comply
+	if(flashing_WHT5 > 0) flashingWHT5(ms);
+} 
+int flashingWHT5(int ms) 
+{
+	if(flashing_WHT5 > 0) {
+		GameOutput(&Throttle, OUT_ID_LED_5, 2);			// TOGGLE
+		DeferCall(ms, &flashingWHT5, ms);	// go on flashing
+	} else {
+		GameOutput(&Throttle, OUT_ID_LED_5, 0);			// STOP
+	}
+}
+
+
+
+//WH Throttle Backlighting
+int WHT_Backlight(int intensity)
+{
+    GameOutput(&Throttle, OUT_ID_LED_INTENSITY, intensity);
+    GameOutput(&Throttle, OUT_ID_LED_BACKLIGHT, 1); //Sleep(500);
+}
+
+
+//End Base Code
+
+
+//Macro States
+
+
+
+//Light Cycle Routines	; note that these only set a state for the desired light and the opposite state for the light on the opposite direction.
+//state defaults to 1 to allow a single cycling led by default (useful for possible defercalls)
+int WHT_Light_Up(int led, int state = 1, int delay = 50)
+{
+if (led > 4)
+	{
+	Lights_WHT5(state);
+	DeferCall(delay, &Lights_WHT4, abs(state-1));
+	}
+else if (led == 4)
+	{
+	Lights_WHT4(state);
+	DeferCall(delay, &Lights_WHT3, abs(state-1));
+	}
+else if (led == 3)
+	{
+	Lights_WHT3(state);
+	DeferCall(delay, &Lights_WHT2, abs(state-1));
+	}
+else if (led == 2)
+	{
+	Lights_WHT2(state);
+	DeferCall(delay, &Lights_WHT1, abs(state-1));
+	}
+else if (led == 1) Lights_WHT1(state);
+else WHT_Lights_Dn(abs(state-1));	//turns off or on; reverse of flow to hit active light first
+}
+
+int WHT_Light_Dn(int led, int state = 1, int delay = 50)
+{
+if (led > 4) Lights_WHT5(state);
+else if (led == 4)
+	{
+	Lights_WHT4(state);
+	DeferCall(delay, &Lights_WHT5, abs(state-1));
+	}
+else if (led == 3)
+	{
+	Lights_WHT3(state);
+	DeferCall(delay, &Lights_WHT4, abs(state-1));
+	}
+else if (led == 2)
+	{
+	Lights_WHT2(state);
+	DeferCall(delay, &Lights_WHT3, abs(state-1));
+	}
+else if (led == 1) 
+	{
+	Lights_WHT1(state);
+	DeferCall(delay, &Lights_WHT2, abs(state-1));
+	}
+else WHT_Lights_Up(abs(state-1));	//turns off or on; reverse of flow to hit active light first
+}
+
+
+//Inverted cycles allow for increasing LEDs opposite identifiers (i.e. going from 1-5 bottom to top)
+int WHT_Light_UpI(int led, int state = 1, int delay = 50)
+{
+if (led > 4)
+	{
+	Lights_WHT1(state);
+	DeferCall(delay, &Lights_WHT2, abs(state-1));
+	}
+else if (led == 4)
+	{
+	Lights_WHT2(state);
+	DeferCall(delay, &Lights_WHT3, abs(state-1));
+	}
+else if (led == 3)
+	{
+	Lights_WHT3(state);
+	DeferCall(delay, &Lights_WHT4, abs(state-1));
+	}
+else if (led == 2)
+	{
+	Lights_WHT4(state);
+	DeferCall(delay, &Lights_WHT5, abs(state-1));
+	}
+else if (led == 1) Lights_WHT5(state);
+else WHT_Lights_Up(abs(state-1));	//turns off or on; reverse of flow to hit active light first
+}
+
+int WHT_Light_DnI(int led, int state = 1, int delay = 50)
+{
+if (led > 4) Lights_WHT1(state);
+else if (led == 4)
+	{
+	Lights_WHT2(state);
+	DeferCall(delay, &Lights_WHT1, abs(state-1));
+	}
+else if (led == 3)
+	{
+	Lights_WHT3(state);
+	DeferCall(delay, &Lights_WHT2, abs(state-1));
+	}
+else if (led == 2)
+	{
+	Lights_WHT4(state);
+	DeferCall(delay, &Lights_WHT3, abs(state-1));
+	}
+else if (led == 1) 
+	{
+	Lights_WHT5(state);
+	DeferCall(delay, &Lights_WHT4, abs(state-1));
+	}
+else WHT_Lights_Dn(abs(state-1));	//turns off or on; reverse of flow to hit active light first
+}
+
+//Dynamic LED Select allows selection of a LED to cycle by function
+int WHT_Light_Sel(int led, int state = 1, int exclude = 0, int delay = 50)	//exclude is opposite for all other leds, delay is for making that happen
+{
+if (led == 1)
+	{
+	Lights_WHT1(state);
+	if (exclude)
+		{
+		DeferCall(delay, &Lights_WHT2, abs(state-1));
+		DeferCall(delay, &Lights_WHT3, abs(state-1));
+		DeferCall(delay, &Lights_WHT4, abs(state-1));		
+		DeferCall(delay, &Lights_WHT5, abs(state-1));
+		}
+	}
+else if (led == 2)
+	{
+	Lights_WHT2(state);
+	if (exclude)
+		{
+		DeferCall(delay, &Lights_WHT1, abs(state-1));
+		DeferCall(delay, &Lights_WHT3, abs(state-1));
+		DeferCall(delay, &Lights_WHT4, abs(state-1));		
+		DeferCall(delay, &Lights_WHT5, abs(state-1));
+		}
+	}
+else if (led == 3)
+	{
+	Lights_WHT3(state);
+	if (exclude)
+		{
+		DeferCall(delay, &Lights_WHT1, abs(state-1));
+		DeferCall(delay, &Lights_WHT2, abs(state-1));
+		DeferCall(delay, &Lights_WHT4, abs(state-1));		
+		DeferCall(delay, &Lights_WHT5, abs(state-1));
+		}
+	}	
+else if (led == 4)
+	{
+	Lights_WHT4(state);
+	if (exclude)
+		{
+		DeferCall(delay, &Lights_WHT1, abs(state-1));
+		DeferCall(delay, &Lights_WHT2, abs(state-1));
+		DeferCall(delay, &Lights_WHT3, abs(state-1));		
+		DeferCall(delay, &Lights_WHT5, abs(state-1));
+		}
+	}
+else if (led == 5)
+	{
+	Lights_WHT2(state);
+	if (exclude)
+		{
+		DeferCall(delay, &Lights_WHT1, abs(state-1));
+		DeferCall(delay, &Lights_WHT2, abs(state-1));
+		DeferCall(delay, &Lights_WHT3, abs(state-1));		
+		DeferCall(delay, &Lights_WHT4, abs(state-1));
+		}
+	}
+else WHT_Lights_Up(abs(state-1),delay);
+}
+int WHT_Light_SelI(int led, int state = 1, int exclude = 0, int delay = 50)	//inverted for variables working in opposite direction
+{
+if (led == 5)
+	{
+	Lights_WHT1(state);
+	if (exclude)
+		{
+		DeferCall(delay, &Lights_WHT2, abs(state-1));
+		DeferCall(delay, &Lights_WHT3, abs(state-1));
+		DeferCall(delay, &Lights_WHT4, abs(state-1));		
+		DeferCall(delay, &Lights_WHT5, abs(state-1));
+		}
+	}
+else if (led == 4)
+	{
+	Lights_WHT2(state);
+	if (exclude)
+		{
+		DeferCall(delay, &Lights_WHT1, abs(state-1));
+		DeferCall(delay, &Lights_WHT3, abs(state-1));
+		DeferCall(delay, &Lights_WHT4, abs(state-1));		
+		DeferCall(delay, &Lights_WHT5, abs(state-1));
+		}
+	}
+else if (led == 3)
+	{
+	Lights_WHT3(state);
+	if (exclude)
+		{
+		DeferCall(delay, &Lights_WHT1, abs(state-1));
+		DeferCall(delay, &Lights_WHT2, abs(state-1));
+		DeferCall(delay, &Lights_WHT4, abs(state-1));		
+		DeferCall(delay, &Lights_WHT5, abs(state-1));
+		}
+	}	
+else if (led == 2)
+	{
+	Lights_WHT4(state);
+	if (exclude)
+		{
+		DeferCall(delay, &Lights_WHT1, abs(state-1));
+		DeferCall(delay, &Lights_WHT2, abs(state-1));
+		DeferCall(delay, &Lights_WHT3, abs(state-1));		
+		DeferCall(delay, &Lights_WHT5, abs(state-1));
+		}
+	}
+else if (led == 1)
+	{
+	Lights_WHT5(state);
+	if (exclude)
+		{
+		DeferCall(delay, &Lights_WHT1, abs(state-1));
+		DeferCall(delay, &Lights_WHT2, abs(state-1));
+		DeferCall(delay, &Lights_WHT3, abs(state-1));		
+		DeferCall(delay, &Lights_WHT4, abs(state-1));
+		}
+	}
+else WHT_Lights_Up(abs(state-1),delay);
+}
+//Tight only adjusts either side of selected LED to minimize Defercalls (taking only 100ms instead of 200).
+int WHT_Light_SelT(int led, int state = 1, int exclude = 0, int delay = 50)	//exclude is opposite for all other leds, delay is for making that happen
+{
+if (led == 1)
+	{
+	Lights_WHT1(state);
+	if (exclude)
+		{
+		DeferCall(delay, &Lights_WHT2, abs(state-1));
+		}
+	}
+else if (led == 2)
+	{
+	Lights_WHT2(state);
+	if (exclude)
+		{
+		DeferCall(delay, &Lights_WHT1, abs(state-1));
+		DeferCall(delay, &Lights_WHT3, abs(state-1));
+		}
+	}
+else if (led == 3)
+	{
+	Lights_WHT3(state);
+	if (exclude)
+		{
+		DeferCall(delay, &Lights_WHT2, abs(state-1));
+		DeferCall(delay, &Lights_WHT4, abs(state-1));		
+		}
+	}	
+else if (led == 4)
+	{
+	Lights_WHT4(state);
+	if (exclude)
+		{
+		DeferCall(delay, &Lights_WHT3, abs(state-1));		
+		DeferCall(delay, &Lights_WHT5, abs(state-1));
+		}
+	}
+else if (led == 5)
+	{
+	Lights_WHT2(state);
+	if (exclude)
+		{
+		DeferCall(delay, &Lights_WHT4, abs(state-1));
+		}
+	}
+else WHT_Lights_Up(abs(state-1),delay);
+}
+int WHT_Light_SelTI(int led, int state = 1, int exclude = 0, int delay = 50)	//inverted for variables working in opposite direction
+{
+if (led == 5)
+	{
+	Lights_WHT1(state);
+	if (exclude)
+		{
+		DeferCall(delay, &Lights_WHT2, abs(state-1));
+		}
+	}
+else if (led == 4)
+	{
+	Lights_WHT2(state);
+	if (exclude)
+		{
+		DeferCall(delay, &Lights_WHT1, abs(state-1));
+		DeferCall(delay, &Lights_WHT3, abs(state-1));
+		}
+	}
+else if (led == 3)
+	{
+	Lights_WHT3(state);
+	if (exclude)
+		{
+		DeferCall(delay, &Lights_WHT2, abs(state-1));
+		DeferCall(delay, &Lights_WHT4, abs(state-1));		
+		}
+	}	
+else if (led == 2)
+	{
+	Lights_WHT4(state);
+	if (exclude)
+		{
+		DeferCall(delay, &Lights_WHT3, abs(state-1));		
+		DeferCall(delay, &Lights_WHT5, abs(state-1));
+		}
+	}
+else if (led == 1)
+	{
+	Lights_WHT5(state);
+	if (exclude)
+		{
+		DeferCall(delay, &Lights_WHT4, abs(state-1));
+		}
+	}
+else WHT_Lights_Up(abs(state-1),delay);
+}
+
+//End Generic Light States
+
+
+//Lights on a "Slider"
+
+//Lights Run Down
+int WHT_Lights_Dn(int state, int delay=50)
+{
+	Lights_WHT1(state);
+	DeferCall(delay, &Lights_WHT2, state);
+	DeferCall(2*delay,&Lights_WHT3,state);
+	DeferCall(3*delay,&Lights_WHT4,state);
+	DeferCall(4*delay,&Lights_WHT5,state);
+}
+//Lights Run Up
+int WHT_Lights_Up(int state, int delay=50)
+{
+	Lights_WHT5(state);
+	DeferCall(delay, &Lights_WHT4, state);
+	DeferCall(2*delay,&Lights_WHT3,state);
+	DeferCall(3*delay,&Lights_WHT2,state);
+	DeferCall(4*delay,&Lights_WHT1,state);
+}
+
+//DeferCall Routines
+int WHT_Lights_Up_D(int state)
+{
+WHT_Lights_Up(state,LED_Delay);
+}
+int WHT_Lights_Dn_D(int state)
+{
+WHT_Lights_Dn(state,LED_Delay);
+}
+int WHT_Lights_Up_SwD(int state)
+{
+WHT_Lights_Up(state,Switch_Delay);
+}
+int WHT_Lights_Dn_SwD(int state)
+{
+WHT_Lights_Dn(state,Switch_Delay);
+}
+
+
+//Lights slide up/down to a desired state
+
+int	Lights_WH_SlideU(int posit, int delay = 50, int key = 1, int index=6)	//trend is whether it is moving up (1), down (-1) or doesnt matter (0).  index 6 (5 LEDs plus all off), for up, 5 = LED1 and 1 = LED5
+{
+int time = WH_LED_Counter;
+int	icounter;	//internal counter to compare with WH_LED_Counter
+
+if (Script_Debug) printf("Init WH LED Slide Up: %i  LED: %i  delay: %i  time: %i  key: %i\xa",WH_LED_Slide_Cur,posit,delay,time,key);
+if (	(posit > index-1) | (posit < 0)	)
+	{
+	if (posit > index-1) 
+		{
+		posit = (WH_LED_Slide_Cur+1);					//no out of bounds
+		if (posit > index-1) posit = index-1;
+		}
+	else if (posit < 0)
+		{
+		posit = (WH_LED_Slide_Cur-1);				//no out of bounds
+		if (posit < 0) posit = 0;
+		}
+	}
+
+while (WH_LED_Slide_Cur != posit)					//do loop with if/then based on </>
+	{
+		if (WH_LED_Slide_Cur > posit) 
+			{
+			if (delay > 0)
+				{
+				if (key)	DeferCall(time, &WH_LED_ArrayU_Off_Set, WH_LED_Slide_Cur);	
+				else		DeferCall(time, &WH_LED_ArrayU_Off_SetF, WH_LED_Slide_Cur);
+				}
+			WH_LED_Slide_Cur = (WH_LED_Slide_Cur-1);
+			if (WH_LED_Slide_Cur < 0) WH_LED_Slide_Cur = 0;
+			}
+		else if (WH_LED_Slide_Cur < posit)
+			{
+			if (delay > 0) 
+				{
+				if (key)	DeferCall(time, &WH_LED_ArrayU_On_Set, WH_LED_Slide_Cur);	
+				else		DeferCall(time, &WH_LED_ArrayU_On_SetF, WH_LED_Slide_Cur);	
+				}
+			WH_LED_Slide_Cur = (WH_LED_Slide_Cur+1);
+			if (WH_LED_Slide_Cur > index-1) WH_LED_Slide_Cur = index-1;
+			}
+		else break;
+
+	if (Script_Debug) printf("WH LED Slide Up: %i  LED: %i  delay: %i  time: %i  key: %i\xa",WH_LED_Slide_Cur,posit,delay,time,key);
+	WH_LED_Counter = time + delay;
+	time = time + delay;
+	//if (Script_Debug) printf("time = %i  icounter = %i)\xa",time, icounter);
+	}
+icounter = WH_LED_Counter;
+DeferCall(WH_LED_Counter,&WH_LED_Counter_Set,icounter);
+}
+
+int	Lights_WH_SlideD(int posit, int delay = 50, int key = 1, int index=6)	//trend is whether it is moving up (1), down (-1) or doesnt matter (0).  index 6 (5 LEDs plus all off), for up, 5 = LED1 and 1 = LED5, key uses ActKey for activation, set to 0 to force function
+{
+int time = WH_LED_Counter;
+int	icounter;	//internal counter to compare with WH_LED_Counter
+
+if (	(posit > index-1) | (posit < 0)	)
+	{
+	if (posit > index-1) 
+		{
+		posit = (WH_LED_Slide_Cur+1);					//no out of bounds
+		if (posit > index-1) posit = index-1;
+		}
+	else if (posit < 0)
+		{
+		posit = (WH_LED_Slide_Cur-1);				//no out of bounds
+		if (posit < 0) posit = 0;
+		}
+	}
+
+while (WH_LED_Slide_Cur != posit)					//do loop with if/then based on </>
+	{
+		if (WH_LED_Slide_Cur > posit) 
+			{
+			if (delay > 0) 
+				{
+				if (key)	DeferCall(time, &WH_LED_ArrayD_Off_Set, WH_LED_Slide_Cur);	
+				else		DeferCall(time, &WH_LED_ArrayD_Off_SetF, WH_LED_Slide_Cur);	
+				}
+			WH_LED_Slide_Cur = (WH_LED_Slide_Cur-1);
+			if (WH_LED_Slide_Cur < 0) WH_LED_Slide_Cur = 0;
+			}
+		else if (WH_LED_Slide_Cur < posit)
+			{
+			if (delay > 0) 
+				{
+				if (key)	DeferCall(time, &WH_LED_ArrayD_On_Set, WH_LED_Slide_Cur);	
+				else		DeferCall(time, &WH_LED_ArrayD_On_SetF, WH_LED_Slide_Cur);	
+				}
+			WH_LED_Slide_Cur = (WH_LED_Slide_Cur+1);
+			if (WH_LED_Slide_Cur > index-1) WH_LED_Slide_Cur = index-1;
+			}
+		else break;
+
+	if (Script_Debug) printf("WH LED Slide Dn: %i  LED: %i  delay: %i  time: %i \xa",WH_LED_Slide_Cur,posit,delay,time);
+	WH_LED_Counter = time + delay;
+	time = time + delay;
+	//if (Script_Debug) printf("time = %i  icounter = %i)\xa",time, icounter);
+	}
+icounter = WH_LED_Counter;
+DeferCall(WH_LED_Counter,&WH_LED_Counter_Set,icounter);
+}
+
+
+//Defercall routines
+int WH_LED_ArrayU_On_Set(int posit)	//uses actkey (exec)
+{
+ActKey(KEYON+PULSE+X(WH_LED_ArrayU_On,posit));
+}
+int WH_LED_ArrayU_On_SetF(int posit)	//forces function
+{
+	if 		(posit == 4) Lights_WHT1(1);
+	else if (posit == 3) Lights_WHT2(1);
+	else if (posit == 2) Lights_WHT3(1);
+	else if (posit == 1) Lights_WHT4(1);
+	else if (posit == 0) Lights_WHT5(1);
+}
+int WH_LED_ArrayU_Off_Set(int posit)
+{
+ActKey(KEYON+PULSE+X(WH_LED_ArrayU_Off,posit));
+}
+int WH_LED_ArrayU_Off_SetF(int posit)
+{
+	if 		(posit == 5) Lights_WHT1(0);
+	else if (posit == 4) Lights_WHT2(0);
+	else if (posit == 3) Lights_WHT3(0);
+	else if (posit == 2) Lights_WHT4(0);
+	else if (posit == 1) Lights_WHT5(0);
+}
+int WH_LED_ArrayD_On_Set(int posit)
+{
+ActKey(KEYON+PULSE+X(WH_LED_ArrayD_On,posit));
+}
+int WH_LED_ArrayD_On_SetF(int posit)
+{
+	if 		(posit == 0) Lights_WHT1(1);
+	else if (posit == 1) Lights_WHT2(1);
+	else if (posit == 2) Lights_WHT3(1);
+	else if (posit == 3) Lights_WHT4(1);
+	else if (posit == 4) Lights_WHT5(1);
+}
+int WH_LED_ArrayD_Off_Set(int posit)
+{
+ActKey(KEYON+PULSE+X(WH_LED_ArrayD_Off,posit));
+}
+int WH_LED_ArrayD_Off_SetF(int posit)
+{
+	if 		(posit == 1) Lights_WHT1(0);
+	else if (posit == 2) Lights_WHT2(0);
+	else if (posit == 3) Lights_WHT3(0);
+	else if (posit == 4) Lights_WHT4(0);
+	else if (posit == 5) Lights_WHT5(0);
+}
+
+int	WH_LED_Counter_Set (int comp = 0, int set = 0)	//for defercall, resets if unchanged
+{
+if (Script_Debug) printf("WH_LED_Counter = %i\xa compare = %i\xa",WH_LED_Counter,comp);
+if ((WH_LED_Counter == comp) | (comp < 1))
+	{
+	if (Script_Debug) printf(" WH_LED_Counter reset to %i\xa",set);
+	WH_LED_Counter = set;
+	}
+}

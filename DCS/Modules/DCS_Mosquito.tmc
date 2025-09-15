@@ -1,0 +1,714 @@
+//========================================================================
+//				DCS Mosquito for HOTAS Cougar/Warthog
+//					by Don "Home Fries" Heumphreus
+//				   Last Updated: 13MAR2023
+//
+//	Change Log:
+//	2.61 	Initial Release
+//	2.62	Added /I toggle to SnapViews
+//			Swiched DX commands for revised Engine Cut routine
+//	2.63	Added WHIdle_Enabled parameter to WH Idle commands
+//	2.65	Added rocket commands and Fuel Pump sw
+//	2.66a	Changed radio model from P51D to Simple 2 channel w/ F-14 ICS
+//	 		
+//
+//
+//========================================================================
+
+//Free DX24
+
+
+int DCS_Mosquito(int led, int sp, int prof = 3606)
+{
+//if (prof == 3606)
+//	{
+	printf("DCS Mosquito FB Mk. VI\xa");
+	if (WarthogStick > 0)
+		{
+		MapKeyR(&Joystick, S2,	EXEC("DCS_Mosquito_Init(3606);"));
+		}
+	else
+		{
+		MapKeyR(&HCougar, S2,	EXEC("DCS_Mosquito_Init(3606);"));
+		}
+	if (sp > 0)	PlayWav("mosfbvi.wav");
+	if (led > 0)	Lights_Four(0,1,1,0,	ProfileSwapDelay+LED_Delay);
+//	}
+}
+
+int	SetMenu_MosFBVI()
+{
+Set_Acft_Array_Cur(3606);
+}
+int DCS_MosFBVI_Init()
+{
+DCS_Mosquito_Init(3606);
+}
+
+
+int DCS_Mosquito_Init(int prof = 3606)
+{
+Determine_Differential_Braking(DiffBraking_Enabled,CougarToeBrakes);
+
+//Declare Values
+FkeyPress			=	1;	//added in 2.02 to prevent Commswitch key activation on profile load.
+GraceFlag			=	0;
+Eng_Start_x			=	0;
+Eng_Stop_x			=	0;
+Starter_Ind_x		=	0;
+MFD_Eng_Start		=	0;
+ProfID				=	prof;
+FixedGear			=	-1;	//no context sensitive so force gearstate up
+Helicopter			=	0;
+T6WheelBrake		=	1;
+GearCycleTimeUp		=	Gear_Retract_Mosquito;
+GearCycleTimeDn		=	Gear_Deploy_Mosquito;
+BrakeOnCycleTime	=	1;	//nonzero to prevent DBZ error
+BrakeOffCycleTime	=	1;
+TriggerZoomEnabled	=	0;	//triggerzoom disabled since trigger used for guns and cannons and gear not context sensitive
+Rdo_Channel_Cur 	= 	0;	//Set to A
+S4AnalogBrake		=	0;	//AnalogPaddleBrake;	//added in 1.33, both values must be nonzero to enable S4AnalogBrake
+AnalogParkingBrake	=	0;					//added in 1.33; JoyY Parking Brake disabled for P-51D
+S4asNWS				=	0;					//added in 1.33
+S3holdNWS 			= 	0;	//added in 2.05
+XYAxisTrim			=	0;	//added in 1.34
+DMS_SnapView		=	0;	//added in 1.34
+WheelBrakeFull		=	1;	//added in 1.35
+ToeBrakesAvailable	=	0;	//added in 1.40
+NVG_Capable			=	0;	//added in 1.40
+AB_Capable			=	1;	//added in 1.61, set to yes for WEP throttles (though special case with pitch)
+Adjust_Backlighting	=	0;	//added in 1.62
+NS430_Enabled		=	NS430_Installed;	//added in 2.21
+CrewCount			=	2;
+StationChangeModifier	=	0;
+WH_Use_TQS				=	0;	//added in 2.43
+Analog_TDC			=	0;	//added in 2.43
+EngineCount 		=	2;	
+CommInitType		=	0;	//0 for none/custom, 1 for single channel (P-51), 2 for simple (dual channel), 3 for complex (3 channel).  added in 2.43
+StnCheckDisabled	=	StnCheckDisabled_Mosquito;	//added in 2.43.  default is 0.
+CurrentStation 		=	1;	//moved here in 2.43
+
+FlapsCycleTimeDn	=	Flap_Deploy_Mosquito;
+FlapsCycleTimeUp	=	Flap_Retract_Mosquito;
+BombBayCycleTimeOpen	=	BombBay_Open_Mosquito;
+BombBayCycleTimeClose	=	BombBay_Close_Mosquito;
+GearPos					=	GearDn_Ind_Default*100;
+
+
+char mosvar;Dim(&mosvar,12);	//added in 2.58
+
+if (prof == 3606)  		sprintf(&mosvar, 	" FB Mk. VI");
+else  					sprintf(&mosvar, 	"");
+
+printf("Done\xa Execute DCS Mosquito%s Config (Profile v%i.%i):\xa",&mosvar,MajorVersion,MinorVersion);
+PlayWavSel(ProfID,abs(Init_Run - 1),DCSFP_Enabled,MFDisplayEnabled);	//added in 1.61, DCSFP added in 2.05, MFDisplay added in 2.29
+if (WarthogThrottle > 0) DeferCall(Flap_PS_Check_Delay+1000,&PSM_FLAPM_Check,ProfID); 	//added in 1.61
+Pause_TrackIR(0);
+AnalogBrakePoll(0);	//added in 1.23
+MFD_Init(ProfID);
+	printf("   Map HOTAS Cougar/Warthog for DCS Mosquito%s Config:\xa",&mosvar);
+	DCS_Axis_Init(ProfID,EngineCount,Analog_TDC);	
+	
+		printf("      Button Mapping:\xa");
+			printf("         Shift Commands: S3  momentary...");
+				if (WarthogStick > 0)
+					{
+					if (WarthogThrottle > 0) 	SetShiftButton(&Joystick, S3, &Throttle, 0, 0);
+					else						SetShiftButton(&Joystick, S3, &HCougar,  0, 0);
+					MapKey	(&Joystick, S3, CHAIN(DX30,TEMPO(DX3, 	EXEC("S3S4Shifted(ProfID,RudderPedals,GearState,Helicopter);"), ModTempo)));		//DX3 short, long(er) for modifier and eject check, moved here in 0.53, removed S4 and changed argument to "RudderPedals"
+					MapKeyR	(&Joystick, S3, 						EXEC("S3Release(ProfID,RudderPedals,GearState,RevANTRudder,Helicopter);"));		//added in 0.53 to release "RudderPedals" argument in S3Shifted
+					}					
+				else
+					{
+					SetShiftButton(&HCougar, S3, &HCougar, 0, 0);
+					MapKey	(&HCougar, S3, CHAIN(DX30,TEMPO(DX3, 	EXEC("S3S4Shifted(ProfID,RudderPedals,GearState,Helicopter);"), ModTempo)));		//DX3 short, long(er) for modifier and eject check, moved here in 0.53, removed S4 and changed argument to "RudderPedals"
+					MapKeyR	(&HCougar, S3, 							EXEC("S3Release(ProfID,RudderPedals,GearState,RevANTRudder,Helicopter);"));		//added in 0.53 to release "RudderPedals" argument in S3Shifted
+					}
+			printf("Done!\xa");	
+		if(WarthogStick > 0)
+			{
+			printf("         Warthog Stick Buttons...");	
+				if (TrackIR > 1)
+					{
+					MapKeyIO(&Joystick,	S1,	DX5,	VR_Zoom);
+					MapKeyRIO(&Joystick,S1,	0,		S1R_VR);
+					}
+				else
+					{
+					MapKey	(&Joystick, S1, DX5);
+					MapKeyR	(&Joystick,	S1,	0);
+					}
+					
+				MapKey	(&Joystick, TG1, DX1);	//triggerzoom removed to allow shifted cannon function
+				MapKeyR	(&Joystick, TG1, 0);				
+
+				MapKey	(&Joystick, TG2,DX6);
+//				MapKeyR	(&Joystick, TG2,0);
+				MapKey	(&Joystick, S2, DX2);	//bomb, /I cannon only
+				MapKeyR	(&Joystick,	S2, 0);
+				MapKeyIO(&Joystick, S4, EXEC("S3S4Shifted();"), DX4);	//allows DX4 or wheelbrakes; diffbraking added in 0.24, dx 30 removed for test in 26, DX4 incorporated into DiffBraking in 0.32
+				MapKeyR	(&Joystick, S4, 0);						//GearState (argument 3) set to 1 for DiffBraking because there is no in-flight function for S4.
+			}
+		else
+			{
+			printf("         Cougar Stick Buttons...");	
+				if (TrackIR > 1)
+					{
+					MapKeyIO(&HCougar,	S1,	DX5,	VR_Zoom);
+					MapKeyRIO(&HCougar,	S1,	0,		S1R_VR);
+					}
+				else
+					{
+					MapKey	(&HCougar,	S1, DX5);
+					MapKeyR	(&HCougar,	S1,	0);
+					}
+			
+				MapKey	(&HCougar, TG1, DX1);
+				MapKeyR	(&HCougar, TG1, 0);	
+
+				MapKey	(&HCougar, TG2,DX6);
+//				MapKeyR	(&HCougar, TG2,0);
+				MapKey	(&HCougar, S2, DX2);	//bomb, /I cannon only
+				MapKeyR	(&HCougar, S2, 0);
+				MapKeyIO(&HCougar, S4, EXEC("S3S4Shifted();"), DX4);	//allows DX4 or wheelbrakes; diffbraking added in 0.24, dx 30 removed for test in 26, DX4 incorporated into DiffBraking in 0.32
+				MapKeyR	(&HCougar, S4, 0);						//GearState (argument 3) set to 1 for DiffBraking because there is no in-flight function for S4.
+			}
+			printf("...Done!\xa");	
+						
+			H1_Init(TrackIR, PadlockEnabled, ProfID);	//moved to individual routines in 1.27 for trim reset removal on helos
+			CommState_Off(1,ProfID,1,0,1);	//sets hats 2-4 to DX functions	
+			
+
+		if (WarthogThrottle > 0)
+			{	
+			printf("         Warthog Throttle Buttons\xa");	
+				DeferCall(IndependentPollInterval,	&AnalogFlapsPoll,	1);	//used for flaps	defercall because AnalogGearPoll(1) called in Mosquito_DF_Init()
+				DeferCall(2*IndependentPollInterval,&AnalogBombBayPoll,	1);	//used for bomb bay
+				//P51D_CommState_Init(ProfID);						//Set Comms routine (DX21 plus whatever options selected)
+				F14_Discrete_ICS_Cycle(1,0,1);	//calls Simple_Comm_Init with Mossie ICS default settings and index 1 (2 options); replaced P51D in 2.66a
+				MapKeyIO(&Throttle, CSD, Spit_GS_Base_Incr,	DX7);									
+				MapKeyIO(&Throttle, CSU, Spit_GS_Base_Decr, DX9);	
+				MapKeyIO(&Throttle, CSL, TEMPO(0,Mos_Tanks_Outer,DefTempo),	DX25);	//DX25/6 rudder trim
+				MapKeyIO(&Throttle, CSR, TEMPO(0,Mos_Tanks_Main, DefTempo),	DX26);	
+				
+//				MapKey	(&Throttle,	SC,	DX19);
+//				MapKeyR	(&Throttle,	SC,	0);
+				
+
+				
+				//CHF taken care of in TriggerZoom_MapGearDn_WH()
+				//TriggerZoom_MapGearDn_WH(TriggerZoom_state, ProfID);
+//				MapKeyIO(&Throttle,	CHF,	KB_LBRTD,	Mos_Prop_Incr);	// /i supercharger
+//				MapKeyIO(&Throttle,	CHB,	KB_LBRTU,	Mos_Prop_Decr);
+//				MapKeyR	(&Throttle,	CHF,	0);	//Added for F-86 in 1.69
+//				MapKeyR	(&Throttle,	CHB,	0);	//Added for F-86 in 1.69
+				
+			
+				MapKey	(&Throttle,	SPDF,	DX19);	
+				MapKeyR	(&Throttle, SPDF,	0);
+				
+				if ((TrackIR > 1) | (MFD_Count < 1))		//TIR/MFD added in 2.34a 
+						MapKeyIO(&Throttle,	SPDB, 	TEMPO(Mixture_Cut, EXEC("DCS_AcftSel(1);"),	SwapTempo),	TEMPO(Mixture_Run, Mixture_Cut, LongTempo));
+				else	MapKeyIO(&Throttle, SPDB,	Mixture_Cut,											TEMPO(Mixture_Run, Mixture_Cut, LongTempo));
+				MapKeyR(&Throttle,	SPDB,	0);
+			
+			//Throttle Locks
+				MapKeyIO(&Throttle,	SC,	 EXEC("WHT_Throttle_Lock(1,1,1);"),	TEMPO(EXEC("WHT_Throttle_Lock(1,0,1);"),EXEC("WHT_Throttle_Lock(1,1,1);"),DefTempo)	);
+				MapKeyIO(&Throttle,	LTB, EXEC("WHT_Throttle_Lock(0,1,1);"),	TEMPO(EXEC("WHT_Throttle_Lock(0,0,1);"),EXEC("WHT_Throttle_Lock(0,1,1);"),DefTempo)	);
+
+
+			printf("Base Switches...");
+
+//			if (Adjust_Backlighting > 0)	MapKeyIO(&Throttle,	LDGH,	TEMPO(0,EXEC("EjectCheckLDGH(ProfID);"), DefTempo), EXEC("Spit_UC_Indicator_Set(-1);"));	//DX Horn Silence
+//			else							MapKeyIO(&Throttle,	LDGH,	TEMPO(0,EXEC("EjectCheckLDGH(ProfID);"), DefTempo), DX24);	//DX Horn Silence
+//				MapKey	(&Throttle,	APENG,	DX19);
+				
+				MapKeyIO(&Throttle,	APPAT,	0,CHAIN(PULSE+Mos_BombBay_Up,EXEC("BombBaySwitch = -1;"))	);	//EXEC("Mosquito_SCLTB_Map(GearState,1);"));
+				MapKeyRIO(&Throttle,APPAT,	0,EXEC("BombBaySwitch = 0; if (BombBayPos > 0) 	 ActKey(KEYON+PULSE+Mos_BombBay_Down);"));	//PULSE+Mos_BombBay_Down,0);
+				MapKey	(&Throttle,	APAH,	0);	//TEMPO(0,EXEC("Mosquito_SCLTB_Map(GearState,0);"),DoubleTap)	);
+				MapKeyIO(&Throttle,	APALT,	0,CHAIN(PULSE+Mos_BombBay_Down,EXEC("BombBaySwitch = 1;"))	);	//EXEC("Mosquito_SCLTB_Map(GearState,-1);"));
+				MapKeyRIO(&Throttle,APALT,	0,EXEC("BombBaySwitch = 0; if (BombBayPos < 100) ActKey(KEYON+PULSE+Mos_BombBay_Up);"));	//PULSE+Mos_BombBay_Up,0);
+
+//				MapKeyIO(&Throttle,	FLAPU,	PULSE+Mos_Flaplock_Close,	CHAIN(PULSE+MiG15_Flaps_Up,	EXEC("FlapsSwitch = -1;"))	);	// /I for flap cover
+//				MapKey	(&Throttle,	FLAPM,	0);
+//				if (GearLock_Auto_Mosquito > 0)
+//						MapKeyIO(&Throttle,	FLAPD,	PULSE+Mos_Flaplock_Open,	CHAIN(PULSE+Mos_Flaplock_Open,D(Switch_Delay),PULSE+MiG15_Flaps_Down,EXEC("FlapsSwitch = 1;"))	);
+//				else	MapKeyIO(&Throttle,	FLAPD,	PULSE+Mos_Flaplock_Open,	CHAIN(PULSE+MiG15_Flaps_Down,EXEC("FlapsSwitch = 1;"))	);	
+				
+//				MapKeyRIO(&Throttle,FLAPU,	0,EXEC("FlapsSwitch = 0; if (FlapsPos > 0)	 ActKey(KEYON+PULSE+MiG15_Flaps_Down);"));	//0,PULSE+MiG15_Flaps_Down);
+//				MapKeyRIO(&Throttle,FLAPD,	0,EXEC("FlapsSwitch = 0; if (FlapsPos < 100) ActKey(KEYON+PULSE+MiG15_Flaps_Up);"));	//0,PULSE+MiG15_Flaps_Up);
+
+			if (Rocket_Sw_Down_On_Mosquito > 0)
+			{
+				MapKeyIO(&Throttle,	EACON,	0,	PULSE+DX_LOSB01);		//master rocket sw
+				MapKeyIO(&Throttle,	EACOFF,	0,	PULSE+CHAIN(DX30,DX31,D(ModDelay),DX1));
+
+				MapKeyIO(&Throttle,	RDRNRM,	0,	PULSE+DX_LOSB02);		//rocket salvo sw
+				MapKeyIO(&Throttle,	RDRDIS,	0,	PULSE+CHAIN(DX30,DX31,D(ModDelay),DX2));
+				}
+			else
+				{
+				MapKeyIO(&Throttle,	EACOFF,	0,	PULSE+DX_LOSB01);		//master rocket sw
+				MapKeyIO(&Throttle,	EACON,	0,	PULSE+CHAIN(DX30,DX31,D(ModDelay),DX1));
+
+				MapKeyIO(&Throttle,	RDRDIS,	0,	PULSE+DX_LOSB02);		//rocket salvo sw
+				MapKeyIO(&Throttle,	RDRNRM,	0,	PULSE+CHAIN(DX30,DX31,D(ModDelay),DX2));
+				}
+				
+			if (WHIdle_Enabled > 0)
+				{
+				MapKey	(&Throttle,	IDLERON,	DX28);
+				MapKey	(&Throttle,	IDLELON,	DX27);
+				}
+//			else
+//				{
+//				MapKey	(&Throttle,	IDLERON,	0);
+//				MapKey	(&Throttle,	IDLELON,	0);
+//				}
+//				MapKey	(&Throttle,	IDLEROFF,	0);
+//				MapKey	(&Throttle,	IDLELOFF,	0);
+				
+//				MapKeyIO(&Throttle,	IDLERON,	0,	CHAIN(PULSE+Engine_Right_Stop, EXEC("Engine_Shutdown_Ind(2, Engine_Shutdown_Ind_Time, 1);")));
+//				MapKeyIO(&Throttle,	IDLEROFF,	0,	CHAIN(PULSE+Engine_Right_Start, EXEC("Engine_Start_Ind(2, Starter_Ind_x, 1);")));
+//				MapKeyIO(&Throttle,	IDLELON,	0,	CHAIN(PULSE+Engine_Left_Stop, EXEC("Engine_Shutdown_Ind(1, Engine_Shutdown_Ind_Time, 1); Spit_UC_Indicator_Set(0);")));
+//				MapKeyIO(&Throttle,	IDLELOFF,	0,	CHAIN(PULSE+Engine_Left_Start, EXEC("Engine_Start_Ind(1, Starter_Ind_x, 1); Spit_UC_Indicator_Set(1);")));				
+//				MapKey	(&Throttle,	IDLERON,	EXEC("Spit_UC_Indicator_Set(0);"));
+//				MapKey	(&Throttle,	IDLEROFF,	EXEC("Spit_UC_Indicator_Set(1);"));
+
+				
+				MapKeyIO(&Throttle,	EFLNORM,	0,	PULSE+Mos_LLdgLight_On);	//PULSE+Mos_MagnetoL_On);
+//				MapKeyR	(&Throttle,	EFLNORM,	0);
+				MapKeyIO(&Throttle,	EFLOVER,	0,	PULSE+Mos_LLdgLight_Off);	//PULSE+Mos_MagnetoL_Off);
+				MapKeyIO(&Throttle,	EFRNORM,	0,	PULSE+Mos_RLdgLight_On);	//PULSE+Mos_MagnetoR_On);
+//				MapKeyR	(&Throttle,	EFRNORM,	0);
+				MapKeyIO(&Throttle,	EFROVER,	0,	PULSE+Mos_RLdgLight_Off);	//PULSE+Mos_MagnetoR_Off);
+	
+
+				MapKey	(&Throttle,	APUON,	EXEC("Mosquito_Starter_Map(1);"));
+				MapKey	(&Throttle,	APUOFF,	EXEC("Mosquito_Starter_Map(0);"));
+
+				if 		(Throttle[APUON]) 	Mosquito_Starter_Map(1);
+				else						Mosquito_Starter_Map(0);
+
+				MapKeyIO(&Throttle,	FLAPU,	PULSE+Mos_Flaplock_Close,	CHAIN(PULSE+MiG15_Flaps_Up,	EXEC("FlapsSwitch = -1;"))	);	// /I for flap cover
+				MapKey	(&Throttle,	FLAPM,	0);
+				if (FlapLock_Auto_Mosquito > 0)
+						MapKeyIO(&Throttle,	FLAPD,	PULSE+Mos_Flaplock_Open,	CHAIN(PULSE+Mos_Flaplock_Open,D(FlapLock_Auto_Mosquito),PULSE+MiG15_Flaps_Down,EXEC("FlapsSwitch = 1;"))	);
+				else	MapKeyIO(&Throttle,	FLAPD,	PULSE+Mos_Flaplock_Open,	CHAIN(PULSE+MiG15_Flaps_Down,EXEC("FlapsSwitch = 1;"))	);	
+				
+				MapKeyRIO(&Throttle,FLAPU,	0,EXEC("FlapsSwitch = 0; if (FlapsPos > 0)	 ActKey(KEYON+PULSE+MiG15_Flaps_Down);"));	//0,PULSE+MiG15_Flaps_Down);
+				MapKeyRIO(&Throttle,FLAPD,	0,EXEC("FlapsSwitch = 0; if (FlapsPos < 100) ActKey(KEYON+PULSE+MiG15_Flaps_Up);"));	//0,PULSE+MiG15_Flaps_Up);
+				
+//				MapKeyIO(&Throttle,	LTB,	DX24);
+				MapKey	(&Throttle,	APENG,	DX15);
+				MapKeyIO(&Throttle,	LDGH,	TEMPO(0,EXEC("EjectCheckLDGH(ProfID);"), DefTempo), DX17);
+				
+
+				MapKey	(&Throttle, PSF, EXEC(			"Mosquito_WHT_Map(1,1);"));				//prop pitch + mixture
+				MapKey	(&Throttle, PSB, EXEC(			"Mosquito_WHT_Map(1,0);"));				//prop pitch with zoom
+				MapKey	(&Throttle, PSM, TEMPO(0,EXEC(	"Mosquito_WHT_Map(0,0);"),DoubleTap));	//throttle with zoom
+				
+				if 		(Throttle[PSF]) 	Mosquito_WHT_Map(1,1);
+				else if (Throttle[PSB]) 	Mosquito_WHT_Map(1,0);
+				else						Mosquito_WHT_Map(0,0);	
+			}
+		else
+			{
+			printf("         TQS Buttons\xa");			
+				P51D_CommState_Init(ProfID,0,1);						//Set Comms routine (DX21 plus whatever options selected)
+				MapKeyIO(&HCougar, T2, Mos_BombBay_Down,	TEMPO(MiG15_Flaps_Down,	Mos_Flaplock_Open,	DefTempo));		//no need for dx30 or triggerzoom_mapgeardn() for T2
+				MapKeyR	(&HCougar, T2, 0);									//no need for dx30 here
+				MapKeyIO(&HCougar, T3, Mos_BombBay_Up,		TEMPO(MiG15_Flaps_Up,	Mos_Flaplock_Close,	DefTempo));							//Flaps, DX30 needs not be used
+				MapKeyR	(&HCougar, T3, 0);									//no need for dx30 here
+				
+				MapKey	(&HCougar, T4, TEMPO(0,Mos_Tanks_Main, DefTempo),	DX26);	//DX rudder trim
+				MapKey	(&HCougar, T5, TEMPO(0,Mos_Tanks_Outer,DefTempo),	DX25);	
+				MapKeyR	(&HCougar, T4, 0);
+				MapKeyR	(&HCougar, T5, 0);	
+				
+				MapKeyIO(&HCougar, T6,	TEMPO(0,	EXEC("EjectCheckT6(ProfID);"), DefTempo),	DX4);	//wheelbrakes, doesnt use P51 routine for now
+				MapKeyR	(&HCougar, T6,	0);
+//				P51DMapT6(GearDn_Ind_Default,ProfID);
+				
+				if ((TrackIR > 1) | (MFD_Count < 1))		//TIR/MFD added in 2.34a 
+						MapKeyIO(&HCougar, T9, 	TEMPO(Mixture_Cut, EXEC("DCS_AcftSel(1);"),	SwapTempo),		TEMPO(Mixture_Run,Mixture_Cut,DefTempo));	
+				else	MapKeyIO(&HCougar, T9,  Mixture_Cut,												TEMPO(Mixture_Run,Mixture_Cut,DefTempo));	
+//				MapKeyR	(&HCougar, T9,  0);	
+				MapKey	(&HCougar, T10,	DX19);	
+				MapKeyR	(&HCougar, T10,	0);
+			}
+			printf("...Done!\xa");
+	Global_DF_Init(WarthogThrottle,ProfID);
+	printf("   HOTAS Mapping Complete.\xa\xa");	
+
+TriggerZoom_state  = 0;		//reset TriggerZoom
+
+
+//Lights_ALL(0);				//Says Init complete
+	DeferCall(LED_Delay,&Lights_RLED2,0);	//Converted to binary in 1.28
+	DeferCall(2*LED_Delay,&Lights_LLED1,0);
+//if (Adjust_Backlighting > 0)	DeferCall(2*LED_Delay,&Spit_UC_Indicator_Set,abs(GearDn_Ind_Default-1));	//sets lights to off if ground start, on for air
+//else							
+DeferCall(3*LED_Delay,&Backlight_Max_Init,0);
+
+	if (WarthogThrottle > 0) DeferCall(5*LED_Delay,&WHT_Lights_Dn_D,0);
+	
+ActKey(DX1);				//just in case DX1 lingers from trigger activation
+if (Init_Run == 0) Gear_Ind_Init(GearDn_Ind_Default,FixedGear,Helicopter,AirBrkFlash);
+
+Map_Cougar_ToeBrakes(0);	//spitfire uses paddle
+
+printf("\xa DCS Mosquito%s Init Complete!\xa",&mosvar);	
+Set_Acft_Array_Cur(ProfID);
+}
+
+
+int Mosquito_HCS_Init(int prof = 3606, int force = 0)	//force added in 1.69 as passthru to allow for initial TGZ_MapGearDn if TGZ disabled.
+{
+			if (Script_Debug) printf("         Hat2 (Armament)...");	
+				MapKeyIO(&HCougar, 	H2U,	TEMPO(DX7,Mos_GunCam_Toggle,DefTempo),	DX7);									
+				MapKeyIO(&HCougar, 	H2D,	TEMPO(DX9,Mos_MasterArm_Cover,DefTempo),DX9);
+				MapKey	(&HCougar,	H2R,	DX8);					
+				MapKey	(&HCougar,	H2L,	DX10);					
+		if (Script_Debug) printf("...Done!\xa");	
+		if (Script_Debug) printf("         Hat3 (SnapViews)...");		
+				MapKeyIO(&HCougar, 	H3U,	TEMPO(MiG15_Flaps_Up,Mos_Flaplock_Close,DefTempo),	DX11);
+				if (TrackIR < 2)
+					{
+					MapKeyIO(&HCougar,	H3D,	TEMPO(MiG15_Flaps_Down,Mos_Flaplock_Open,DefTempo), 		SnapView2);
+					MapKeyIO(&HCougar, 	H3R,	Std_SnapView9,	SnapView9);	
+					MapKeyIO(&HCougar, 	H3L,	Std_SnapView7,	SnapView7);	
+					}
+				else
+					{
+					MapKeyIO(&HCougar,	H3D,	TEMPO(MiG15_Flaps_Down,Mos_Flaplock_Open,DefTempo), 		CHAIN(DX30,D(ModDelay),DX11)	);
+					MapKey	(&HCougar, 	H3R,	DX26);	//rudder trim
+					MapKey	(&HCougar, 	H3L,	DX25);	
+					}
+
+		if (Script_Debug) printf("...Done!\xa");	
+		if (Script_Debug) printf("         Hat4 (VHF Radio)...");	
+				MapKeyIO(&HCougar,	H4U,	TEMPO(EXEC("Cycle_RdoMode(4);"),Rdo_Mode_Unlock, DefTempo),	TEMPO(EXEC("Cycle_RdoChannel(-1,0,0);"), EXEC("Cycle_RdoChannel(4,1,0);"), DefTempo) );		//TEMPO(EXEC("Cycle_RdoMode(-1);"),Rdo_Mode_Lock, DefTempo)
+				MapKeyIO(&HCougar,	H4D,	TEMPO(EXEC("Cycle_RdoMode(-1);"),Rdo_Mode_Lock, DefTempo),	TEMPO(EXEC("Cycle_RdoChannel(5,0,0);"), EXEC("Cycle_RdoChannel(4,1,0);"), DefTempo) );
+				MapKey	(&HCougar,	H4R,	KB_LCONU);									//vhf volume/dim incr
+				MapKey	(&HCougar,	H4L,	KB_LCOND);									//vhf volume/dim decr
+		if (Script_Debug) printf("...Done!\xa");		
+}
+int Mosquito_WHS_Init(int prof = 3606, int force = 0)	//force added in 1.69 as passthru to allow for initial TGZ_MapGearDn if TGZ disabled. must force if no wh throttle
+{
+			if (Script_Debug) printf("         Hat2 (Armament)...");	
+				MapKeyIO(&Joystick,	H2U,	TEMPO(DX7,Mos_GunCam_Toggle,DefTempo),	DX7);									
+				MapKeyIO(&Joystick,	H2D,	TEMPO(DX9,Mos_MasterArm_Cover,DefTempo),DX9);	
+				MapKey	(&Joystick,	H2R,	DX8);		
+				MapKey	(&Joystick,	H2L,	DX10);	
+		if (Script_Debug) printf("...Done!\xa");	
+		if (Script_Debug) printf("         Hat3 (SnapViews)...");		
+//				if (!WarthogThrottle)
+//					{
+//					MapKeyIO(&Joystick, H3U,	TEMPO(MiG15_Flaps_Up,Mos_Flaplock_Close,DefTempo),	DX11);
+//					if (TrackIR < 2)
+//							MapKeyIO(&Joystick,	H3D,	TEMPO(MiG15_Flaps_Down,Mos_Flaplock_Open,DefTempo),		SnapView2);
+//					else	MapKeyIO(&Joystick,	H3D,	TEMPO(MiG15_Flaps_Down,Mos_Flaplock_Open,DefTempo), 	CHAIN(DX30,D(ModDelay),DX11)	);	
+					//TriggerZoom_MapGearDn(TriggerZoom_state, prof);
+//					}
+//				else
+//					{
+					MapKey	(&Joystick, H3U,	DX11);
+//					if (TrackIR < 2)	MapKeyIO(&Joystick,	H3D,	Std_SnapView2,	SnapView2);
+//					else				MapKeyIO(&Joystick,	H3D,	VR_Spyglass,	VR_Zoom_kb);
+//					}
+				if (TrackIR < 2)
+					{
+					MapKeyIO(&Joystick,	H3D,	Std_SnapView2,	SnapView2);
+					
+					MapKeyIO(&Joystick, H3R,	Std_SnapView9,	SnapView9);									
+					MapKeyIO(&Joystick, H3L,	Std_SnapView7,	SnapView7);	
+					}
+				else	//VR TBI
+					{
+					MapKeyIO(&Joystick,	H3D,	VR_Spyglass,	VR_Zoom_kb);
+					
+					MapKey	(&Joystick, H3R,	DX26);		//rudder trim						
+					MapKey	(&Joystick, H3L,	DX25);	
+					}	
+		
+		if (Script_Debug) printf("...Done!\xa");	
+		if (Script_Debug) printf("         Hat4 (VHF Radio)...");	
+				MapKeyIO(&Joystick,	H4U,	TEMPO(EXEC("Cycle_RdoMode(4);"),Rdo_Mode_Unlock, DefTempo),	TEMPO(EXEC("Cycle_RdoChannel(-1,0,0);"), EXEC("Cycle_RdoChannel(4,1,0);"), DefTempo) );		//unshifted tempo added in 2.65
+				MapKeyIO(&Joystick,	H4D,	TEMPO(EXEC("Cycle_RdoMode(-1);"),Rdo_Mode_Lock, DefTempo),	TEMPO(EXEC("Cycle_RdoChannel(5,0,0);"), EXEC("Cycle_RdoChannel(4,1,0);"), DefTempo) );
+				MapKey	(&Joystick,	H4P,	DX5);			//TEMPO(EXEC("Cycle_RdoChannel(4,1,0);"),DX19,DefTempo)	);
+				MapKey	(&Joystick,	H4R,	KB_LCONU);									//vhf volume/dim incr
+				MapKey	(&Joystick,	H4L,	KB_LCOND);									//vhf volume/dim decr
+		if (Script_Debug) printf("...Done!\xa");		
+}
+
+int	Mosquito_DF_Init(int wh)
+{
+int bsbo;
+
+if (GearLock_Auto_Mosquito > 0)	bsbo = CHAIN(PULSE+Mos_Gearlock_Open,D(GearLock_Auto_Mosquito),PULSE+Landing_Gear_Up,EXEC("GearSwitch = -1;"));
+else							bsbo = CHAIN(PULSE+Landing_Gear_Up,EXEC("GearSwitch = -1;"));
+
+if (wh > 0)
+	{
+//	if (GearLock_Auto_Mosquito > 0)	bsbo = CHAIN(PULSE+Mos_Gearlock_Open,D(Switch_Delay),PULSE+Landing_Gear_Up,EXEC("GearSwitch = -1;"));
+//	else							bsbo = CHAIN(PULSE+Landing_Gear_Up,EXEC("GearSwitch = -1;"));	
+	
+	MapKeyIO(&Throttle, BSF, PULSE+Mos_Gearlock_Close,	CHAIN(PULSE+Landing_Gear_Down,EXEC("GearSwitch = 1;"))	);		// /I to cycle the lock
+	MapKeyRIO(&Throttle,BSF, 0,EXEC("GearSwitch = 0; if (GearPos < 100) ActKey(KEYON+PULSE+Landing_Gear_Up);"));	//0,PULSE+Gear_Up);
+	MapKeyIO(&Throttle, BSB, PULSE+Mos_Gearlock_Open,	bsbo	);				
+	MapKeyRIO(&Throttle,BSB, 0,EXEC("GearSwitch = 0; if (GearPos > 0)	ActKey(KEYON+PULSE+Landing_Gear_Down);"));	//0,PULSE+Gear_Dn);
+	MapKey	(&Throttle, BSM, 0);	
+	}
+else
+	{
+//	if (GearLock_Auto_Mosquito > 0)	bsbo = CHAIN(PULSE+Mos_Gearlock_Open,D(Switch_Delay),PULSE+Landing_Gear_Up);
+//	else							bsbo = PULSE+Landing_Gear_Up;
+
+	MapKeyIO(&HCougar, T7,	bsbo,	PULSE+USB_8);	//sellt
+	MapKeyRIO(&HCougar,T7,	EXEC("GearSwitch = 0; if (GearPos > 0)	ActKey(KEYON+PULSE+Landing_Gear_Down);"),	0);
+	MapKeyIO(&HCougar, T8,	CHAIN(PULSE+Landing_Gear_Down,EXEC("GearSwitch = 1;")),	PULSE+USB_0);	//selrt
+	MapKeyRIO(&HCougar,T8, 	EXEC("GearSwitch = 0; if (GearPos < 100) ActKey(KEYON+PULSE+Landing_Gear_Up);"),	0);
+	MapKeyIO(&HCougar, DFM,	0, TEMPO(0,PULSE+USB_9, DoubleTap));	//selboth	
+	}
+AnalogGearPoll(1);	//used for gear
+}
+
+int	Mosquito_MFD_Init(int prof = 3606)
+{
+//===================================
+//		Standard MFD Buttons
+//===================================
+
+	printf("   Map Cougar Left  MFD (DX31)...");	
+//LOSB 1 in Init
+					MapKeyIO(&LMFD, OSB02,	DX_LOSB02, DX_LOSB02T);
+					MapKeyIO(&LMFD, OSB03,	PULSE+Mos_MagnetoL_Off,TEMPO(Mos_MagnetoL_On,PULSE+Mos_MagnetoL_Off,LongTempo)	);	//DX_LOSB03, DX_LOSB03T);
+					MapKeyIO(&LMFD,	OSB04,	DX_LOSB04, DX_LOSB04T);
+//					MapKeyR	(&LMFD,	OSB04,	0);	//for A-10C and F-5E			
+					MapKeyIO(&LMFD, OSB05,	PULSE+Mos_MagnetoR_Off,TEMPO(Mos_MagnetoR_On,PULSE+Mos_MagnetoR_Off,LongTempo)	);	//DX_LOSB05, DX_LOSB05T);
+//					MapKeyR	(&LMFD,	OSB05,	0);	//For F-5E
+//LOSB 6-10
+					MapKey	(&LMFD,	OSB06,	EXEC("Cycle_RdoChannel(4,1,0);"));
+//					MapKeyIO(&LMFD,	OSB06,	EXEC("F14_Discrete_ICS_Cycle(-1,1,1);"),	EXEC("Cycle_RdoChannel(4,1,0);"));
+					MapKey	(&LMFD,	OSB07,	EXEC("Cycle_RdoChannel(0,0,0);"));
+//					MapKeyR	(&LMFD,	OSB07,	0);	//for Bf109
+					MapKey	(&LMFD,	OSB08,	EXEC("Cycle_RdoChannel(1,0,0);"));
+					MapKey	(&LMFD,	OSB09,	EXEC("Cycle_RdoChannel(2,0,0);"));
+					MapKey	(&LMFD,	OSB10,	EXEC("Cycle_RdoChannel(3,0,0);"));
+
+//LOSB 11-15, 16
+//				if (WarthogThrottle > 0)
+//					{
+//					MapKey	(&LMFD,	OSB11,	DX18);	//unshifted for oil dilution
+//					MapKey	(&LMFD,	OSB12,	DX16);
+//					}
+//				else
+//					{
+					MapKeyIO(&LMFD,	OSB11,	DX28,DX18);	//shifted for engine cut, unshifted for oil dilution
+					MapKeyIO(&LMFD,	OSB12,	DX27,DX16);
+//					}
+					MapKeyIO(&LMFD,	OSB13,	CHAIN(DX31,D(ModDelay),DX11,DX12), TEMPO(CHAIN(DX31,D(ModDelay),DX11,DX12),	CHAIN(DX30,DX31,D(ModDelay),DX11,DX12),	DefTempo));	//does 11 and 12 for both oxygen depending on seat
+					MapKeyIO(&LMFD,	OSB14,	DX_LOSB14, DX_LOSB14T);
+					MapKeyIO(&LMFD,	OSB15,	DX_LOSB15, DX_LOSB15T);
+					
+//LOSB 16-19
+					MapKeyIO(&LMFD,	OSB16,	DX_LOSB16, DX_LOSB16T);
+					MapKeyIO(&LMFD,	OSB17,	DX_LOSB17, DX_LOSB17T);
+					MapKeyIO(&LMFD,	OSB18,	DX_LOSB18, DX_LOSB18T);
+					MapKeyIO(&LMFD,	OSB19,	DX_LOSB19, DX_LOSB19T);
+
+//LMFD 20 in Init
+
+
+//Left Rocker Switches
+//CON
+
+		MapKeyIO(&LMFD,	CONU,	KB_LCONU,KB_LCONUT);	//VHF night mode /i right fuel sel
+		MapKeyIO(&LMFD,	COND,	KB_LCOND,KB_LCONDT);
+
+//SYM
+		MapKeyIO(&LMFD,	SYMU,	Rdo_Mode_Lock,		TEMPO(EXEC("Cycle_RdoMode(3);"),	Rdo_Mode_Lock,		DefTempo));
+		MapKeyIO(&LMFD,	SYMD,	Rdo_Mode_Unlock,	TEMPO(EXEC("Cycle_RdoMode(-1);"),	Rdo_Mode_Unlock, 	DefTempo));
+
+//BRT
+		MapKeyIO(&LMFD,	BRTU,	KB_LBRTU,KB_LBRTUT);	//supercharger, /i left fuel sel
+		MapKeyIO(&LMFD,	BRTD,	KB_LBRTD,KB_LBRTDT);
+		
+//GAIN in Init
+
+	printf("Done!\xa");
+
+	printf("   Map Cougar Right MFD (DX32)...");
+
+//ROSB 1-10 at first part of routine
+		MapKeyIO(&RMFD,	OSB01,	DX_ROSB01, TEMPO(DX_ROSB01,Mos_LStarter_DX,DefTempo));
+		MapKeyIO(&RMFD,	OSB02,	DX_ROSB02, TEMPO(DX_ROSB02,Mos_LBooster_DX,DefTempo));
+		MapKeyIO(&RMFD,	OSB03,	DX_ROSB03, TEMPO(DX_ROSB03,Mos_RStarter_DX,DefTempo));
+		MapKeyIO(&RMFD,	OSB04,	DX_ROSB04, TEMPO(DX_ROSB04,Mos_RBooster_DX,DefTempo));
+		MapKeyIO(&RMFD,	OSB05,	DX_ROSB05, DX_ROSB05T);
+//		MapKeyR	(&RMFD,	OSB05,	0);
+		MapKey	(&RMFD,	OSB06,	DX_ROSB06);	
+		MapKeyIO(&RMFD,	OSB07,	DX_ROSB07, DX_ROSB07T);
+//		MapKeyR	(&RMFD,	OSB07,	0);
+		MapKeyIO(&RMFD,	OSB08,	DX_ROSB08, DX_ROSB08T);
+		MapKeyIO(&RMFD,	OSB09,	DX_ROSB08, DX_ROSB09T);
+		MapKeyIO(&RMFD,	OSB10,	DX_ROSB10, DX_ROSB10T);
+//ROSB 11-15
+		MapKeyIO(&RMFD,	OSB11,	DX_ROSB11, DX_ROSB11T);
+		MapKeyIO(&RMFD,	OSB12,	DX_ROSB12, DX_ROSB12T);
+		MapKeyIO(&RMFD,	OSB13,	DX_ROSB13, DX_ROSB13T);
+		MapKeyIO(&RMFD,	OSB14,	DX_ROSB14, DX_ROSB14T);
+		MapKeyIO(&RMFD,	OSB15,	DX_ROSB15, DX_ROSB15T);
+		
+//ROSB 16-20
+		MapKey	(&RMFD,	OSB16,	TEMPO(DX_LOSB05, DX_ROSB16,SwTempo));	//DX_ROSB16, DX_ROSB16T); No /I dual function TEMPO added in 2.65
+		MapKeyIO(&RMFD,	OSB17,	DX_ROSB17, DX_ROSB17T);
+		MapKeyIO(&RMFD,	OSB18,	DX_ROSB18, DX_ROSB18T);
+		MapKeyIO(&RMFD,	OSB19,	DX_ROSB19, DX_ROSB19T);
+//		MapKeyIO(&RMFD,	OSB20,	CHAIN(DX32,D(ModDelay),DX24),	NS430_Toggle);	//added in 2.21
+
+//Right Rocker Switches
+//SYM
+//		MapKeyIO(&RMFD,	SYMU,	CHAIN(R_CTL,DX32,D(ModDelay),DX21),	CHAIN(DX32,D(ModDelay),DX21));	//R_CTL added to /I in 1.36 to deconflict with brake+mic = equal function
+//		MapKeyIO(&RMFD,	SYMD,	CHAIN(R_CTL,DX32,D(ModDelay),DX22),	CHAIN(DX32,D(ModDelay),DX22));
+		MapKeyIO(&RMFD,	SYMU,	KB_RSYMU,KB_RSYMUT);
+		MapKeyIO(&RMFD,	SYMD,	KB_RSYMD,KB_RSYMDT);
+//		MapKeyR	(&RMFD,	SYMU,	0);	//added in 1.61 to account for context sensitive R in M2000C
+//		MapKeyR	(&RMFD,	SYMD,	0);
+		
+//CON
+		MapKeyIO(&RMFD,	CONU,	KB_RCONU,KB_RCONUT);
+		MapKeyIO(&RMFD,	COND,	KB_RCOND,KB_RCONDT);
+//		MapKeyR	(&RMFD,	CONU,	0);	//added in 1.24 to account for context sensitive R in UH-1
+//		MapKeyR	(&RMFD,	COND,	0);
+
+//BRT
+	MapKeyIO(&RMFD,	BRTU,	KB_RBRTU,KB_RBRTUT);
+	MapKeyIO(&RMFD,	BRTD,	KB_RBRTD,KB_RBRTDT);
+
+//GAIN
+	MapKeyIO(&RMFD,	GAINU,	KB_RGAINU,KB_RGAINUT);
+	MapKeyIO(&RMFD,	GAIND,	KB_RGAIND,KB_RGAINDT);		
+
+
+	printf("Done!\xa");	
+}
+
+int Mosquito_WHT_Map(int prop, int mix)	//mix is obsolete as it is binary even on axis
+{
+int tl;
+int tr;
+int chfo;
+int chbo;
+
+//if (TrackIR > 1) mix = 1;	//forces mix for VR
+
+if (prop)
+	{
+	printf("Prop Pitch ");
+	tl	=	DX_XROT_AXIS;
+	tr	=	DX_YROT_AXIS;
+
+	chfo	=	USB_KP_PLUS;	//default throttle keys
+	chbo	=	USB_KP_HYPHEN;
+	}
+else
+	{
+	printf("Throttle ");	
+	tl	=	DX_THROTTLE_AXIS;
+	tr	=	DX_Z_AXIS;	
+	
+	chfo	=	Mos_Prop_Incr;
+	chbo	=	Mos_Prop_Decr;
+	}
+
+MapAxis (&Throttle,	THR_LEFT,	tl,		 AXIS_NORMAL, MAP_ABSOLUTE);	
+MapAxis (&Throttle,	THR_RIGHT,	tr,		 AXIS_NORMAL, MAP_ABSOLUTE);
+	
+//AB Detent curves
+if (WH_AB_Detent_Enabled > 0)
+	{
+	if (prop)
+		{
+		printf("(linear)");
+		SetCustomCurve(&Throttle, THR_RIGHT,	LIST(0,0,		WH_AB_DetentLow_R,100,	100,100)); 	//linear, max at AB for RPM/mixture
+		SetCustomCurve(&Throttle, THR_LEFT,		LIST(0,0,		WH_AB_DetentLow_L,100,	100,100));	//linear, max at AB for RPM/mixture		
+		}
+	else	//separate L/R throttles with WEP 
+		{
+		printf("(detent %i,%i)",WHT_DetentL_Mosquito,WHT_DetentR_Mosquito);
+		SetCustomCurve(&Throttle, THR_LEFT,		LIST(0,0,		WH_AB_DetentLow_L,WHT_DetentL_Mosquito,		WH_AB_DetentHigh_L,WHT_DetentL_Mosquito,	100,100));	//WHT_DetentL_Mosquito is the point on the curve where the handles are lifted.
+		SetCustomCurve(&Throttle, THR_RIGHT,	LIST(0,0,		WH_AB_DetentLow_R,WHT_DetentR_Mosquito,		WH_AB_DetentHigh_R,WHT_DetentR_Mosquito,	100,100));
+		}
+	}
+else
+	{
+	printf("(no detent)");
+	SetCustomCurve(&Throttle, THR_RIGHT,	LIST(0,0,		100,100));	//linear
+	SetCustomCurve(&Throttle, THR_LEFT,		LIST(0,0,		100,100));
+	}
+
+MapKeyIO(&Throttle,	CHF,	Mos_Supercharger_Mod,	chfo);	// /i supercharger
+MapKeyIO(&Throttle,	CHB,	Mos_Supercharger_Auto,	chbo);	
+
+
+//if (mix)
+//	{
+//	MapAxis (&Throttle,	THR_FC,	DX_ZROT_AXIS,		 AXIS_NORMAL, MAP_ABSOLUTE);
+//	printf("/Mixture\xa");
+//	}
+//else
+//	{
+//	MapAxis (&Throttle,	THR_FC,	DX_SLIDER_AXIS,		 AXIS_NORMAL, MAP_ABSOLUTE);
+//	printf("/FOV\xa");
+//	}
+printf("\xa");
+Lights_WHT4(prop);
+//DeferCall(LED_Delay,&Lights_WHT5,mix);
+}
+
+
+int Mosquito_Starter_Map(int eng = 0)
+{
+int lign;
+int lnorm;
+int lmot;
+int rign;
+int rnorm;
+int rmot;
+
+
+if (eng > 0)	//right
+	{
+	printf("Right Starter Selected\xa");
+	lign	=	Mos_RStarter_DX;
+	lnorm	=	Mos_RStarterCoverOpen;
+	lmot	=	Mos_RStarterCoverClose;
+	
+	rign	=	Mos_RBooster_DX;
+	rnorm	=	Mos_RBoosterCoverOpen;
+	rmot	=	Mos_RBoosterCoverClose;
+	}	
+else
+	{
+	printf("Left Starter Selected\xa");
+	lign	=	Mos_LStarter_DX;
+	lnorm	=	Mos_LStarterCoverOpen;
+	lmot	=	Mos_LStarterCoverClose;
+	
+	rign	=	Mos_LBooster_DX;
+	rnorm	=	Mos_LBoosterCoverOpen;
+	rmot	=	Mos_LBoosterCoverClose;
+	}
+
+MapKey	(&Throttle,	EOLIGN,		lign);
+MapKeyIO(&Throttle,	EOLNORM,	0,	PULSE+lnorm);
+MapKeyIO(&Throttle,	EOLMOTOR,	0,	PULSE+lmot);
+MapKey	(&Throttle,	EORIGN,		rign);
+MapKeyIO(&Throttle,	EORNORM,	0,	PULSE+rnorm);
+MapKeyIO(&Throttle,	EORMOTOR,	0,	PULSE+rmot);
+
+Lights_WHT5(eng);
+}
+
