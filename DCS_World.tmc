@@ -102,7 +102,7 @@ int ModDelay=10;
 int KBDelay=60;
 int KBPress=50;
 int PathLength=89;
-alias ScriptPath="C:\\Users\\vyper\\OneDrive\\Documents\\TARGET Profiles\\CTS";
+alias ScriptPath="D:\\Source\\CTS";
 
 
 
