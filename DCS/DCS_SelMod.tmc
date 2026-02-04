@@ -1,7 +1,8 @@
 //==========================================================================================
 //		DCS World Module Selection Subroutines for HOTAS Cougar/Warthog and Cougar MFDs
 //						by Michael Scott "Spaz" McIntosh
-//							last updated: 02FEB2026
+//							last updated: 03FEB2026
+//
 //	Change Log:
 //	1.53	Changed profile selection routine to array based selection; put all in this file
 //	1.55	Set LEDs to 0 0 0 0 at first part of selection routine so person knows that they are selecting
@@ -73,6 +74,7 @@
 //	2.70	Added F-15E to Global_DF_Init()
 //	2.71	Removed Mi-8 from Global_S2_Init()
 //  2.72	Fixed profile selection bug
+//
 //
 //==========================================================================================
 
@@ -1586,13 +1588,13 @@ if (	((prof == 2515) | (prof == 2029)) | (prof == 2586) | (prof == 2508) | (prof
 else if (prof == 1050) BS2_Map_S3(BS2_ForceCommStateOff,gear);	//Ka-50
 else if (WarthogStick > 0)	//all others WH
 	{
-MapKey	(&Joystick,	S3,	CHAIN(EXEC("S3Held=1;"),	BTN_S3P));
-MapKeyR	(&Joystick,	S3,	CHAIN(EXEC("S3Held=0;"),	BTN_S3R));
+	MapKey	(&Joystick,	S3,	CHAIN(EXEC("SwapTempoSaved=SwapTempo; SwapTempo=SwapTempoS3Chord;"),	BTN_S3P));
+	MapKeyR	(&Joystick,	S3,	CHAIN(EXEC("SwapTempo=SwapTempoSaved;"),					BTN_S3R));
 	}
 else						//all others Cougar
 	{
-MapKey	(&HCougar,	S3,	CHAIN(EXEC("S3Held=1;"),	BTN_S3P));
-MapKeyR	(&HCougar,	S3,	CHAIN(EXEC("S3Held=0;"),	BTN_S3R));
+	MapKey	(&HCougar,	S3,	CHAIN(EXEC("SwapTempoSaved=SwapTempo; SwapTempo=SwapTempoS3Chord;"),	BTN_S3P));
+	MapKeyR	(&HCougar,	S3,	CHAIN(EXEC("SwapTempo=SwapTempoSaved;"),					BTN_S3R));
 	}
 if (Script_Debug) printf("%i\xa",prof);	//for test purposes
 }
