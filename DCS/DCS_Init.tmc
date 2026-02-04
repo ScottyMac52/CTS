@@ -1,7 +1,7 @@
 //==========================================================================================
 //		DCS World Initialization Subroutines for HOTAS Cougar/Warthog and Cougar MFDs
 //						by Michael Scott "Spaz" McIntosh
-//							last updated: 03FEB2026
+//							last updated: 02FEB2026
 //	Change Log:
 //	0.1		Initial Beta Release
 //	0.11	Added Engine Start/Stop routine with LEDs
@@ -260,52 +260,50 @@ int abdelta;	//added in 2.40 for Elite Dangerous (diff b/t abhi and ablo)
 	if (WarthogStick > 0)
 		{
 		printf("      Axis mapping Warthog Stick...");
-// Stick axis source can be a classic TARGET stick (&Joystick) or an AVA grip device (&AVA_F16, etc.)
-// StickSource is configured in DCS_World.tmc (0=classic/default, 1..6=AVA variants).
-if(StickSource == 1) { // AVA_F16 (AVA [R] Viper)
+// Stick axes: map from the selected physical stick source (AVA variants or classic &Joystick)
+if(StickSource == 1) { // &AVA_F16
     MapAxis(&AVA_F16, JOYX, DX_X_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
     MapAxis(&AVA_F16, JOYY, DX_Y_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
-    SetSCurve(&AVA_F16, JOYX, 0, 0, 0, 0, 0);
-    SetSCurve(&AVA_F16, JOYY, 0, 0, 0, 0, 0);
+    SetSCurve(&AVA_F16, JOYX, 0, 0, 0, 0, 0 );
+    SetSCurve(&AVA_F16, JOYY, 0, 0, 0, 0, 0 );
 }
-else if(StickSource == 2) { // AVA_F16L
+else if(StickSource == 2) { // &AVA_F16L
     MapAxis(&AVA_F16L, JOYX, DX_X_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
     MapAxis(&AVA_F16L, JOYY, DX_Y_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
-    SetSCurve(&AVA_F16L, JOYX, 0, 0, 0, 0, 0);
-    SetSCurve(&AVA_F16L, JOYY, 0, 0, 0, 0, 0);
+    SetSCurve(&AVA_F16L, JOYX, 0, 0, 0, 0, 0 );
+    SetSCurve(&AVA_F16L, JOYY, 0, 0, 0, 0, 0 );
 }
-else if(StickSource == 3) { // AVA_F18
+else if(StickSource == 3) { // &AVA_F18
     MapAxis(&AVA_F18, JOYX, DX_X_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
     MapAxis(&AVA_F18, JOYY, DX_Y_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
-    SetSCurve(&AVA_F18, JOYX, 0, 0, 0, 0, 0);
-    SetSCurve(&AVA_F18, JOYY, 0, 0, 0, 0, 0);
+    SetSCurve(&AVA_F18, JOYX, 0, 0, 0, 0, 0 );
+    SetSCurve(&AVA_F18, JOYY, 0, 0, 0, 0, 0 );
 }
-else if(StickSource == 4) { // AVA_F18L
+else if(StickSource == 4) { // &AVA_F18L
     MapAxis(&AVA_F18L, JOYX, DX_X_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
     MapAxis(&AVA_F18L, JOYY, DX_Y_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
-    SetSCurve(&AVA_F18L, JOYX, 0, 0, 0, 0, 0);
-    SetSCurve(&AVA_F18L, JOYY, 0, 0, 0, 0, 0);
+    SetSCurve(&AVA_F18L, JOYX, 0, 0, 0, 0, 0 );
+    SetSCurve(&AVA_F18L, JOYY, 0, 0, 0, 0, 0 );
 }
-else if(StickSource == 5) { // AVA_SolR
+else if(StickSource == 5) { // &AVA_SolR
     MapAxis(&AVA_SolR, JOYX, DX_X_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
     MapAxis(&AVA_SolR, JOYY, DX_Y_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
-    SetSCurve(&AVA_SolR, JOYX, 0, 0, 0, 0, 0);
-    SetSCurve(&AVA_SolR, JOYY, 0, 0, 0, 0, 0);
+    SetSCurve(&AVA_SolR, JOYX, 0, 0, 0, 0, 0 );
+    SetSCurve(&AVA_SolR, JOYY, 0, 0, 0, 0, 0 );
 }
-else if(StickSource == 6) { // AVA_SolRL
+else if(StickSource == 6) { // &AVA_SolRL
     MapAxis(&AVA_SolRL, JOYX, DX_X_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
     MapAxis(&AVA_SolRL, JOYY, DX_Y_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
-    SetSCurve(&AVA_SolRL, JOYX, 0, 0, 0, 0, 0);
-    SetSCurve(&AVA_SolRL, JOYY, 0, 0, 0, 0, 0);
+    SetSCurve(&AVA_SolRL, JOYX, 0, 0, 0, 0, 0 );
+    SetSCurve(&AVA_SolRL, JOYY, 0, 0, 0, 0, 0 );
 }
 else {
-    // Classic CTS behavior (Warthog stick / whatever TARGET binds to &Joystick)
+    // Classic CTS behavior
     MapAxis(&Joystick, JOYX, DX_X_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
     MapAxis(&Joystick, JOYY, DX_Y_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
-    SetSCurve(&Joystick, JOYX, 0, 0, 0, 0, 0);
-    SetSCurve(&Joystick, JOYY, 0, 0, 0, 0, 0);
-}
-		}			
+    SetSCurve(&Joystick, JOYX, 0, 0, 0, 0, 0 );
+    SetSCurve(&Joystick, JOYY, 0, 0, 0, 0, 0 );
+}}			
 	else
 		{
 		printf("      Axis mapping Cougar Stick...");

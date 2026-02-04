@@ -1,5 +1,5 @@
 //========================================================================
-//				DCS World for HOTAS Cougar/Warthog/AVA/ViperTQS and Cougar MFDs
+//				DCS World for HOTAS Cougar/Warthog and Cougar MFDs
 //					by Michael Scott "Spaz" McIntosh
 //				   Template last changed: 2FEB2026
 //	 		 (Personalization Parameters last updated 2.72)
@@ -102,7 +102,7 @@ int ModDelay=10;
 int KBDelay=60;
 int KBPress=50;
 int PathLength=89;
-alias ScriptPath="D:\\Source\\CTS";
+alias ScriptPath="C:\\Users\\vyper\\OneDrive\\Documents\\TARGET Profiles\\CTS";
 
 
 
@@ -114,25 +114,9 @@ alias ScriptPath="D:\\Source\\CTS";
 //=========================================
 // CTS Physical Device Selection (AVA/TQS)
 //=========================================
-// CTS is written against logical devices (&Joystick, &JoystickF18, &Throttle).
-// For AVA/TQS (and future TM gear), we bind those logical devices to the selected physical devices here.
-//
-// Set exactly ONE stick source and ONE throttle source per run.
-//
-// StickSource:
-//   0 = default TARGET binding (classic CTS behavior)
-//   1 = AVA base + F-16 right handle  (TARGET device: &AVA_F16)  <-- your "AVA [R] Viper"
-//   2 = AVA base + F-16 left handle   (TARGET device: &AVA_F16L)
-//   3 = AVA base + F/A-18 right handle(TARGET device: &AVA_F18)
-//   4 = AVA base + F/A-18 left handle (TARGET device: &AVA_F18L)
-//   5 = AVA base + Sol-R right handle (TARGET device: &AVA_SolR)
-//   6 = AVA base + Sol-R left handle  (TARGET device: &AVA_SolRL)
-int StickSource = 1;
-
-// ThrottleSource:
-//   0 = default TARGET binding (classic CTS behavior)
-//   1 = HOTAS Warthog throttle (TARGET device: &Throttle)
-//   2 = Viper TQS Mission Pack (TARGET device: &ViperTQS)
+// StickSource: 0=default, 1=&AVA_F16, 2=&AVA_F16L, 3=&AVA_F18, 4=&AVA_F18L, 5=&AVA_SolR, 6=&AVA_SolRL
+int StickSource = 0;
+// ThrottleSource: 0=default, 1=Warthog, 2=&ViperTQS
 int ThrottleSource = 1;
 
 int WHIdle_Enabled=1;
@@ -834,98 +818,6 @@ DCS_FA18C_Init();
 
 //Begin Footer (static code)
 
-//=========================================
-// CTS_BindPhysicalDevices
-//=========================================
-int CTS_BindPhysicalDevices()
-{
-    int StickIdx = -1;
-    int ThrottleIdx = -1;
-
-    if(Script_Debug)
-    {
-        printf("CTS_BindPhysicalDevices(): StickSource=%d ThrottleSource=%d\r\n", StickSource, ThrottleSource);
-    }
-
-    // Bind STICK source
-    if(StickSource == 1)
-    {
-        StickIdx = GetIndexJoy(Select(&AVA_F16));
-        &Joystick = StickIdx;
-        HornetStick = 0;
-        WarthogStick = 1;
-        if(Script_Debug) printf("  Stick: bound &Joystick to &AVA_F16 (idx=%d)\r\n", StickIdx);
-    }
-    else if(StickSource == 2)
-    {
-        StickIdx = GetIndexJoy(Select(&AVA_F16L));
-        &Joystick = StickIdx;
-        HornetStick = 0;
-        WarthogStick = 1;
-        if(Script_Debug) printf("  Stick: bound &Joystick to &AVA_F16L (idx=%d)\r\n", StickIdx);
-    }
-    else if(StickSource == 3)
-    {
-        StickIdx = GetIndexJoy(Select(&AVA_F18));
-        &JoystickF18 = StickIdx;
-        HornetStick = 1;
-        WarthogStick = 1;
-        if(Script_Debug) printf("  Stick: bound &JoystickF18 to &AVA_F18 (idx=%d)\r\n", StickIdx);
-    }
-    else if(StickSource == 4)
-    {
-        StickIdx = GetIndexJoy(Select(&AVA_F18L));
-        &JoystickF18 = StickIdx;
-        HornetStick = 1;
-        WarthogStick = 1;
-        if(Script_Debug) printf("  Stick: bound &JoystickF18 to &AVA_F18L (idx=%d)\r\n", StickIdx);
-    }
-    else if(StickSource == 5)
-    {
-        StickIdx = GetIndexJoy(Select(&AVA_SolR));
-        &Joystick = StickIdx;
-        HornetStick = 0;
-        WarthogStick = 1;
-        if(Script_Debug) printf("  Stick: bound &Joystick to &AVA_SolR (idx=%d)\r\n", StickIdx);
-    }
-    else if(StickSource == 6)
-    {
-        StickIdx = GetIndexJoy(Select(&AVA_SolRL));
-        &Joystick = StickIdx;
-        HornetStick = 0;
-        WarthogStick = 1;
-        if(Script_Debug) printf("  Stick: bound &Joystick to &AVA_SolRL (idx=%d)\r\n", StickIdx);
-    }
-    else
-    {
-        if(Script_Debug) printf("  Stick: no rebinding (classic CTS / TARGET default)\r\n");
-    }
-
-    // Bind THROTTLE source
-    if(ThrottleSource == 2)
-    {
-        ThrottleIdx = GetIndexJoy(Select(&ViperTQS));
-        &Throttle = ThrottleIdx;
-        WarthogThrottle = 1; // keep CTS throttle mapping path enabled
-        if(Script_Debug) printf("  Throttle: bound &Throttle to &ViperTQS (idx=%d)\r\n", ThrottleIdx);
-    }
-    else if(ThrottleSource == 1)
-    {
-        WarthogThrottle = 1;
-        if(Script_Debug) printf("  Throttle: using HOTAS Warthog throttle (classic CTS)\r\n");
-    }
-    else
-    {
-        if(Script_Debug) printf("  Throttle: no rebinding (classic CTS / TARGET default)\r\n");
-    }
-
-    if(Script_Debug)
-    {
-        printf("CTS_BindPhysicalDevices(): HornetStick=%d WarthogStick=%d WarthogThrottle=%d\r\n", HornetStick, WarthogStick, WarthogThrottle);
-    }
-
-    return 0;
-}
 int main()
 {
 SetCSVAC();	//determines whether CommState runs with VAICOM Pro.
@@ -933,11 +825,7 @@ SetCSVAC();	//determines whether CommState runs with VAICOM Pro.
 if (TrackIR_Index > TrackIR_Index_Max) TrackIR_Index = TrackIR_Index_Max;	//error trap
 
 //Init Declarations.
-SetKBRate(KBPress, KBDelay);		
-
-	// Bind selected physical devices to CTS logical devices
-	CTS_BindPhysicalDevices();
-//constants moved to personalization section in 0.70.
+SetKBRate(KBPress, KBDelay);		//constants moved to personalization section in 0.70.
 
 Configure(&T16000,MODE_EXCLUDED);
 Configure(&T16000L,MODE_EXCLUDED);
