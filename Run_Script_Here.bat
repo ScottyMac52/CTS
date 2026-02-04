@@ -1,0 +1,1 @@
+start "" "C:\Program Files (x86)\Thrustmaster\TARGET\x64\TARGETGUI.exe" -r "D:\CTS\DCS_World.tmc"

@@ -632,6 +632,18 @@ printf("\xa%s for DCS/FC3 Init Complete!\xa",&acftname);
 //else if	(prof == 2515) 	printf("\xaF-15C Eagle for DCS Init Complete!\xa");
 //else					printf("\xaSu-25A/T Frogfoot for DCS Init Complete!\xa");
 Set_Acft_Array_Cur(ProfID);
+
+// --- CTS S3HELD LATCH BEGIN ---
+    // Ensure profile-selection chord sees S3 held (modules sometimes override S3 mapping)
+    if(HornetStick) {
+        MapKey(&JoystickF18, S3, CHAIN(EXEC("S3Held=1;"), BTN_S3P));
+        MapKeyR(&JoystickF18, S3, CHAIN(EXEC("S3Held=0;"), BTN_S3R));
+    } else {
+        MapKey(&Joystick, S3, CHAIN(EXEC("S3Held=1;"), BTN_S3P));
+        MapKeyR(&Joystick, S3, CHAIN(EXEC("S3Held=0;"), BTN_S3R));
+    }
+// --- CTS S3HELD LATCH END ---
+
 }
 
 

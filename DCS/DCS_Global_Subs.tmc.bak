@@ -1,0 +1,4259 @@
+//===================================================================================
+//		DCS World Global Subroutines for HOTAS Cougar/Warthog and Cougar MFDs
+//					by Don "Home Fries" Heumphreus
+//					with modified PAC Zoom routine by ivanwfr
+//					and  AirBrakeProc()
+//					Last Updated: 22JUL2023
+//
+//	Change Log:
+//	0.1		Initial Beta Release
+//	0.11	Added Engine Start/Stop Routine with LEDs.
+//	0.2		Removed PULSE from Landing Gear and Flaps
+//			Corrected Flaps Up/Down orientation
+//			Enabled & Optimized Flashing Airbrake routine
+//	0.24	Added MFD Engine Start LED routine
+//			Added DiffBraking routine
+//	0.25	MFDRestore and SnapView routines added
+//	0.30	Added flashing for gear transition and globalized routines for gear and airbrake
+//	0.32	GearState now tracked in addition to LLED2.  GearState() renamed to GearStateInd().
+//			Added LMFD to SnapView to prevent release of DX31.  Removed MFDRestore (redundant).
+//	0.35	Updated timing for SetSnapViewT()
+//	0.40	Added landing gear toggle for BS2
+//	0.41	Added GearState toggle function to GearStateInd(-1) and incorporated into EjectCheckT6()
+//	0.52	Added MFD profile variability (prof) to SnapViewT mappings
+//	0.55	Updated S3S4Shift() for ANT Rudder and added S3Release()
+//			Updated GearStateInd() to prevent LED flash when GearState = desired state
+//	0.56	Moved GearState reset from EjectCheckT6() to Eject_Init()
+//	0.60	Updated Gear and ejection routines for FixedGear (UH1) and StationCheck()
+//	0.61	Added Pause_TrackIR() to allow pausing TrackIR during Door Gunner view
+//	0.64	Added TrackIR unpause and UH1 ICS Channel to ejection routine
+//	0.65	Added force UH1_CommState_Off() if same position hat is pressed (i.e. pilot if already at pilot station)
+//	0.68	Modified GearStateInd() to force GearState == 1 on fixed gear aircraft
+//			Added helo argument to GearStateInd() and Landing_Gear_Toggle() to force RudderPedals when gear is up
+//	0.70	Added UH1_XM60_Cycle() to Eject routine
+//	0.71	Added KBPress variable to DeferCall and D() commands
+//			Fixed Landing Gear Toggle commands (added Helicopter argument)
+//			Added DeferCall(ModDelay) KEYON+DX29 in DiffBraking()
+//	0.72	Modified TriggerZoom_toggle() to discrete function (for discrete off on profile change)
+//	1.00	Initial Release/Rebaseline
+//	1.01	Added Mi-8 to StationCheck() and Eject
+//	1.11	Added Relative Axes to FC3 profile in S3S4Shifted()
+//	1.14	Updated Eject routine to add Drag Chute to FC3
+//			Added Landing Gear state check to engine start and shutdown routines
+//	1.15	Removed obsolete line from Mi-8 ejection subroutine
+//			Added Mi8_H3_Map() to StationCheck()
+//	1.17	Added prof argument and FC3MapButtons(state) to Gear_State_Ind()
+//			Eject_Init() now clears DX4, DX29-32
+//	1.19	Added MapAxis rotary to microstick for Huey in S3S4Check() and S3Release()
+//	1.21	Adjusted Analog Airbrake routine to prevent double-flashing
+//	1.22	Added Analog_Pulse_Airbrake for F-15C type analog airbrake
+//			UH1_SetT6() added to Eject_Init()
+//	1.23	Added new analog airbrake routine (by Nicu)
+//			Moved Airbrake_Map_Set() from FC3 to here
+//	1.24	A10C (prof==4) added to GearStateInd() and Airbrake_Map_Set()
+//	1.25	Added TARGET-based Central Position Trimmer Mode for helos
+//	1.26	Revised CPTM and H4D mapping for helos for consistency and prevention of false keying
+//			Added LED to CPTM
+//			Fixed minor bug in Ka-50 eject routine
+//			Fixed ejection routine to prevent TrackIR from pausing after ejection
+//			Added T6 to DiffBraking for P-51/Fw190 (gear state down)
+//			Converted TriggerZoom to polling function and slaved to GearState
+//	1.27	Updated ejection routine to reset new Ka-50 engine start variables.
+//			Refined TCPTM
+//	1.28	Added S3_NWS() for F-86
+//			Incorporated Fw-190 into engine start/stop and ejection routines.
+//	1.29	Added Binary Discrete brake type for MiG-21
+//			Added Throttle Start/Stop to Single Engine for MiG-21
+//			Added GearStateCycle() and GearStateCycleStop() to allow for interrupted cycling (MiG-21)
+//			Added GearState_Blink() to indicate gear lock cycling (e.g. Fw190 and MiG-21)
+//	1.30	Added Parking Brake to MiG-21 T9/T10
+//	1.31	Modified CenterPositRudder checks in TCPTM to allow for -1 value (BS2 disabled in menu).
+//			Added Bf-109 to GearStateInd()
+//	1.32	F-86: New startup routine added to GearStateInd().
+//	1.33	Added Optional Braking Routine to S3_NWS().  Added analog braking options to DiffBraking().  H/T Scrim for the concept.
+//			Ka-50: Fixed bug where BRT in Rubicon DE would reset DX32 flag
+//			S3Release() to S3_NWS() to reset ANT rudder and microstick axes to absolute (bug fix)
+//			Added ThrottleEngineShutdown() to allow for DeferCall with throttle-based engine shutdown
+//	1.34	Removed ActKey DX1 from TriggerZoom for inclusion with regular profiles
+//			Fixed Binary-Momentary non-swap airbrake routine
+//			Added MiG-15 to integrated routines
+//			Updated SnapViewT() to allow fixed view of kp0 and modified timing to multiples of KBDelay
+//			Removed BS2_ReleaseRudderTrim() function call in CPTM_Trim() (obsolete)
+//			Added TARGET Based conventional aircraft trim routines.  Added neutral trim to ejection routine (fixed and helo).
+//	1.35	Ka-50: Added error trap to GearStateInd() to force "normal" T6 and dogfight/comm switches when gear change is made (in case of warm start).
+//			A-10C: A10C_Complex_Comm_Init() - added arguments to force keyboard pulse of radios (optional DX for PTT Common) when in CDU DE mode
+//			F-86: Fixed bug with mapping T6 to allow proper A4 sight cage/uncage
+//	1.36	FC3: Added FC3_Flaps_Cur to ejection routine, added Flap LED indication routines and integrated with Triggerzoom, GearStateCycle and GearStateToggle
+//			Ka-50: added BS2_Map_S3() to GearStateInd(), CPTM_Mapping()
+//	1.40	Added WH specifics to global subs
+//			FC3: Replaced FC3_Flaps_Cur with FlapState (global variable)
+//	1.40a3	Added Mi8_LMFD_Map() to StationCheck()
+//			Updated FC3 H3 mappings
+//			Added ability to use Toe Brakes attached to Cougar if WarthogStick == 1
+//	1.40a4	Added UP+DX31/32 commands to S3Release() to counter individual Ka-50 throttle commands.
+//	1.50	Removed BS2_ReleaseRudderTrim() from CPTM (obsolete)
+//	1.51	Added Gazelle to StationCheck()
+//	1.53	Removed unused arguments from S3S4Shifted() + S3Release() removed the argument calls from S3_NWS()
+//	1.54	Added L-39 to StationCheck()
+//	1.55	Added L-39 to EngineStartSingle() and EngineShutDownSingle()
+//	1.57	Removed extraneous FC3_Custom_LUA from S3S4Shifted(), changed routine to deterministic based on ProfID (2027/29)
+//	1.61	Fixed AAP bug on CON/BRT in CDU Direct Entry mode
+//			Moved Su-25 Gear/Flaps Macros here from DCS_FC3.tmc to fix issue with gear/flaps not working
+//	1.63	Added F-5E to Airbrake_Map_Set() Type 1  and Eject_Init()
+//	1.66	Added Shifted SnapViews 1 and 3 for M-2000C
+//			Flap state LED indications disabled for stability
+//			Forced ProfID argument for SnapView release (fixes A-10C direct entry bug)
+//			Added Spitfire LF Mk.IXc to GearStateInd() and Eject_Init()
+//			FC3: Added Route with Baro Alt macro to Warthog AP button FC3_AP_WH_O.
+//	1.67	Added AJS-37 to GearStateInd() and Airbrake_Map_Set()
+//	1.69	Added Hawk exception to binary airbrake for gearstate down and in GearStateInd()
+//			Assigned AJS37-specific GearStateInd() to AJS37_Array_Init()
+//	1.71	Added Shift_Snapview2, 5
+//			Mi-8: Mi8_S3T6() to EjectCheckT6()
+//	1.72	Added Su-33 Standalone profile to arguments
+//	1.73	Updated GearStateInd() and Landing_Gear_Toggle() for Ka-50 Fuel Switches
+//			FC3: Added F15_AP_WH_O and FC3_H3DDOWH
+//	2.00	Added AV8B
+//	2.01	Su-33: Added Su33_Startbrake to DiffBraking().
+//	2.02	Renamed and Remmed WH_LED_ArrayI (not used).
+//	2.03	Added S3_NWS() to GearStateInd() for AV-8B (2508).
+//	2.04	Forced DX19 reset on gear up in S3_NWS() for Harrier switch setting (currently remmed out)
+//			Changed FC3_H2L/RMO33 variables to FC3_H2L/RMI33 for more accurate description
+//	2.05	S3S4Shfited(): disabled FOV toggle for S3 holding NWS if RudderPedals == 2 (e.g. for F-15, F-86, AV-8B), added S3holdNWS value, added LED_Delay to Lights_LLED1 to deconflict with GearState
+//			Fixed TriggerZoom for Warthog
+//			Added DX30 to TriggerZoom for AV-8B or anything that uses KP*/
+//			Added FLAPD check and L-39 to TriggerZoom (for gear that uses DF/FLAP)
+//	2.20	Added J-11A to GearStateInit() and Eject_Init()
+//			Added Gear/Flaps macros for F-18
+//			Updated SetSnapViewT() for AV-8B and F-18
+//			Added F-18 exception to DiffBraking()
+//			Fixed TriggerZoom for AV-8B and F-18
+//	2.21	Updated SetSnapViewT() for keyboard OSBs and DX switches
+//	2.24	Removed AV8_TDC_NoAct from S3S4Shifted()
+//			Added G-Limiter Override to DiffBraking() for Fulcrum and Flanker
+//	2.25	Added Autopilot button for MiG-29 PFM
+//	2.26	Removed F/A-18 Master Caution from EjectCheckT6()
+//			Added UH-1, Mi-8, and SA342 specific arguments to Pause_TrackIR() function calls
+//			Added FA18C_RCON_Map() to GearStateInd() for JHMCS integration
+//			Added A-4EC to GearStateInd(), Diffbraking(), and Eject_Init()
+//	2.27	Added CA arguments to  TriggerZoom_toggle()
+//	2.28	Set Fw190_H4PI = Fw190_H4PO (disables snapview on same button as bomb release)
+//			Added C-101 to Eject_Init()
+//			Added ModDelay to Shift_Snapview macros
+//			Assigned RMFD key commands to F/A-18 and LMFD rockers in SetSnapViewT()
+//			Added Su33 Refuel routine to Eject_Init()
+//	2.30	Added keyboard SA342 station commands to StationCheck() to replace DX commands (deconflict with VR)
+//			Added MFD_Count < 1 argument for playing gearup/geardn.wav in GearStateInd()
+//	2.31	Added F-14
+//	2.32	Added CrewStationxRS to StationCheck()
+//	2.33	Fixed CommState_Off() for Ka-50 in Eject_Init()
+//			Added F14_MFD_Gear_Map() to GearStateInd()
+//	2.34	Added support for MFDisplay RIO CAP drum in StationCheck()
+//			Added F14_DF_Init() to GearStateInd() for F-14 (prevents WH takeoff with Boat as engine sel sw)
+//			Added S3+T9/SBDB Long to enable profile select in Airbrake_Map_Set() and Airbrake_Map_Set_WH () for VR or no MFDs 
+//	2.35	Added IL-2 GB Hooks to Engine Start and Stop routines, Eject_Init() and DiffBraking()
+//			Added Init_Run_Set() DeferCall function
+//			Added FA18C_S2_Map() to GearStateInd()
+//	2.40	Added F5E_IGN_Map(), Fw190A8 and IL-2 to GearStateInd()
+//			Added VR and IL-2 to TriggerZoom
+//			Added IL-2 ignition flags to Print_Value()
+//	2.41	Added MFD backlighting to Engine_Start/Shutdown_Ind() and converted same routine in Cougar start/stop to point to Engine_Start/Shutdown_Ind() function instead.
+//			Added RSStart/RSStop (RSHIFT+HOME/END) to EngineStart/ShutdownSingle()
+//			Moved CMSP_Modes array from A10C to Global for dual use with F-16C
+//	2.41a	Fixed issue with Engine_Start/Shutdown_Int forcing negative MFD power values
+//	2.42	Added IL-2 1946 to Triggerzoom
+//			Applied WAV gearstate to toggle using T6/LDGH
+//			Added I-16 to GearStateInd()
+//			Added change to passthru arguments for F-14 MFDisplay force in StationCheck()
+//			Fixed L-39 in StationCheck()
+//			Updated F/A-18C UFC assignments in SnapView D/E
+//			Added M2000C to EjectCheck() and S1 to GearStateInd()
+//	2.43a	Fixed station change for POV users
+//	2.44	added P51D_H4DOVR for VR Spyglass
+//			Fixed Viggen Airbrake MapKeyR
+//			Added Airbrake macros to DCS_Global() for AirBrkFlash < 0 and fixed Analog-Pulse for AirBrkFlash == 0.
+//	2.44a	Added VRBrakeProfileSwap to airbrake swap routines
+//	2.45	Added JF17_WHT_Switch_Map() to GearStateInd()
+//			Added F-16C brake switch to Airbrake_Map_Set()
+//			Removed Hawk references
+//	2.45a	Added wav argument to Airbrake_Type_Set() functions
+//	2.48	Added F14Plt_T6_Map() to GearStateInd() for F-14 if discrete weapon select not used.
+//			Set Brake on delay to 500 for momentary and binary brakes in AirBrake_Init()
+//	2.49	Forcee F14Plt_T6_Map() to tie to GearState
+//			Added S1R_VR for VR S1 doubletap
+//	2.49a	Added F-14 LANTIRN error trap to GearStateInd()
+//			Added Analog_AirbrakeStop and Analog_AirbrakeActiveStop to non-flashing airbrake assignments
+//			F-86: applied Analog_AirbrakeActiveStop to VR airbrake assignments
+//	2.49b	Added wav argument to StationCheck() to allow wav suppression.  Updated CPTM to take advantage.
+//	2.50c	Removed Mi-8 specific StationCheck() default (already factored in H1 map).
+//	2.54	Added Spacebar to CommState_F1 Long for mission trigger activation
+//	2.60	Added Mi-24 to Stationcheck()
+//	2.61	Added WHT_Throttle_Lock() for Mossie.
+//			Added rex arguments to AirBrakeProc() and AnalogBrakePoll() for other timing functions (Mossie).
+//	2.61a	Updated AV-8B brake to analog momentary in Airbrake_Map_Set() and Airbrake_Map_Set_WH() (special 2508 conditions moved)
+//	2.64	Added AH-64 to H4UD_CPTM() and H4D_CPTM()
+//	2.66	Added Helo_Throttle_PS_Init() for optional non-throttle pinky switch functionality
+//	2.68	Added F-15E to Eject_Init(), GearStateInd(), DiffBraking() and StationCheck()
+//			Fixed F/A-18 ROSB06 in SetSnapViewT() (set to KB instead of DX)
+//	2.69	Added P51D_HeatMgmt_Map to Eject_Init()
+//	2.70	Added F-15E MFDisp to StationCheck()
+//
+//
+//====================================================================================
+
+
+//	Ideas for Future Implementation:
+//		LEDs for Flap indicator: requires major code overhaul and function w/ variable for multi-stage flaps.  tried unsuccessfully w/ MFD, perhaps WHT
+//		MFD dimming for "night mode": poss implementation with A-10C (Implemented)
+//		Add option for Ka-50 to reset trim with stick forward (level rotor); tempo with S3+H4U (Implemented)
+
+
+
+//	REXEC/AutoRepeat Codes (Global)
+//		0:	Global:		Analog Airbrake Polling
+//		2:	Global: 	TARGET Trim, CPTM
+//			Mossie:		Analog gear Polling
+//		3:	Global:		VR Mouse Scroll Wheel
+//		6:	UH-1:		Radio Frequencies on RMFD
+//			BS2:		PVI-800 Brightness (RCON)
+//			FC3:		Weapon Jettison
+//			P-51D:		Flaps repeat
+//			F-86 (WH): 	UHF Frequency cycle
+//			Bf109/Spit:	Priming Pumps
+//			M2000C: 	Intervalometer/TACAN/ILS Channel cycle
+//			F-86: 		Rocket Intervalometer cycle
+//			AV-8B:		STO Stop Cycle
+//			F/A-18C:	DDI Power Switch
+//			A-4E:		Heading Select, FC3-style Weps Jettison
+//			F-14:		Lighting Rheostats
+//			F-15E:		CMD Repeat on Switches (PS/DF)
+//			F-16C:		Emergency Jettison Repeat (FC3-style)
+//			Mossie:		Analog Flap Polling
+//		8:	Mi-8/BS2:	Throttle Repeat
+//			A-4E:		Radalt Danger Altitude
+//			M2000C:		APAlt/Bingo Cycle
+//			F-14:		Cannon Ammo Counter
+//			JF-17:		Clock brightness
+//			Mossie:		Analog Bomb Bay polling
+//		9:	Global:		Dual Brakes to single axis
+
+
+//Declarations
+int	GraceFlag;	//added in 1.27 for grace period timer (Grace_Flag() ).
+				//Grace Flag Assignments:
+				//	0 - False
+				//	1 - True
+				//	2 - Hat Right (StationCheck() 1)
+				//	3 - H1D /R (TrimXYResetCheck() and poss TIR Unpause)
+				//		H1U Doubletap for Zoom View
+				//	4 - Hat Left  (StationCheck() 2)
+				//	5 - VR Zoom Check (global)
+				
+int ProfileSwapDelay;
+int	Adjust_Backlighting;	//moved from DCS World.tmc in 1.62
+
+int Toggle_Airbrake;
+int Momentary_AirbrakeOn;
+int Momentary_AirbrakeOff;
+int Toggle_AirbrakeOn;
+int Toggle_AirbrakeOff;
+int Binary_AirbrakeOn;
+int Binary_AirbrakeOff;
+
+//int	IL2_Toggle_AirbrakeOn;
+//int	IL2_Toggle_AirbrakeOff;
+
+//Analog Airbrake variables
+int Analog_AirbrakeOn;
+int Analog_AirbrakeOff;
+int Analog_AirbrakeStop;
+int	Analog_AirbrakeActiveStop;
+int Analog_Pulse_AirbrakeOn;
+int Analog_Pulse_AirbrakeOff;
+int Analog_Pulse_AirbrakeOnStop;
+int Analog_Pulse_AirbrakeOffStop;
+int AirBrakePos;
+int AirBrakeSwitch;
+int AirbrakeLEDState;
+int AirBrakePollStatus;
+int	Airbrake_Type_Cur;		//global added in 2.43
+int	Airbrake_Swap;			//global added in 2.43
+
+int	TriggerZoomEnabled;		//whether the individual profile (aircraft) allows TriggerZoom
+int	TriggerZoomSwitch;		//direction of zoom (1 for in, -1 for out, 0 for hold)
+int	TriggerZoomPollStatus;	//whether TriggerZoom is currently polling
+int ZoomTime;				//amount of time to zoom in/out while holding down TG1 (TriggerZoom)
+
+int	LOSB01I;				//added in 2.21 for NS430
+int TIR_Center;
+int GearState; 
+int GearCycling = 0;			//added in 1.29 for early termination of gear cycling (i.e. MiG-21).  Also used to prevent double use with AJS-37 (1.68)
+int FlapState;					//flap state (0 is up, 2 is down)
+
+int Gear_Flaps_Up;
+int Gear_Flaps_Dn;
+int	Gear_Flaps_Dn_TGZ;			//added in 1.26 for TriggerZoom cancel
+int Gear_Flaps_Up_T;			//added in 0.40
+int Gear_Flaps_Dn_T;
+int	Gear_Flaps_Dn_TGZ_T;		//added in 1.26 for TriggerZoom cancel
+int Gear_Flaps_Up_AV8;			//added in 2.00 for AV-8B
+int	Gear_Flaps_Dn_AV8;
+int	Gear_Flaps_Dn_TGZ_AV8;
+int Gear_Flaps_Up_F18;			//added in 2.20 for F/A-18C
+int Gear_Flaps_Dn_F18;
+int Gear_Flaps_Dn_TGZ_F18;
+
+int GearPos;
+int	GearSwitch;
+int GearCycleTimeUp;		//Allows for different gear cycle times for different aircraft using same routine.  Should be multiple of 500.  Added in 0.30, modified to GearCycleTimeUp in 0.54
+int GearCycleTimeDn;		//Allows for differing cycle times for gear deployment (versus retraction).  Should be multiple of 500.  Added in 0.54 
+int GearPollStatus;
+
+int BrakeOnCycleTime;		//Allows for different airbrake cycle times (in and out) for different aircraft using same routine.  Should be multiple of 500.  Added in 0.30
+int BrakeOffCycleTime;
+
+int	BombBayPos;				//added in 2.61
+int	BombBaySwitch;
+int	BombBayCycleTimeOpen;
+int	BombBayCycleTimeClose;	
+int BombBayPollStatus;
+
+int	FlapsPos;				//added in 2.61
+int	FlapsSwitch;
+int FlapsCycleTimeDn;
+int FlapsCycleTimeUp;
+int FlapsPollStatus;
+
+int FlightIdle = 0;		//Defaults Throttle Flight Idle setting at 0.  If at flight idle, will need to go to Fuel Cut Off for start anyway.
+int FuelCutOff = 1;		//Defaults Throttle Fuel Cut Off setting at 1.  If beneath idle detent , allows engine start without fiddling.  If not there, will need to get there anyway.
+int	ThrAbsPosit;		//Similar to FuelCutOff and FlightIdle, but based on physical throttle position instead of logical throttle position.
+
+int SnapViews;
+int SnapViewsT;
+int SnapViewState = 0;		//whether a snapview toggle is currently active
+int TriggerZoom_state = 0;	//whether TriggerZoom is currently active
+
+int AirBrakeExtended = 0;	//added in 1.21 for experimental analog airbrake routine
+
+int CPTM_Engaged 	= 0;	//added in 1.25 for TARGET-based Central Position Trimmer Mode (helos)
+int CPTM_Locked		= 0;
+
+int S4AnalogBrake;		//added in 1.33 to optionally apply Scrim's Joy_Y analog brake routine with S4
+int	S4asNWS;			//added in 1.33 to identify profiles where S4 acts as a momentary NWS (necessary for analog braking routine)
+int S3holdNWS;			//added in 2.05 to identify profiles where S3 acts as a momentary NWS (used with RudderPedals = 2 to disable FOV)
+int	DiffBrakes;			//moved here in 1.33 as a global variable (not constant) as to whether differential braking is enabled for each module
+int AnalogParkingBrake;	//added in 1.33 to apply Parking Brake when S4 released with stick fully aft
+int	ToeBrakesAvailable;	//added in 1.40 for aircraft with toe brakes
+						//set 0 for no toe brakes, 1 for analog toe brakes, 2 for analaog toe brakes with modifier (to deconflict with SC).
+						//outliers: set to -1 for digital toe brakes, 3 for digital and analog combined (for FC3).
+
+int	IgnLState;			//added in 1.40 to track persistent state on IGN base switches (emulating switch locked in place).
+int	IgnRState;
+
+//Added in 1.40
+int	CommState_F1;	
+int	CommState_F2;
+int	CommState_F3;
+int	CommState_F4;
+int	CommState_F5;
+int	CommState_F6;
+int	CommState_F7;
+int	CommState_F8;
+int	CommState_F9;
+int	CommState_F10;
+int	CommState_F11;
+int CommState_F12;
+int	CommState_F12_Toggle;
+int	CommState_F12_Toggle_BS2;
+
+int Std_SnapView1;
+int Std_SnapView2;
+int Std_SnapView3;
+int Std_SnapView4;
+int Std_SnapView5;
+int Std_SnapView6;
+int Std_SnapView7;
+int Std_SnapView8;
+int Std_SnapView9;
+int Std_SnapView0;
+
+int	Shift_SnapView1;
+int	Shift_SnapView2;
+int	Shift_SnapView3;
+int Shift_SnapView4;
+int	Shift_SnapView5;
+int	Shift_SnapView6;
+int Shift_SnapView7;
+int	Shift_SnapView8;
+int	Shift_SnapView9;
+
+int UH1_SnapView2;
+int	UH1_SnapView8;
+
+int	A10C_SnapView2;	//added for F/A-18 in 2.20
+int	A10C_SnapView3;
+int	A10C_SnapView8;	//added for AV-8B in 2.00
+int A10C_SnapView9;
+
+int BS2_SnapView1;
+int BS2_SnapView2;
+int BS2_SnapView3;
+int BS2_SnapView4;
+int BS2_SnapView6;
+int BS2_SnapView9;
+
+int	BTN_TG1PO;
+int	BTN_TG1PO_TGZ;
+int	BTN_TG1PI;
+int	BTN_TG1PI_TGZ;
+int	BTN_TG1RO;
+int	BTN_TG1RO_TGZ;
+int	BTN_TG1RI_TGZ;
+int	BTN_TG2;
+
+
+int S1R_VR;	//added in 2.49 for VRZoom doubletap
+int BTN_S2;
+
+int BTN_S3P;
+int	BTN_S3R;
+
+int BTN_S4PI;
+int	BTN_S4PO;
+int	BTN_S4PO_NoDiff;
+int	BTN_S4R_NoDiff;	
+int	BTN_S4R;
+
+int	FC3_H2UUI;
+int	FC3_H2UUO;
+int	FC3_H2UMI;
+int	FC3_H2UMO;
+int	FC3_H2UDI;
+int	FC3_H2UDO;
+
+int	FC3_H2RUI;
+int	FC3_H2RUO;
+int	FC3_H2RMI;
+int	FC3_H2RMO;
+int	FC3_H2RDI;
+int	FC3_H2RDO;
+int FC3_H2RMI33;	//changed from RMO to RMI in 2.04
+
+int	FC3_H2DUI;
+int	FC3_H2DUO;
+int	FC3_H2DMI;
+int	FC3_H2DMO;
+int	FC3_H2DDI;
+int	FC3_H2DDO;
+
+int	FC3_H2LUI;
+int	FC3_H2LUO;
+int	FC3_H2LMI;
+int	FC3_H2LMO;
+int	FC3_H2LDI;
+int	FC3_H2LDO;
+int FC3_H2LMI33;	//changed from LMO to LMI in 2.04
+
+int	FC3_H3LU;
+int	FC3_H3LMI;
+int	FC3_H3LMO;
+int	FC3_H3LD;
+
+int	FC3_H3RU;
+int	FC3_H3RMI;
+int	FC3_H3RMO;
+int	FC3_H3RD;
+
+int	FC3_H3UUI;
+int FC3_H3UUIF;
+int	FC3_H3UUO;
+int	FC3_H3UMI;
+int	FC3_H3UMIF;
+int	FC3_H3UMO;
+int	FC3_H3UDI;
+int	FC3_H3UDIF;
+int	FC3_H3UDO;
+
+int	FC3_H3DUI;
+int	FC3_H3DUIF;
+int	FC3_H3DUO;
+int	FC3_H3DMI;
+int	FC3_H3DMI_TGZ;
+int	FC3_H3DMIF;
+int	FC3_H3DMIF_TGZ;
+int	FC3_H3DMO;
+int	FC3_H3DDI;
+int	FC3_H3DDIF;
+int	FC3_H3DDO;
+int	FC3_H3DDOWH;
+
+int	FC3_H3RMIWH;
+int	FC3_H3RMOWH;
+int	FC3_H3LMIWH;
+int	FC3_H3LMOWH;
+
+int	FC3_AP_WH_I;
+int	FC3_AP_WH_O;
+int	F15_AP_WH_O;
+int	MiG29_AP_WH_O;
+
+int	P51D_H4UI;
+int	P51D_H4DI;
+int	P51D_H4UO;
+int	P51D_H4DO;
+int	P51D_H4DOVR;
+
+int Fw190_H4UI;
+int	Fw190_H4DI;
+int Fw190_H4UO;
+int	Fw190_H4DO;
+int	Fw190_H4PO;
+int	Fw190_H4PI;
+
+int	UH1_H2UI;
+int	UH1_H2DI;
+
+int	Gear_Up;
+int	Gear_Dn;
+int	Gear_Dn_TGZ;
+
+int	Gear_Up_T;
+int	Gear_Dn_T;
+int	Gear_Dn_TGZ_T;
+
+int T1i;
+int T1o;
+int T1ri;
+int T1ro;
+
+//added in 1.54 for L-39 with possibility of future global use
+int	Fire_Ext_Cover_Cur;
+int	Emer_Fuel_Cover_Cur;
+int	APU_Sw_Cover_Cur;
+int	Eng_Start_Sw_Cover_Cur;
+
+int	MasterArm_Cur;	//added in 1.68 for AJS-37 (possible global use)
+
+
+//added in 2.30 for global H1/crew seat mapping arguments
+int	HeloHatTrim;
+int	CrewCount;
+int	StationChangeModifier;
+
+int CMSP_Modes;			//moved from A10C in 2.41 to support dual use F-16C
+int CMSP_Mode_Cur = 0;
+
+int Rdo_Channels_Index;	//added in 2.42 to enable more channels for array and put Off at end of index.
+
+int AxisLockL_Cur;		//added in 2.61 for WHT_Throttle_Lock()
+int	AxisLockR_Cur;
+
+int HeloThrottle; 		//added in 2.66 for Helo_Throttle_PS_Init();
+
+int DCS_Global()
+{
+printf("DCS_Global() Start.\xa");
+
+// --- Add your F4U-1D Corsair profile initialization here ---
+if (ProfID == 3518) {
+	Helicopter = 0;
+	FixedGear = 0; // Retractable gear
+	RudderPedals = 1; // Use rudder pedals
+	AirBrkFlash = 1; // Enable airbrake LED
+}
+
+S1R_VR			=	EXEC("VRZoom_Init(1);DeferCall(ModDelay,&VRZoom_Set,1);DeferCall(DoubleTap,&VRZoom_Set,0);");
+
+//WH_LED_ArrayI = 	SEQ (
+//					LED1,
+//					LED2,
+//					LED3,
+//					LED4,
+//					LED5
+//					);
+CMSP_Modes	=	SEQ(						//Array for 5 CMSP Mode Switch Settings; moved from A10C to Global in 2.41
+						CMSP_Mode_Off,		//0
+						CMSP_Mode_Stby,		//1
+						CMSP_Mode_Man,		//2
+						CMSP_Mode_Semi,		//3
+						CMSP_Mode_Auto,		//4
+						CMSP_Mode_Byp		//5	for F-16C (added in 2.41)
+						);
+
+
+LMFD_Pwr	=	SEQ	(
+					LMFD_Off,
+					LMFD_Night,
+					LMFD_Day
+					);
+					
+RMFD_Pwr 	=	SEQ	(
+					RMFD_Off,
+					RMFD_Night,
+					RMFD_Day
+					);
+MFD_Lt	=	LIST	(
+					MFD_Lt_Off,
+					MFD_Lt_Night,
+					MFD_Lt_Day
+					);
+					
+Fw190_LdgGear_Cover_Array = SEQ(Fw190_LdgGear_Cover_Down,Fw190_LdgGear_Cover_Up);	//moved here in 1.33 to consolidate	
+
+
+SnapViewsT	=	SEQ(USB_KP_0,					//0 		placeholder, also cancels toggle.  
+					SnapView1t,					//1			Left Console
+					SnapView2t,					//2			Right Console (Warning lights if default snapviews)
+					SnapView3t,					//3			CDU (right console w/ CDU if default snapviews)
+					SnapView4t,					//4			LMFD+Dash
+					SnapView5t,					//5			HUD
+					SnapView6t,					//6			RMFD+Dash
+					SnapView7t,					//7	
+					SnapView8t,					//8	
+					SnapView9t					//9	
+					);	
+
+SnapViews	=	SEQ(USB_KP_0,					//0 		placeholder, also cancels toggle.  
+					SnapView1,					//1			Left Console
+					SnapView2,					//2			Right Console (Warning lights if default snapviews)
+					SnapView3,					//3			CDU (right console w/ CDU if default snapviews)
+					SnapView4,					//4			LMFD+Dash
+					SnapView5,					//5			HUD
+					SnapView6,					//6			RMFD+Dash
+					SnapView7,					//7	
+					SnapView8,					//8	
+					SnapView9					//9	
+					);	
+
+Rdo_Channels	=	SEQ(Rdo_Channel_A,				//0 		set for changing VHF Radio Channels.  moved here from P-51D in 1.28 for use with Fw-190
+					Rdo_Channel_B,					//1
+					Rdo_Channel_C,					//2
+					Rdo_Channel_D,					//3
+					Rdo_Channel_E,					//4			//4 and 5 added for MiG-19 in 2.42
+					Rdo_Channel_F,					//5
+					Rdo_Channel_Off					//6			added in 1.66 for spitfire
+					);			
+Rdo_Channels_Index = 6;	
+
+Rdo_Modes		=	SEQ(Rdo_REM,					//0			set for changing VHF radio modes.  moved here from P-51D in 1.66 for Spitfire
+					Rdo_R,							//1
+					Rdo_T							//2
+					);
+
+//Gear Only Routines for Warthog
+Gear_Up 			=	CHAIN(Landing_Gear_Up,		EXEC("GearStateInd(0, ProfID, FixedGear, Helicopter, GearCycleTimeUp, AirBrkFlash);"));
+Gear_Dn 			=	CHAIN(Landing_Gear_Down,	EXEC("GearStateInd(1, ProfID, FixedGear, Helicopter, GearCycleTimeDn, AirBrkFlash);"));
+Gear_Dn_TGZ			=	CHAIN(EXEC("TriggerZoom_toggle(0,1,0);"),D(250),Landing_Gear_Down,	EXEC("GearStateInd(1, ProfID, FixedGear, Helicopter, GearCycleTimeDn, AirBrkFlash);"));
+
+Gear_Up_T			=	EXEC("Landing_Gear_Toggle(0, ProfID, FixedGear, Helicopter, GearCycleTimeUp, AirBrkFlash);");
+Gear_Dn_T			=	EXEC("Landing_Gear_Toggle(1, ProfID, FixedGear, Helicopter, GearCycleTimeDn, AirBrkFlash);");
+Gear_Dn_TGZ_T		=	CHAIN(EXEC("TriggerZoom_toggle(0,1,0);"),D(250),EXEC("Landing_Gear_Toggle(1, ProfID, FixedGear, Helicopter, GearCycleTimeDn, AirBrkFlash);"));
+
+//Gear/Flaps routine (works with multi-stage flaps with no LLED1 representation)
+Gear_Flaps_Up 		=	TEMPO(Flaps_Up, Gear_Up,		GearUpTempo);
+Gear_Flaps_Dn 		=	TEMPO(Flaps_Dn, Gear_Dn,		GearDnTempo);
+Gear_Flaps_Dn_TGZ	=	TEMPO(Flaps_Dn, Gear_Dn_TGZ,	GearDnTempo-250);
+
+
+//same function with a toggle gear (added in 0.40 for BS2)
+Gear_Flaps_Up_T		=	TEMPO(Flaps_Up, Gear_Up_T,		GearUpTempo);
+Gear_Flaps_Dn_T		=	TEMPO(Flaps_Dn,	Gear_Dn_T,		GearDnTempo);
+Gear_Flaps_Dn_TGZ_T	=	TEMPO(Flaps_Dn, Gear_Dn_TGZ_T,	GearDnTempo-250);
+
+//Flap Array routine moved here from FC3 in 1.61 to fix definition order problem.
+Gear_Flaps_Up_FC3	=	TEMPO(	EXEC("FC3_Flaps_Cycle(-1);"),	CHAIN(Landing_Gear_Up,		EXEC("GearStateInd(0, ProfID, FixedGear, Helicopter, GearCycleTimeUp, AirBrkFlash);")),	GearUpTempo);
+Gear_Flaps_Dn_FC3	=	TEMPO(	EXEC("FC3_Flaps_Cycle(3);"),	CHAIN(Landing_Gear_Down,	EXEC("GearStateInd(1, ProfID, FixedGear, Helicopter, GearCycleTimeDn, AirBrkFlash, FlapState);")),	GearDnTempo);
+Gear_Flaps_Dn_TGZ_FC3=	TEMPO(	EXEC("FC3_Flaps_Cycle(3);"),	CHAIN(EXEC("TriggerZoom_toggle(0,1,0);"),D(250),Landing_Gear_Down,	EXEC("GearStateInd(1, ProfID, FixedGear, Helicopter, GearCycleTimeDn, AirBrkFlash);")),	GearDnTempo-250);						
+//Gear_Flaps_Up_FC3	=	TEMPO(	EXEC("FC3_Flaps_Cycle(-1);Flap_LED_Set(FlapState, 500+LED_Delay, AirBrkFlash, GearState, TriggerZoom_state);"),	
+//								CHAIN(Landing_Gear_Up,		EXEC("GearStateInd(0, ProfID, FixedGear, Helicopter, GearCycleTimeUp, AirBrkFlash);")),	GearUpTempo);
+//Gear_Flaps_Dn_FC3	=	TEMPO(	EXEC("FC3_Flaps_Cycle(3);Flap_LED_Set(FlapState, 1000+LED_Delay, AirBrkFlash, GearState, TriggerZoom_state);"),	
+//								CHAIN(Landing_Gear_Down,	EXEC("Flap_LED_Set(0);"), D(LED_Delay),	EXEC("GearStateInd(1, ProfID, FixedGear, Helicopter, GearCycleTimeDn, AirBrkFlash, FlapState);")),	GearDnTempo);
+//Gear_Flaps_Dn_TGZ_FC3=	TEMPO(	EXEC("FC3_Flaps_Cycle(3);Flap_LED_Set(FlapState, 1000+LED_Delay, AirBrkFlash, GearState, TriggerZoom_state);"),	
+//								CHAIN(EXEC("TriggerZoom_toggle(0,1,0);"),D(250),Landing_Gear_Down,	EXEC("GearStateInd(1, ProfID, FixedGear, Helicopter, GearCycleTimeDn, AirBrkFlash);")),	GearDnTempo-250);						
+Gear_Flaps_Up_AV8 		=	TEMPO(EXEC("AV8_Flaps_Sel(-1,Switch_Delay);"), Gear_Up,		GearUpTempo);
+Gear_Flaps_Dn_AV8 		=	TEMPO(EXEC("AV8_Flaps_Sel(3,Switch_Delay);"), Gear_Dn,		GearDnTempo);
+Gear_Flaps_Dn_TGZ_AV8	=	TEMPO(EXEC("AV8_Flaps_Sel(3,Switch_Delay);"), Gear_Dn_TGZ,	GearDnTempo-250);
+
+Gear_Flaps_Up_F18 		=	TEMPO(F18_Flaps_Up, Gear_Up,		GearUpTempo);
+Gear_Flaps_Dn_F18 		=	TEMPO(F18_Flaps_Dn, Gear_Dn,		GearDnTempo);
+Gear_Flaps_Dn_TGZ_F18	=	TEMPO(F18_Flaps_Dn, Gear_Dn_TGZ,	GearDnTempo-250);
+
+//Gear_Up_IL2GB 			=	CHAIN(IL2GB_Landing_Gear_Up,	EXEC("GearStateInd(0, ProfID, FixedGear, Helicopter, GearCycleTimeUp, AirBrkFlash);"));
+//Gear_Dn_IL2GB 			=	CHAIN(IL2GB_Landing_Gear_Down,	EXEC("GearStateInd(1, ProfID, FixedGear, Helicopter, GearCycleTimeDn, AirBrkFlash);"));
+//Gear_Dn_TGZ_IL2GB		=	CHAIN(EXEC("TriggerZoom_toggle(0,1,0);"),D(250),IL2GB_Landing_Gear_Down,	EXEC("GearStateInd(1, ProfID, FixedGear, Helicopter, GearCycleTimeDn, AirBrkFlash);"));
+
+Toggle_Airbrake =		CHAIN(PULSE+DX27,SEQ(Lights_LLED1(1),Lights_LLED1(0)));
+
+
+//CommState
+CommState_F1	=	CHAIN(TEMPO(USB[0x3A],USB_SPACEBAR,DefTempo),EXEC("FkeyPress=1;"));
+CommState_F2	=	CHAIN(USB[0x3B],EXEC("FkeyPress=1;"));
+CommState_F3	=	CHAIN(USB[0x3C],EXEC("FkeyPress=1;"));
+CommState_F4	=	CHAIN(USB[0x3D],EXEC("FkeyPress=1;"));
+CommState_F5	=	CHAIN(USB[0x3E],EXEC("FkeyPress=1;"));
+CommState_F6	=	CHAIN(USB[0x3F],EXEC("FkeyPress=1;"));
+CommState_F7	=	CHAIN(USB[0x40],EXEC("FkeyPress=1;"));
+CommState_F8	=	CHAIN(USB[0x41],EXEC("FkeyPress=1;"));
+CommState_F9	=	CHAIN(USB[0x42],EXEC("FkeyPress=1;"));
+CommState_F10	=	CHAIN(USB[0x43],EXEC("FkeyPress=1;"));
+CommState_F11	=	CHAIN(USB[0x44],EXEC("FkeyPress=1;"));
+CommState_F12	=	CHAIN(USB[0x45],EXEC("FkeyPress=1;"));
+
+CommState_F12_Toggle	=	TEMPO(	CHAIN(CommMenu,EXEC("FkeyPress=1;")),
+									CHAIN(USB[0x45],EXEC("FkeyPress=1;")),
+									ModTempo);	
+CommState_F12_Toggle_BS2=	TEMPO(	CHAIN(SPU9_PTT,EXEC("FkeyPress=1;")),
+									CHAIN(USB[0x45],EXEC("FkeyPress=1;")),
+									ModTempo);	
+
+//added in 1.69
+if (TrackIR == 2)	TIR_Center = VR_Center;
+else				TIR_Center = TrackIR_Center;
+
+//SnapViews
+Std_SnapView1	=	TEMPO(EXEC("SnapViewModRelease(KBPress, ProfID);"), EXEC("SetSnapViewT(1);"), DefTempo);
+Std_SnapView2	=	TEMPO(EXEC("SnapViewModRelease(KBPress, ProfID);"), EXEC("SetSnapViewT(2);"), DefTempo);
+Std_SnapView3	=	TEMPO(EXEC("SnapViewModRelease(KBPress, ProfID);"), EXEC("SetSnapViewT(3);"), DefTempo);
+Std_SnapView4	=	TEMPO(EXEC("SnapViewModRelease(KBPress, ProfID);"), EXEC("SetSnapViewT(4);"), DefTempo);
+Std_SnapView5	=	TEMPO(EXEC("SnapViewModRelease(KBPress, ProfID);"), EXEC("SetSnapViewT(5);"), DefTempo);
+Std_SnapView6	=	TEMPO(EXEC("SnapViewModRelease(KBPress, ProfID);"), EXEC("SetSnapViewT(6);"), DefTempo);
+Std_SnapView7	=	TEMPO(EXEC("SnapViewModRelease(KBPress, ProfID);"), EXEC("SetSnapViewT(7);"), DefTempo);
+Std_SnapView8	=	TEMPO(EXEC("SnapViewModRelease(KBPress, ProfID);"), EXEC("SetSnapViewT(8);"), DefTempo);
+Std_SnapView9	=	TEMPO(EXEC("SnapViewModRelease(KBPress, ProfID);"), EXEC("SetSnapViewT(9);"), DefTempo);
+Std_SnapView0	=	TEMPO(EXEC("SnapViewModRelease(KBPress, ProfID);"), EXEC("SetSnapViewT(0);"), DefTempo);
+
+Shift_SnapView1	=	TEMPO(EXEC("SnapViewModRelease(KBPress, ProfID, 1);"), CHAIN(DX30,D(ModDelay),EXEC("SetSnapViewT(1);")), DefTempo);
+Shift_SnapView2	=	TEMPO(EXEC("SnapViewModRelease(KBPress, ProfID, 1);"), CHAIN(DX30,D(ModDelay),EXEC("SetSnapViewT(2);")), DefTempo);
+Shift_SnapView3	=	TEMPO(EXEC("SnapViewModRelease(KBPress, ProfID, 1);"), CHAIN(DX30,D(ModDelay),EXEC("SetSnapViewT(3);")), DefTempo);
+Shift_SnapView4	=	TEMPO(EXEC("SnapViewModRelease(KBPress, ProfID, 1);"), CHAIN(DX30,D(ModDelay),EXEC("SetSnapViewT(4);")), DefTempo);
+Shift_SnapView5	=	TEMPO(EXEC("SnapViewModRelease(KBPress, ProfID, 1);"), CHAIN(DX30,D(ModDelay),EXEC("SetSnapViewT(5);")), DefTempo);
+Shift_SnapView6	=	TEMPO(EXEC("SnapViewModRelease(KBPress, ProfID, 1);"), CHAIN(DX30,D(ModDelay),EXEC("SetSnapViewT(6);")), DefTempo);
+Shift_SnapView7	=	TEMPO(EXEC("SnapViewModRelease(KBPress, ProfID, 1);"), CHAIN(DX30,D(ModDelay),EXEC("SetSnapViewT(7);")), DefTempo);
+Shift_SnapView8	=	TEMPO(EXEC("SnapViewModRelease(KBPress, ProfID, 1);"), CHAIN(DX30,D(ModDelay),EXEC("SetSnapViewT(8);")), DefTempo);
+Shift_SnapView9	=	TEMPO(EXEC("SnapViewModRelease(KBPress, ProfID, 1);"), CHAIN(DX30,D(ModDelay),EXEC("SetSnapViewT(9);")), DefTempo);
+
+
+
+UH1_SnapView8	=	TEMPO(	EXEC("SnapViewModRelease(KBPress, ProfID);  	UH1_XM60_Cycle(UH1_XM60_Current, 	UH1_XM60_Track, 0, UH1_Custom_LUA, 1);"),	//UH1_PedestalView added in 1.24
+							EXEC("SetSnapViewT(8); 					UH1_XM60_Cycle(				  0, 	UH1_XM60_Track, 0, UH1_Custom_LUA, 1);"), DefTempo);
+UH1_SnapView2	=	TEMPO(	EXEC("SnapViewModRelease(KBPress, ProfID);  	UH1_XM60_Cycle(UH1_XM60_Current, 	UH1_XM60_Track, 0, UH1_Custom_LUA, 1);"),	//resets XM60 mapping to current state upon release
+							EXEC("SetSnapViewT(2,0,ProfID); 		UH1_XM60_Cycle(				  0, 	UH1_XM60_Track, 0, UH1_Custom_LUA, 1);"), DefTempo);	//sets XM60 mapping to stowed for ADF use in snapview
+//A10C SnapViews work for any DE
+A10C_SnapView2	=	TEMPO(EXEC("SnapViewModRelease(KBPress, ProfID);"),EXEC("SetSnapViewT(2,KBPress*2,ProfID);"), DefTempo);
+A10C_SnapView3	=	TEMPO(EXEC("SnapViewModRelease(KBPress, ProfID);"),EXEC("SetSnapViewT(3,KBPress*2,ProfID);"), DefTempo);
+A10C_SnapView8	=	TEMPO(EXEC("SnapViewModRelease(KBPress, ProfID);"),EXEC("SetSnapViewT(8,KBPress*2,ProfID);"), DefTempo);		//added for AV-8B in 2.00
+A10C_SnapView9	=	TEMPO(EXEC("SnapViewModRelease(KBPress, ProfID);"),EXEC("SetSnapViewT(9,KBPress*2,ProfID);"), DefTempo);
+
+BS2_SnapView1	=	TEMPO(	CHAIN(EXEC("SnapViewModRelease(KBPress, ProfID);"),D(KBDelay),EXEC("if ((BS2_PVI_CommState) & (!BS2_ForceCommStateOff)) BS2_CommState_Toggle(0,SPU9_BS2);")), CHAIN(EXEC("SetSnapViewT(1);"),D(KBDelay),EXEC("if ((BS2_PVI_CommState) & (!BS2_ForceCommStateOff)) BS2_CommState_Toggle(0,SPU9_BS2);")), DefTempo);
+BS2_SnapView2	=	TEMPO(	CHAIN(EXEC("SnapViewModRelease(KBPress, ProfID);"),D(KBDelay),EXEC("if ((BS2_PVI_CommState) & (!BS2_ForceCommStateOff)) BS2_CommState_Toggle(0,SPU9_BS2);")), CHAIN(EXEC("SetSnapViewT(2);"),D(KBDelay),EXEC("if ((BS2_PVI_CommState) & (!BS2_ForceCommStateOff)) BS2_CommState_Toggle(0,SPU9_BS2);")), DefTempo);
+BS2_SnapView3	=	TEMPO(	CHAIN(EXEC("SnapViewModRelease(KBPress, ProfID);"),D(KBDelay),EXEC("if ((BS2_PVI_CommState) & (!BS2_ForceCommStateOff)) BS2_CommState_Toggle(0,SPU9_BS2);")), CHAIN(EXEC("SetSnapViewT(3);"),D(KBDelay),EXEC("if ((BS2_PVI_CommState) & (!BS2_ForceCommStateOff)) BS2_CommState_Toggle(0,SPU9_BS2);")), DefTempo);
+BS2_SnapView4	=	TEMPO(	CHAIN(EXEC("SnapViewModRelease(KBPress, ProfID);"),D(KBDelay),EXEC("if ((BS2_PVI_CommState) & (!BS2_ForceCommStateOff)) BS2_CommState_Toggle(0,SPU9_BS2);")), CHAIN(EXEC("SetSnapViewT(4,KBPress*2,2);"),D(KBDelay),EXEC("if (BS2_PVI_CommState) BS2_CommState_Toggle(1,SPU9_BS2);")), 					DefTempo);
+BS2_SnapView6	=	TEMPO(	CHAIN(EXEC("SnapViewModRelease(KBPress, ProfID);"),D(KBDelay),EXEC("if ((BS2_PVI_CommState) & (!BS2_ForceCommStateOff)) BS2_CommState_Toggle(0,SPU9_BS2);")), CHAIN(EXEC("SetSnapViewT(6);"),D(KBDelay),EXEC("if ((BS2_PVI_CommState) & (!BS2_ForceCommStateOff)) BS2_CommState_Toggle(0,SPU9_BS2);")), DefTempo);
+BS2_SnapView9	=	TEMPO(	CHAIN(EXEC("SnapViewModRelease(KBPress, ProfID);"),D(KBDelay),EXEC("if ((BS2_PVI_CommState) & (!BS2_ForceCommStateOff)) BS2_CommState_Toggle(0,SPU9_BS2);")), CHAIN(EXEC("SetSnapViewT(9);"),D(KBDelay),EXEC("if ((BS2_PVI_CommState) & (!BS2_ForceCommStateOff)) BS2_CommState_Toggle(0,SPU9_BS2);")), DefTempo);
+
+BTN_TG1PO		=	DX1;
+BTN_TG1PO_TGZ	=	CHAIN(DX1,EXEC("TriggerZoom_in();"));
+BTN_TG1PI		=	0;
+BTN_TG1PI_TGZ	=	EXEC("TriggerZoom_toggle(-1,AirBrkFlash,GearState);");
+BTN_TG1RO		=	0;
+BTN_TG1RO_TGZ	=	EXEC("ActKey(ZoomIn_slow); DeferCall(KBDelay,&TriggerZoom_out,0);");
+BTN_TG1RI_TGZ	=	UP+DX1;	//ActKey(DX1) added in 1.21 to force DX1 release if stuck
+BTN_TG2			=	DX6;
+
+BTN_S2			=	DX2;
+
+BTN_S3P			=	CHAIN(DX30,TEMPO(DX3, 	EXEC("S3S4Shifted(ProfID,RudderPedals,GearState,Helicopter);"), ModTempo));	//DX3 short, long(er) for modifier and eject check, moved here in 0.53, removed S4 and changed argument to "RudderPedals"
+BTN_S3R			=	EXEC("S3Release(ProfID,RudderPedals,GearState,RevANTRudder,Helicopter);");		//added in 0.53 to release "RudderPedals" argument in S3Shifted
+
+BTN_S4PI		=	EXEC("S3S4Shifted();");
+BTN_S4PO		=	EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,0);");
+BTN_S4R			=	EXEC("DiffBraking(RudderPedals,DiffBrakes,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,1);");
+BTN_S4PO_NoDiff	=	EXEC("DiffBraking(RudderPedals,0,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,0);");	//allows DX4 (A/P Disconnect) or wheelbrakes; DiffBraking (arg 2) = 0 because it's built into the module
+BTN_S4R_NoDiff	=	EXEC("DiffBraking(RudderPedals,0,GearState,RudderToe,S4AnalogBrake,S4asNWS,WheelBrakeFull,1);");	//GearState reinstated in 1.33 to allow for A/P disconnect
+
+
+//FC3
+FC3_H2UUI		=	DX7;												//UI	map to Target Lock (w/wo DX30 modifier)
+FC3_H2UUO		=	TEMPO(CAC_Bore_Mode, DX7, ModTempo);				//UO	Tap for CAC Bore mode, Hold for Lock, set Longitudinal on non-fighters
+FC3_H2UMI		=	Nav_Mode;											//MI
+FC3_H2UMO		=	NextWaypoint;										//MO
+FC3_H2UDI		=	TEMPO(BVR_Mode,Air_To_Ground_Mode, DefTempo);		//DI	short for BVR, long for A2G (for Ru fighters)
+FC3_H2UDO		=	DX7;												//DO	Target Lock
+
+FC3_H2DUI		=	DX9;												//UI	map to Target Unlock (w/ DX30 modifier), Backup Gunsight on Ru fighters
+FC3_H2DUO		=	CAC_Vertical_Scan_Mode;								//UO	Need DX key for this (DX9+DX25 orig) (set gunsight reticle on non-fighters)
+FC3_H2DMI		=	TEMPO(TailHook,GunsightReticle, LongTempo);			//MI	Tailhook long for gunsight (Ru)
+FC3_H2DMO		=	PrevWaypoint; 										//MO	
+FC3_H2DDI		=	GunsightReticle;									//DI	should also map this to RWS mode for F-15
+FC3_H2DDO		=	TEMPO(DX9,CHAIN(DX30,D(ModDelay),DX9), DefTempo);	//DO 	Target Unlock (F-15 short is TWS target deselect for F-15, long for RWS mode
+
+FC3_H2RUI		=	RDRScan_Incr;										//UI formerly RDRScan/GunpodELEStep_Incr
+FC3_H2RUO		=	CAC_HMD_Mode; 										//UO	sets logitudinal on non-fighters
+FC3_H2RMI		=	RDRScan_Incr; 										//MI Rdrscan
+FC3_H2RMI33		=	Autothrottle_Incr;									//MI Autothrottle Incr Su-33
+FC3_H2RMO		=	RDRScan_Incr;										//MO formerly RDRScan/GunpodELEStep_Incr
+FC3_H2RDI		=	RDRScan_Incr;										//DI Set to Intervalometer w/ DX30 on Su-25A/T
+FC3_H2RDO		=	RWS_TWS_Toggle;										//DO Set to Altimeter on Su-25 and Sgl/Prs release on A-10A
+
+FC3_H2LUI		=	RDRScan_Decr;										//UI formerly RDRScan/GunpodELEStep_Decr
+FC3_H2LUO		=	Longitudinal_FLOOD_mode;							//UO
+FC3_H2LMI		=	RDRScan_Decr;										//MI RdrScan
+FC3_H2LMI33		=	Autothrottle_Decr;									//MI Autothrottle Incr Su-33
+FC3_H2LMO		=	RDRScan_Decr;										//MO formerly RDRScan/GunpodELEStep_Decr
+FC3_H2LDI		=	RDRScan_Decr;										//DI Set to Intervalometer w/ DX30 on Su-25A/T
+FC3_H2LDO		=	PRF_Select;											//DO Set to Altimeter on Su-25 and Sgl/Prs release on A-10A
+
+
+
+FC3_H3UUI		=	TEMPO(TargetDesignator_Center,Flaps_Up,DefTempo);	//UI short for target desig center, long for flaps up
+FC3_H3UUIF		=	TEMPO(TargetDesignator_Center,EXEC("FC3_Flaps_Cycle(0);"),DefTempo);
+FC3_H3UUO		=	CHAIN(DX30,D(ModDelay), DX11);						//UO set for Radar (E/O for Su-25T); be sure to reassign in FC3 and remove DX11 only command
+FC3_H3UMI		=	Gear_Flaps_Up;										//MI Hold for Gear up, Tap for Flaps up, NWS state forced off in 1.04, removed in 1.17
+FC3_H3UMIF		=	Gear_Flaps_Up_FC3;									//MI Hold for Gear up, Tap for Flaps up (array cycle)
+FC3_H3UMO		=	CHAIN(DX30,D(ModDelay), DX11);						//MO set for Radar (E/O for Su-25T)
+FC3_H3UDI		=	TEMPO(CHAIN(DX30,D(ModDelay), DX11),Flaps_Up, DefTempo);						//DI set for Radar (E/O for Su-25T), long for flaps up
+FC3_H3UDIF		=	TEMPO(CHAIN(DX30,D(ModDelay), DX11),EXEC("FC3_Flaps_Cycle(0);"),DefTempo);		//DI set for Radar (E/O for Su-25T), long for flaps up (discrete)
+FC3_H3UDO		=	DX11;												//DO set for scan mode/disp zoom in for A-10A/Su-25T (remove Modifier in FC3)
+
+FC3_H3DDOWH		=	CHAIN(DX8,DX13);
+FC3_H3DUI		=	TEMPO(CHAIN(DX8, DX13),	Flaps_Dn,	DefTempo);		//UI set for E/O (LLLTV for Su-25)  remap to DX13 in FC3 and set DX8 to ELINT (Phantasmagoria) pod; long for flaps dn
+FC3_H3DUIF		=	TEMPO(CHAIN(DX8, DX13), EXEC("FC3_Flaps_Cycle(1);"),	DefTempo);	//UI set for E/O (LLLTV for Su-25)  remap to DX13 in FC3 and set DX8 to ELINT (Phantasmagoria) pod; long for maneuvering flaps
+FC3_H3DUO		=	CHAIN(DX30,D(ModDelay), DX8, DX13);					//UO set for E/O (LLLTV for Su-25)
+FC3_H3DMI		=	Gear_Flaps_Dn;										//MI Hold for Gear down, Tap for Flaps down.  2 state flaps (down/up).  NWS state forced off in 1.04, removed in 1.17
+FC3_H3DMIF		=	Gear_Flaps_Dn_FC3;									//MI Hold for Gear down, Tap for Flaps down.  2 state flaps (down/up).  FC3 array.
+FC3_H3DMI_TGZ	=	Gear_Flaps_Dn_TGZ;									//MI forces TriggerZoom off prior to gear down
+FC3_H3DMIF_TGZ	=	Gear_Flaps_Dn_TGZ_FC3;								//MI forces TriggerZoom off prior to gear down (Su-25)
+FC3_H3DMO		=	FC3_H3DUO;											//MO set for E/O (LLLTV for Su-25)
+FC3_H3DDI		=	TEMPO(CHAIN(DX8, DX13),	Flaps_Dn, DefTempo);		//DI set for E/O (LLLTV for Su-25), long for flaps down
+FC3_H3DDIF		=	TEMPO(CHAIN(DX8, DX13),	EXEC("FC3_Flaps_Cycle(1);"),	DefTempo);	//DI set for E/O (LLLTV for Su-25), long for maneuvering flaps
+FC3_H3DDO		=	DX13;												//DO set for Scan mode/disp zoom out for A-10A/Su-25T (remap to DX13 and remove modifier in FC3)
+
+FC3_H3RU		=	CHAIN(DX32,D(ModDelay),DX27);						//UI set for  TGTSize/GunpodELE_Incr (reassign in FC3, incl modifier)
+FC3_H3RMI		=	TEMPO(LandingLight, EXEC("FC3_AntiColl_Lights_Set(-1);"), DefTempo);			//MI
+FC3_H3RMO		=	TEMPO(Cockpit_Illum,EXEC("FC3_Nav_Lights_Set(-1);"), DefTempo);					//MO Forces .5s for Nav lights (FENCE), short for landing light
+FC3_H3RD		=	DX12;												//DI set tgt size incr in Su-25, Scanzone Rt in fighters & DO
+FC3_H3RMIWH		=	TEMPO(Cockpit_Illum, LandingLight, DefTempo);
+FC3_H3RMOWH		=	FC3_H3RD;
+
+FC3_H3LU		=	CHAIN(DX32,D(ModDelay),DX28);						//UI set for  TGTSize/GunpodELE_Decr (reassign in FC3, incl modifier)
+FC3_H3LMI		=	FC3_H3RMI;											//MI
+FC3_H3LMO		=	FC3_H3RMO;											//MO cockpit lights, long for nav lights
+FC3_H3LD		=	DX14;												//DI Set tgt size decr in Su-25, Scanzone Left in fighters
+FC3_H3LMIWH		=	FC3_H3RMIWH;
+FC3_H3LMOWH		=	FC3_H3LD;
+
+FC3_AP_WH_I		=	TEMPO(EXEC("FC3_Autopilot_Set('9');"),EXEC("FC3_Autopilot_Emergency_Off();"),DefTempo);				//Short Autopilot Disconnect, Long emer disconnect
+FC3_AP_WH_O		=	TEMPO(EXEC("FC3_Autopilot_Set(FC3_Autopilot_Mode); if ((Throttle[APAH]) & (Throttle[RDRDIS])) DeferCall(KBDelay,&ActKey,KEYON+PULSE+USB_H);"), EXEC("FC3_Autopilot_Set('h');"),DefTempo);	//Short Autopilot Mode (norm for F-15), long for baro alt hold.  updated in 1.66 to allow for route with baro alt if radalt off.  ActKey used instead of AP routine to piggyback with Defercalls and reduce time.
+F15_AP_WH_O		=	TEMPO(EXEC("FC3_Autopilot_Set(FC3_Autopilot_Mode);"), EXEC("FC3_Autopilot_Set('h');"),DefTempo);	//Short Autopilot Mode (norm for F-15), long for baro alt hold.  
+MiG29_AP_WH_O	=	TEMPO(EXEC("FC3_Autopilot_Set(FC3_Autopilot_Mode); if ((Throttle[APAH]) & (Throttle[RDRNRM])) DeferCall(KBDelay,&ActKey,KEYON+PULSE+USB_H);"), EXEC("FC3_Autopilot_Set('h');"),DefTempo);	//Short Autopilot Mode (norm for F-15), long for baro alt hold.  enables att + alt if RADALT on (MiG-29).  ActKey used instead of AP routine to piggyback with Defercalls and reduce time.
+
+P51D_H4UI		=	TEMPO(EXEC("Cycle_RdoMode(-1);"),Rdo_Mode_Lock, DefTempo);  	//cycle mode
+P51D_H4UO		=	EXEC("Cycle_RdoChannel(-1);");	//Cycle channel
+P51D_H4DI		=	EXEC("Cycle_RdoMode(4);");		//cycle mode
+P51D_H4DO		=	TEMPO(EXEC("Cycle_RdoChannel(5);"),SnapView4, DefTempo);		//Cycle channel (Long snapview of fuselage tank)
+P51D_H4DOVR		=	TEMPO(EXEC("Cycle_RdoChannel(5);"),VR_Spyglass, DefTempo);
+
+Fw190_H4UI		=	PULSE+Fw190_RdoMode_Toggle;
+Fw190_H4DI		=	Std_SnapView3;	//Cycle Channel/Mode (Long snapview of CB panel)
+Fw190_H4UO		=	EXEC("Fw190_Radio_Freq_Set(-1,ProfID);");
+Fw190_H4DO		=	EXEC("Fw190_Radio_Freq_Set(5,ProfID);");
+
+
+Fw190_H4PO		=	DX2;
+Fw190_H4PI		=	Fw190_H4PO;	//Fw190_H4DI; disabled snapview in 2.28
+
+UH1_H2UI		=	TEMPO(DX7,EXEC("UH1_XM60_Cycle(-1, UH1_XM60_Track,1, UH1_Custom_LUA, 0);"),LongTempo);	//Armament Selector Up/Master Arm Up (long for pilot sight toggle)
+UH1_H2DI		=	TEMPO(DX9,Flex_Sight_Toggle_DX,LongTempo);								//Armament Selector Down/Master Arm Down (long for flex sight)
+
+printf("DCS_Global() Finish.\xa");
+}
+
+
+int Print_Value(int value = 0)	//just a test routine to output values in an EXEC statement without double-quoting.
+{
+if (value == 21) printf("T8 Remapped from TriggerZoom to standard.\xa");	//use this to indicate remapping MiG-21 gear from TriggerZoom to normal.
+else if (value == 4)  printf("Already in A-10C.  You must switch to a different profile before reloading the A-10C profile.");
+else if (value == 7)  printf(" TARS/SRS = %i\xa StnCheckDisabled = %i\xa Sum = %i\xa",TARS,StnCheckDisabled,TARS+StnCheckDisabled); //for H1_Init stationcheck()
+else if ((value == 12)	)
+	{
+	printf("Currently in A-10C.  You must switch to a different profile before switching to ");
+		if (value == 12) printf("the L-39 profile.\xa");
+		else printf("this profile.\xa");
+	flashRLED2(1,250);
+	deferCall(500,&flashRLED2,0);
+	}
+else if (value == 71) printf("ABHi\xa");
+else if (value == 70) printf("ABHiL\xa");
+else if (value == 69) printf("ABLo\xa");
+else if (value == 68) printf("ABLoL\xa");
+//else if (value == 3) printf(" ProfID = %i\xa GearState = %i\xa",ProfID,GearState);
+else if (ProfID ==2508)
+	{
+	if 		(value == 100) printf("AV-8B Throttle normal\xa");
+	else if	(value == 101) printf("AV-8B Throttle > 100\xa");
+	else if	(value == 102) printf("AV-8B Throttle > 101\xa");
+	else if	(value == 103) printf("AV-8B Throttle > 102\xa");
+	else if	(value == 104) printf("AV-8B Throttle > 103\xa");
+	else if	(value == 105) printf("AV-8B Throttle > 104\xa");
+	else printf("Print Test: Input = %i\xa",value);
+	}
+//else if ((ProfID > 3999) & (ProfID < 5000))
+//	{
+//	if		(value == 4100)	printf("IL2GB Common (R) Ignition: %i\xa",IL2GB_IgnRState);
+//	else if	(value == 4101)	printf("IL2GB Left Ignition: %i\xa",IL2GB_IgnLState);
+//	else if (value == 4102)	printf("IL2GB Right Ignition: %i\xa",IL2GB_IgnRState);
+//	else printf("Print Test: Input = %i\xa",value);
+//	}
+else printf("Print Test: Input = %i\xa",value);
+}
+
+int Grace_Flag(int flag)	//this is a generic function for use with DeferCall to enable or prevent an action for a short time.
+{
+GraceFlag = flag;
+if (Script_Debug) printf("GraceFlag = %i\xa",GraceFlag);
+}
+
+int Init_Run_Set(int flag)	//Used with DeferCall to reset Init_Run
+{
+Init_Run = flag;
+}
+int	GearCycling_Set(int state)	//used for DeferCall resetting the GearCycling flag
+{
+GearCycling = state;
+}
+
+//*******************************************
+//			Flaps (obsolete in 1.66)
+//*******************************************
+
+int Flap_LED_Set(int state, int delay=100, int led = 1, int gear = 0, int tgz=0)	//state is flap position (FlapState), delay is LED_Delay, gear is GearState, tgz is TriggerZoom_state, led is whether LED flashing (AirBrkFlash) is enabled.
+{
+if ((led > 0) & (!gear) & (!tgz))
+	{
+	Lights_LLED2(0);
+	flashLLED2(0);
+
+	if (state > 0) DeferCall(delay,&Flap_LED_On,state);
+	}	
+}
+
+int Flap_LED_On(int state, int base=1000)	//added so that it can be defercalled in FC3_Flap_LED_Set
+{
+if (AirBrkFlash > 0)
+	{	
+	if (state > 0) flashLLED2(1,base/state);					//base/state means that a more extended flap state flashes faster (larger denominator)
+	else flashLLED2(0);
+	}
+}
+//*******************************************
+//				Airbrake
+//*******************************************
+
+int AirBrake_Init(int flash) //Global Airbrake Routines
+{
+if (flash > 0)		//Set in DCS World.tmc.  1 enables flashing LED for airbrake (harder on program)
+	//***Set to -1 for disable***
+	{
+	
+//	Analog_AirbrakeOn = 	CHAIN(DX27, 		D(BrakeOnCycleTime),	EXEC("if (AirBrakeExtended == 0) flashLLED1(1,500); AirBrakeExtended = 1;"));		
+//	Analog_AirbrakeOff = 	CHAIN(DX28, 		D(BrakeOffCycleTime),	EXEC("flashLLED1(0,0); AirBrakeExtended = 0;"));		//delay  1-1.5s for boards in for "cool factor"
+
+//	Binary_AirbrakeOn = 	CHAIN(PULSE+DX27,	D(BrakeOnCycleTime),	EXEC("if ((ProfID != 2512) | (!GearState) & (!GearCycling)) flashLLED1(1,500); else DeferCall(GearCycleTimeDn,&flashLLED1,1);"));	//added Hawk exception in 1.69 and  & !GearCycling in 2.05
+	Binary_AirbrakeOn = 	CHAIN(PULSE+DX27,	D(500),					EXEC("if (!GearCycling) flashLLED1(1,500);		else DeferCall(GearCycleTimeDn,&flashLLED1,1);"));	//removed Hawk exception in 2.45 and  & !GearCycling in 2.05, removed & (!Gearstate) in 2.48
+	Binary_AirbrakeOff =	CHAIN(PULSE+DX28,	D(BrakeOffCycleTime), 	EXEC("if (!GearCycling) flashLLED1(0,0); 		else DeferCall(GearCycleTimeUp,&flashLLED1,0);"));
+
+	Momentary_AirbrakeOn = 	CHAIN(DOWN+DX27, 	D(500),					EXEC("if (!GearCycling) flashLLED1(1,500); 		else DeferCall(GearCycleTimeDn,&flashLLED1,1);"));
+	Momentary_AirbrakeOff =	CHAIN(UP+DX27,		D(BrakeOffCycleTime),	EXEC("if (!GearCycling) flashLLED1(0,0); 		else DeferCall(GearCycleTimeUp,&flashLLED1,0);"));
+	
+	Toggle_AirbrakeOn =		CHAIN(PULSE+DX27,	D(BrakeOnCycleTime),	EXEC("if (!GearCycling) flashLLED1(1,500); 		else DeferCall(GearCycleTimeDn,&flashLLED1,1);"));
+	Toggle_AirbrakeOff =	CHAIN(PULSE+DX27,	D(BrakeOffCycleTime),	EXEC("if (!GearCycling) flashLLED1(0,0); 		else DeferCall(GearCycleTimeUp,&flashLLED1,0);"));
+
+//	IL2_Toggle_AirbrakeOn =	CHAIN(IL2GB_Airbrakes,	D(BrakeOnCycleTime),	EXEC("if (!GearCycling) flashLLED1(1,500); 	else DeferCall(GearCycleTimeDn,&flashLLED1,1);")	);	//no pulse because already in
+//	IL2_Toggle_AirbrakeOff= CHAIN(IL2GB_Airbrakes,	D(BrakeOffCycleTime),	EXEC("if (!GearCycling) flashLLED1(0,0);   	else DeferCall(GearCycleTimeUp,&flashLLED1,0);")	);
+	//IL2GB_Airbrakes = DOWN+USB_RIGHTALT,D(ModDelay_IL2GB),PULSE+USB_B,D(KBPress_IL2GB+ModDelay_IL2GB),UP+USB_RIGHTALT
+
+//Temporary working routines
+	//Analog_Pulse_AirbrakeOn = 	CHAIN(PULSE+DX27, 	D(0),	EXEC("if (AirBrakeExtended == 0) flashLLED1(1,500); AirBrakeExtended = 1;"));		
+	//Analog_Pulse_AirbrakeOff = 	CHAIN(PULSE+DX28, 	D(BrakeOffCycleTime),	EXEC("flashLLED1(0,0); AirBrakeExtended = 0;"));		//delay  1-1.5s for boards in for "cool factor"
+
+//Nicu's Analog Brake routine modified by Home Fries
+    Analog_AirbrakeOn 				= 	CHAIN(DX27, 				EXEC("AirBrakeSwitch = 1;"));		
+    Analog_AirbrakeOff 				= 	CHAIN(DX28, 				EXEC("AirBrakeSwitch =-1;"));
+    Analog_AirbrakeStop				=								EXEC("AirBrakeSwitch = 0;");
+    Analog_AirbrakeActiveStop		= 	CHAIN(PULSE+Airbrake_Stop,	EXEC("AirBrakeSwitch = 0;"));	//added in 1.40 for F-86
+	Analog_Pulse_AirbrakeOn 		= 	CHAIN(PULSE+DX27, 			EXEC("AirBrakeSwitch = 1;"));		
+    Analog_Pulse_AirbrakeOff 		= 	CHAIN(PULSE+DX28, 			EXEC("AirBrakeSwitch =-1;"));
+    Analog_Pulse_AirbrakeOnStop		= 	CHAIN(PULSE+DX27, 			EXEC("AirBrakeSwitch = 0;"));	//analog pulse		
+    Analog_Pulse_AirbrakeOffStop 	= 	CHAIN(PULSE+DX28, 			EXEC("AirBrakeSwitch = 0;"));
+	}
+else if (flash < 0)	//LED Disabled (for troubleshooting and easier on program)
+	{	
+	Analog_AirbrakeOn = 	DX27;		
+	Analog_AirbrakeOff = 	DX28;
+
+	Binary_AirbrakeOn = 	PULSE+DX27;
+	Binary_AirbrakeOff =	PULSE+DX28;
+
+	Momentary_AirbrakeOn = 	DOWN+DX27;
+	Momentary_AirbrakeOff =	UP+DX27;
+
+
+	Toggle_AirbrakeOn =		PULSE+DX27;
+	Toggle_AirbrakeOff =	PULSE+DX27;
+
+//	IL2_Toggle_AirbrakeOn =	IL2GB_Airbrakes;	//no pulse because already in
+//	IL2_Toggle_AirbrakeOff= IL2GB_Airbrakes;
+
+//	Analog_Pulse_AirbrakeOn = 	Analog_AirbrakeOn;	
+//	Analog_Pulse_AirbrakeOff = 	Analog_AirbrakeOff;
+
+ 	Analog_Pulse_AirbrakeOn 		=	PULSE+DX27;		
+	Analog_Pulse_AirbrakeOff 		=	PULSE+DX28;
+	Analog_Pulse_AirbrakeOnStop		= 	PULSE+DX27;		
+	Analog_Pulse_AirbrakeOffStop	= 	PULSE+DX28;		
+	Analog_AirbrakeStop				=	0;
+	Analog_AirbrakeActiveStop		= 	PULSE+Airbrake_Stop;	//added in 2.49a for F-86	
+//	Analog_Pulse_AirbrakeOnStop		= 	0;		
+//	Analog_Pulse_AirbrakeOffStop 	= 	0;
+
+	}
+else	//steady state (easier on program)
+	{
+	Analog_AirbrakeOn = 	CHAIN(DX27, 		D(BrakeOnCycleTime),	EXEC("Lights_LLED1(1);"));		
+	Analog_AirbrakeOff = 	CHAIN(DX28, 		D(BrakeOffCycleTime),	EXEC("Lights_LLED1(0);"));		//delay  1-1.5s for boards in for "cool factor"
+
+//	Binary_AirbrakeOn = 	CHAIN(PULSE+DX27,	D(BrakeOnCycleTime),	EXEC("if ((ProfID != 2512) | (!GearState)) Lights_LLED1(1);"));	//added Hawk exception in 1.69
+	Binary_AirbrakeOn = 	CHAIN(PULSE+DX27,	D(BrakeOnCycleTime),	EXEC("if (!GearState) Lights_LLED1(1);"));	//removed Hawk exception in 2.45
+	Binary_AirbrakeOff =	CHAIN(PULSE+DX28,	D(BrakeOffCycleTime), 	EXEC("Lights_LLED1(0);"));
+
+	Momentary_AirbrakeOn = 	CHAIN(DOWN+DX27, 	D(BrakeOnCycleTime),	EXEC("Lights_LLED1(1);"));
+	Momentary_AirbrakeOff =	CHAIN(UP+DX27,		D(BrakeOffCycleTime),	EXEC("Lights_LLED1(0);"));
+
+
+	Toggle_AirbrakeOn =		CHAIN(PULSE+DX27,	D(BrakeOnCycleTime),	EXEC("Lights_LLED1(1);"));
+	Toggle_AirbrakeOff =	CHAIN(PULSE+DX27,	D(BrakeOffCycleTime),	EXEC("Lights_LLED1(0);"));
+
+//	IL2_Toggle_AirbrakeOn =	CHAIN(IL2GB_Airbrakes,	D(BrakeOnCycleTime),	EXEC("Lights_LLED1(1);")	);	//no pulse because already in
+//	IL2_Toggle_AirbrakeOff= CHAIN(IL2GB_Airbrakes,	D(BrakeOffCycleTime),	EXEC("Lights_LLED1(0);")	);
+
+//	Analog_Pulse_AirbrakeOn = 	Analog_AirbrakeOn;	
+//	Analog_Pulse_AirbrakeOff = 	Analog_AirbrakeOff;
+
+// 	Analog_Pulse_AirbrakeOn = 	CHAIN(PULSE+DX27, 	EXEC("if (AirBrakeExtended == 0) Lights_LLED1(1); AnalogBrakeOutLED(BrakeOnCycleTime, 0, AirBrakeExtended);"));		
+//	Analog_Pulse_AirbrakeOff = 	CHAIN(PULSE+DX28, 	EXEC("AnalogBrakeInLED(BrakeOffCycleTime, AirBrakeExtended);"));		//delay  1-1.5s for boards in for "cool factor"
+
+//	Analog_Pulse_AirbrakeOnStop		= 	0;		
+//	Analog_Pulse_AirbrakeOffStop 	= 	0;
+
+
+
+//	Analog_Pulse_AirbrakeOn 		= 	CHAIN(PULSE+DX27, 			EXEC("AirBrakeSwitch = 1;"));		
+//	Analog_Pulse_AirbrakeOff 		= 	CHAIN(PULSE+DX28, 			EXEC("AirBrakeSwitch =-1;"));
+//	Analog_Pulse_AirbrakeOnStop		= 	CHAIN(PULSE+DX27, 			EXEC("AirBrakeSwitch = 0;"));	//analog pulse		
+//	Analog_Pulse_AirbrakeOffStop 	= 	CHAIN(PULSE+DX28, 			EXEC("AirBrakeSwitch = 0;"));    
+	
+	Analog_Pulse_AirbrakeOn 		=	PULSE+DX27;		
+	Analog_Pulse_AirbrakeOff 		=	PULSE+DX28;
+	Analog_Pulse_AirbrakeOnStop		= 	PULSE+DX27;		
+	Analog_Pulse_AirbrakeOffStop	= 	PULSE+DX28;	
+	Analog_AirbrakeStop				=	0;
+	Analog_AirbrakeActiveStop		= 	PULSE+Airbrake_Stop;	//added in 2.49a for F-86		
+	}
+}
+
+int GearStateInd(int state, int prof, int fixed = 0, int helo = 0, int time = 0, int cycle = 1, int flaps = 0, int init = 0)	//added helo in 0.68 to force ANT rudder when gear is up; added prof in 1.17 to allow for remaps (FC3 F-15C).  added flaps in 1.36 for FC3 array
+{
+int mfdps; //power state for MFD illum
+
+GearPos = GearDn_Ind_Default*100;	//added in 2.61
+if (fixed == 0)	//added in 0.60 for Huey, changed to == in 1.40
+	{
+	if (state == -1) state = (GearState + 1)%2;		//toggle added to 0.41 to force cycle indications on init
+	if (	(cycle > 0) & ((time > 500) | (flaps > 0)) & (GearState != state) 	)	
+		{
+		if ((flaps > 0) & (state == 1))	// added flap delay factor in 1.36; 
+			{
+			if (time > 1000/flaps)	//time>1000/flaps so that transition time will not be negative.
+				{
+				GearCycling = 1;	//added in 2.05 to deconflict with speedbrake
+				DeferCall (1000/flaps+LED_Delay, &GearStateCycle_Down,time-(1000/flaps));
+				DeferCall (time+3*LED_Delay, &Lights_LLED2,1);
+				DeferCall (time+4*LED_Delay,&GearCycling_Set,0);	//added in 2.05 to deconflict with speedbrake
+				if (Script_Debug) printf( "Time Long\xa State = %i\xa Flaps = %i\xa DeferCycle = %i\xa CycleTime = %i\xa CycleStop = %i\xa DeferSteady = %i\xa",state,flaps,1000/flaps+LED_Delay,time-(1000/flaps),LED_Delay+time-250,time+2*LED_Delay);
+				
+				}
+			else 
+				{
+				GearCycling = 1;	//added in 2.05 to deconflict with speedbrake
+				DeferCall (LED_Delay, &GearStateCycle_Down,time);
+				DeferCall (time+1000/flaps+3*LED_Delay, &Lights_LLED2,1); //set to "1" instead of state
+				DeferCall (time+1000/flaps+4*LED_Delay,&GearCycling_Set,0);	//added in 2.05 to deconflict with speedbrake
+				if (Script_Debug) printf("Time Short\xa State = %i\xa Flaps = %i\xa DeferCycle = %i\xa CycleTime = %i\xa CycleStop = %i\xa DeferSteady = %i\xa",state,flaps,1000/flaps+LED_Delay,time,1000/flaps+LED_Delay+time-250,time+1000/flaps+2*LED_Delay);
+				}
+			}
+		else
+			{
+			
+			GearStateCycle(time,prof,state);															//GearState != state added in 0.54 to prevent cycling same state
+			if 		(	((cycle < 0) | (MFD_Count == 0)) & (state)	) PlayWav("geardn.wav");
+			else if (	((cycle < 0) | (MFD_Count == 0)) & (!state)	) PlayWav("gearup.wav");
+			else 
+				{
+				GearCycling = 1;	//added in 2.05 to deconflict with speedbrake
+				DeferCall(time+2*LED_Delay, &Lights_LLED2,state);
+				DeferCall(time+3*LED_Delay,&GearCycling_Set,0);	//added in 2.05 to deconflict with speedbrake
+				}
+			if (Script_Debug) printf("No Delay\xa State = %i\xa Flaps = %i\xa DeferCycle = N/A\xa CycleTime = %i\xa DeferSteady = %i\xa",state,flaps,time,time+2*LED_Delay);		
+			}
+		}
+	else if ((GearState != state) & (cycle > 0)) 
+			{
+			DeferCall(time, &Lights_LLED2,state);	//solidifies LED after transition, or immediate if no state change	
+			if (Script_Debug) printf("Cycle\xa");
+			}
+	else if (	((prof == 2019) & (prof == 2021))	&	(cycle > 0)	)		GearStateCycle(time,prof,state);		//added in 1.29 for termination of MiG-21 cycle indications at dogfight center
+	
+	else if (	((cycle < 0) | (MFD_Count == 0)) & (!state)	) PlayWav("gearup.wav");	//added in 2.05
+	else if (	((cycle < 0) | (MFD_Count == 0)) & (state)	) PlayWav("geardn.wav");	//added in 2.05
+	else Lights_LLED2(state);
+	
+	GearState = state;
+	
+	if (GearState > 0) 
+		{
+		Map_Cougar_ToeBrakes(ToeBrakesAvailable);//added in 1.40;
+//		if (prof == 2512) //Hawk auto brake retract
+//			{
+//			if (AirBrkFlash > 0) flashLLED1(0,0);
+//			else if (AirBrkFlash == 0) Lights_LLED1(0);			
+//			}
+		}
+	else
+		{
+		if (ToeBrakesAvailable > 1) LockTDC(0);	//forces TDC unlock just in case.
+		Map_Cougar_ToeBrakes(0);
+		}
+		
+	if	(prof == 1050)
+		{
+		if (!state) RotorBrake_Toggle(0,0,50);		//added in 1.27 to default rotor brake off when gear state up (accounts for airstarts).  50 at end of function to deconflict with gear indication
+		if (RangeKnob < 1) RangeKnob = 1;			//added in 1.35 to force "normal" buttons on gear change if warm start, but won't change state in emergency (RangeKnob = 2)
+		BS2_MapDFT6(GearState, BS2_Starter, RangeKnob);
+		BS2_Map_S3(BS2_ForceCommStateOff, state);	//added in 1.36
+		BS2_Fuel_Sw_Array_Set(state,init);					//added in 1.73
+		}
+	else if ((prof == 1024) | (prof == 1564))	//Helos with Petrovich/George (added in 2.64)
+			{
+			Mi8_H3_Map(1,prof,0);	//Resets Petrovich
+			}
+	else if	((prof == 2025) | (prof == 2011) | (prof == 2027) | (prof == 2033) | (prof == 2029) | (prof == 2509) | (prof == 2515))	//FC3
+			{
+			FC3MapButtons(state,prof);							//added in 1.17 to allow remapping with gear state
+			//if ((FlapState > 0) & (!state)) Flap_LED_Set(FlapState, time+500+LED_Delay,AirBrkFlash);	//added in 1.36, disabled in 1.66
+			}
+	else if ((prof == 2505) | (prof == 2604)) //F-5 was separate for S3 comms, but can likely be absorbed into a S3_NWS routine
+		{
+		if (prof == 2505)
+			{
+			F5E_IGN_Map(WHT_IGN_Start_F5E,state);
+			//F5E_Mic_Set(state);
+			}
+		S3_NWS(state,prof);
+		}
+			
+	else if	((prof == 2508) | (prof == 2510) | (prof == 2518)	|	(prof == 2516)	| (prof == 2615)	)	//MFD backlighting.  AV8B added in 2.00, F/A-18C added in 2.20, F-16 in 2.41, F-15E in 2.68
+			{
+			if (prof == 2510) A10CMapEbrk(state,prof);
+			else if (prof == 2516) F16C_Array_Init(state);
+			else	//S3_NWS, if no S3_NWS need to add new criteria
+				{
+				S3_NWS(state,prof);
+				if (prof == 2508) AV8MapEbrk(state,prof);
+				else if ((prof == 2518)	|	(prof == 2615))
+					{
+					FA18C_WH_ThrButton_Map(state,prof);	//sets ldgh/apeng for f-15e and f/a-18
+					if (prof == 2518)
+						{
+						FA18C_S2_Map(state);
+						ActKey(DX13);						//clears APU switch 
+						FA18C_DF_Init(WarthogThrottle,0);
+						FA18C_RCON_Map(state);
+						if (!WarthogThrottle) FA18C_TQS_Speedbrake_Map(0);
+						}
+					}
+				}
+			if ((state == 0) & (Adjust_Backlighting > 0))	
+				{
+				WHT_Power_Check(LMFD_Pwr_State,RMFD_Pwr_State);
+				if ((prof == 2615))	//any acft that don't have night illum, just off/day
+						mfdps = 2;	
+				else	mfdps = 1;
+				
+				if (LMFD_Pwr_State == 0) DeferCall(LED_Delay,&LMFD_Power,mfdps);
+				if (RMFD_Pwr_State == 0) DeferCall(LED_Delay,&RMFD_Power,mfdps);
+				}
+			}
+	else if (prof == 2514) 
+			{
+			if (CurrentStation == 1)	//error trap forces LANTIRN off after gear up/down for pilot mod in case APU/T1 was left on.
+				{
+				F14_LANTIRN_Enabled = 0;	
+				if (state)
+					{
+					if (WarthogStick > 0) 	F14_WHS_Init(1,ProfID,1);
+					else					F14_HCS_Init(1,ProfID,1);
+					}
+				}
+			if (WarthogThrottle > 0)	F14_WH_ThrButton_Map(CurrentStation,state);
+			F14_MFD_Gear_Map(CurrentStation,state);
+			//else F14_TQS_Map(CurrentStation)	//placeholder, currently no gearstate on tqs	
+			//if (!Discrete_WepSel_F14)	
+			F14Plt_T6_Map(WarthogThrottle, abs(1-state));
+			F14_DF_Init(WarthogThrottle,CurrentStation,0);	//error trap added in 2.34 to prevent takeoff with boat set to engine sel switch			
+			}
+	else if (prof == 2520)	
+			{
+			M2k_PS_Set(state);					//added in 1.66 for context sensitive pinky switch
+			M2k_S1_Set(WarthogStick,state); 	//added in 2.42 for dynamic S1
+			M2k_RMFD_BottomRow_Set(0,state);	//added in 2.45 (bug fix)
+			}
+	else if ((prof == 2537))	AJS37_Map_LBRT(state);	//was AJS37_Gear_Map(state);		//added in 1.67 for LBRT thrust reverser tempo command, changed in 1.68
+	else if (prof == 2117)		JF17_WHT_Switch_Map(state,WarthogThrottle);	//added in 2.45
+	else if	((prof == 3551) | (prof == 3090) | (prof == 3190) | (prof == 3009) | (prof == 3509)	|	(prof == 3516)	|	(prof == 3547)	|	(prof == 3606)	)	//3190 added in 2.40, 3516 in 2.42, 3606 in 2.61
+		{
+		P51DMapT6(state,prof);
+		if (	((prof == 3090) | (prof == 3190))	&	(WarthogThrottle == 0)	) Fw190_Map_Starter(state,prof);	//added in 2.40 (previously overlooked)
+		//else if (prof == 3009) Bf109_LTB_Map(state);		//obsolete
+		}
+	// Add Corsair-specific gear/flap logic
+	else if(prof == 3518)
+	{
+		if (state == 1) { // Gear down
+			ActKey(KEYON+PULSE+F4U_Gear_Down);
+			Lights_LLED2(1); // Green LED for gear down
+		} else { // Gear up
+			ActKey(KEYON+PULSE+F4U_Gear_Up);
+			Lights_LLED2(0);
+		}
+    // Flaps (analog axis mapped to Throttle slider)
+    MapAxis(&Throttle, THR_FC, DX_ZROT_AXIS);
+	}
+	else if (prof == 2586) 									//added in 1.28 for F-86
+		{
+		P51DMapT6(state,prof);
+		S3_NWS(state);	
+		F86_Map_S2(state);	//added in 1.32
+		}		
+
+	if	(helo > 0) 	SetANTRudder(RudderPedals,1,RevANTRudder);		//forces ANT Rudder when gear is up in Helos
+	else			SetANTRudder(RudderPedals,state,RevANTRudder);	//routine in DCS_Init added in 0.53
+
+//add here if Day/Night lighting	
+	if (	((prof != 2510) & (prof != 2508) & (prof != 3509))	& (state == 0) & (Adjust_Backlighting > 0)) MFD_WHT_Power(2);	//prof != 2508 added in 2.00
+	}
+else //FixedGear nonzero (determine down or up added in 1.40)
+	{
+	if (fixed < 0) GearState = 0;	//added in 1.40, applies to helos/aircraft with skids (e.g. UH-1) and forces gearstate up
+	else GearState = 1;	//Forces fixed gear down state.  fixed == 1, !fixed already checked in logic above.
+		SetANTRudder(RudderPedals,1,RevANTRudder,fixed);
+		ActKey(DX29);	//added in 1.35 just to be sure braking is clear
+		ActKey(DX4);
+		Lights_LLED2(0);
+		}
+if (Script_Debug) printf("GearState = %i\xa",GearState);	//for test purposes
+}
+
+int GearStateCycle(int time, int prof = 0, int state=0)	//separated from GearStateInd() in 1.29 for MiG-21; state defaults to 0 because it is only used with MiG-21 (prof == 1) and shouldn't be a required argument (i.e. 0 is dummy)
+{
+if (AirBrkFlash > 0)
+	{
+	if	(	(prof == 2021)	)
+		{
+		if (	((WarthogThrottle != 1) & (HCougar[T7])|(HCougar[T8])) | ((WarthogThrottle == 1) & (!Throttle[FLAPM]))	)		//makes sure dogfight/boat is pressed if MiG-21
+			{
+			GearCycling = 1;
+			flashLLED2(1,250);	//indications if stop is being applied
+			DeferCall(time-250,&GearStateCycleStop,state);
+//			DeferCall(time-250,&flashLLED2,0);
+//			DeferCall(time,&Lights_LLED2,state);
+			}
+		else
+			{
+			//GearCycling = 0;
+			GearStateCycleStop(state);
+//			flashLLED2(0);
+//			DeferCall(LED_Delay+250, &Lights_LLED2, state);	//call routine on button release to force light off
+			}	
+		}
+	else if (time > 250)	//time argument added in 1.36
+		{
+		flashLLED2(1,250);
+		DeferCall(time-250,&flashLLED2,0);		
+		}
+	else flashLLED2(0);	//added in 1.36
+	}
+if ((Script_Debug) & (prof != 1501)) printf("GearStateCycle\xa State = %i\xa Time = %i\xa Prof = %i\xa",state,time,prof);	//for test purposes
+}
+
+int GearStateCycleStop(int state)	//serves only as a check for DeferCall; currently only for MiG-21 but can be used with discrete button holds for landing gear
+{
+if((AirBrkFlash > 0) & (GearCycling))	//uses global variable instead of argument to allow for termination if interrupted (i.e. MiG-21)
+	{
+	if (Script_Debug) printf("GearStateCyclingStop:\xaGearCycling = %i...",GearCycling);	//for test purposes
+	flashLLED2(0);
+	DeferCall(250,&Lights_LLED2,state);
+	GearCycling = 0;
+	if (Script_Debug) printf("%i\xa",GearCycling);	//for test purposes
+	}
+}
+
+int Landing_Gear_Toggle(int state, int prof, int fixed = 0, int helo = 0, int delay = 0, int cycle = 1, int flaps=0, int init = 0)
+{
+	if ((GearState != state) & (!fixed))		//fixed added in 0.60 for huey
+	{
+		ActKey(KEYON+PULSE+Landing_Gear_Toggle_Key);
+		GearStateInd(state, prof, fixed, helo, delay, cycle,flaps,init);
+	}
+}
+
+int	GearState_Blink(int state, int time = 250)	//used to indicate lock toggle
+{
+if ((AirBrkFlash > 0) & (!TriggerZoom_state))	//makes sure TriggerZoom not active so as to not screw up the flashing
+	{
+	Lights_LLED2(abs(state-1));
+	DeferCall(time,&Lights_LLED2,state);
+	}
+}
+
+int GearStateCycle_Down(int time)	//exists to allow for GearStateCycle in DeferCall (prevents overlap in flaps indication); added in 1.36
+{
+GearStateCycle(time,0,1);	//time, profile, state
+}
+
+int Airbrake_Map_Set(int type, int swap = 3, int led = 0, int wav = 0)	//type is airbrake type, swap is whether the brakes can be hot selected (3 for FC3 enabled).  swap defaulted to 3 to allow DeferCall. 
+{
+if (Script_Debug) printf("Airbrake_Map_Set(%i,%i,%i,%i)\xa",type,swap,led,wav);
+if ((WarthogThrottle == 1)	|	((WarthogThrottle > 1) & (!WH_Use_TQS))	) Airbrake_Map_Set_WH(type,swap,led,wav);	//TQS logic added in 2.43 for F-16 (JF17 uses custom routine)
+else
+	{
+	if (type > 1) 
+		{
+		if (type == 2)		//type 2: analog-pulse
+			{
+			if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1)	)		//TIR/MFD added in 2.34 
+				{
+				if (Script_Debug) printf("Airbrake Type %i VR\xa",type);
+				MapKeyIO(&HCougar,	T9, 		TEMPO(0, EXEC("DCS_AcftSel(1);"),	SwapTempo),				Analog_Pulse_AirbrakeOn);
+				MapKeyRIO(&HCougar,	T9, 		0,															Analog_Pulse_AirbrakeOnStop);
+				MapKey	(&HCougar,	T10, 		Analog_Pulse_AirbrakeOff);
+				MapKeyR	(&HCougar,	T10, 		Analog_Pulse_AirbrakeOffStop);
+				}
+			else if (swap > 0)
+				{
+				if (swap == 3)	//FC3
+					{
+					if (Script_Debug) printf("Airbrake Type %i FC3 Cycle\xa",type);
+					MapKeyIO(&HCougar,	T9, 	TEMPO(0, EXEC("FC3_Airbrake_Type_Set(-1);"),1000),			Analog_Pulse_AirbrakeOn);
+					MapKeyIO(&HCougar,	T10, 	0,															Analog_Pulse_AirbrakeOff);
+					MapKeyRIO(&HCougar,	T10, 	0,						  									Analog_Pulse_AirbrakeOffStop);
+					}
+				else
+					{
+					if (Script_Debug) printf("Airbrake Type %i DX Cycle\xa",type);
+					MapKeyIO(&HCougar,	T9, 	TEMPO(0, EXEC("DX_Airbrake_Type_Set(-1);"),1000),			Analog_Pulse_AirbrakeOn);
+					MapKey	(&HCougar,	T10, 	Analog_Pulse_AirbrakeOff);
+					MapKeyR	(&HCougar,	T10, 	Analog_Pulse_AirbrakeOffStop);
+					}
+				MapKeyRIO(&HCougar,	T9, 		0,															Analog_Pulse_AirbrakeOnStop);
+				}
+			else
+				{
+				if (Script_Debug) printf("Airbrake Type %i No Cycle\xa",type);
+				MapKey	(&HCougar,	T9, 		Analog_Pulse_AirbrakeOn);
+				MapKeyR	(&HCougar,	T9, 		Analog_Pulse_AirbrakeOnStop);
+				MapKey	(&HCougar,	T10, 		Analog_Pulse_AirbrakeOff);
+				MapKeyR	(&HCougar,	T10, 		Analog_Pulse_AirbrakeOffStop);
+				}
+			printf("      Type %i (Analog-Pulse) Airbrake Set.\xa", type);
+			if (led) 
+				{
+				flashLLED1(1,500);
+				DeferCall(2000,&flashLLED1,0);
+				}
+			if (wav) PlayWav("t2ap.wav");
+			}
+		else		//type 3: analog momentary; allows for type set if type higher than max index	
+			{
+			if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1))		//TIR/MFD added in 2.34 
+				{
+				if (Script_Debug) printf("Airbrake Type %i VR\xa",type);
+				MapKeyIO(&HCougar,	T9, 	TEMPO(0, EXEC("DCS_AcftSel(1);"),	SwapTempo),			Analog_AirbrakeOn);
+				MapKey	(&HCougar,	T10, 															Analog_AirbrakeOff);
+				if (ProfID == 2586)						//added in 2.49a (bug fix)
+					{
+					MapKeyRIO(&HCougar,	T9,	0, 														Analog_AirbrakeActiveStop);
+					MapKeyR	 (&HCougar,	T10,														Analog_AirbrakeActiveStop);
+					}
+				
+				else if (ProfID == 2508)	//moved here from binary to analog in 2.61a
+					{
+					if (Script_Debug) printf("Airbrake Type %i Prof %i VR\xa",type,ProfID);
+					MapKeyIO(&HCougar,	T9, 	TEMPO(CHAIN(DOWN+DX27,D(EmerFlapRetract_AV8),UP+DX27), EXEC("DCS_AcftSel(1);"),	SwapTempo),	Analog_AirbrakeOn);		
+					MapKeyRIO(&HCougar,	T9,		0,																							Analog_AirbrakeStop);
+					AV8MapT10(GearState, ProfID);		
+					}
+				
+				else
+					{
+					MapKeyRIO(&HCougar,	T9,	0,														Analog_AirbrakeStop);
+					MapKeyR	 (&HCougar,	T10, 														Analog_AirbrakeStop);
+					}
+				}		
+			else if (swap > 0)
+				{
+				if (swap == 3)	//FC3
+					{
+					if (Script_Debug) printf("Airbrake Type %i FC3 Cycle\xa",type);
+					MapKeyIO(&HCougar,	T9, 	TEMPO(0, EXEC("FC3_Airbrake_Type_Set(-1);"),1000),			Analog_AirbrakeOn);
+					MapKeyRIO(&HCougar,	T9, 	0,															Analog_AirbrakeStop);
+					MapKeyIO(&HCougar,	T10, 	0,															Analog_AirbrakeOff);
+					MapKeyRIO(&HCougar,	T10, 	0,															Analog_AirbrakeStop);
+					}
+				else if (swap == 4) 
+					{
+					if (Script_Debug) printf("Airbrake Type %i Swap4\xa",type);
+					if (ProfID == 2516)	//added in 2.45 for F-16 DX antiskid/parking brake
+						{
+						MapKeyIO(&HCougar,	T9,	TEMPO(CHAIN(DX31,DX32,D(ModDelay),DX27),DX27,DefTempo),	Analog_AirbrakeOn);		
+						MapKeyRIO(&HCougar,	T9, 0,														Analog_AirbrakeStop);
+						}
+					else
+						{
+						MapKey	(&HCougar,	T9, Analog_AirbrakeOn);		//moved here in 1.40 for bug fix
+						MapKeyR	(&HCougar,	T9, Analog_AirbrakeStop);
+						}
+						
+					if (ProfID == 2510) A10CMapT10(GearDn_Ind_Default);	//A-10C
+					else if (ProfID == 2516)							//F-16C /I DX for antiskid/parking brake
+						{
+						MapKeyIO(&HCougar,	T10, PULSE+DX28,							Analog_AirbrakeOff);
+						MapKeyRIO(&HCougar,	T10, CHAIN(DX31,DX32,D(ModDelay),DX27),		Analog_AirbrakeStop);	
+						}
+					else
+						{
+						//MapKey	(&HCougar,	T9, 			Analog_AirbrakeOn);	//remmed/moved in 1.40 for bug fix
+						//MapKeyR	(&HCougar,	T9, 			Analog_AirbrakeStop);
+						MapKeyIO(&HCougar,	T10, DX29,	Analog_AirbrakeOff);
+						MapKeyRIO(&HCougar,	T10, 0,		Analog_AirbrakeStop);
+						}
+					}
+				else
+					{
+					if (Script_Debug) printf("Airbrake Type %i DX Cycle\xa",type);
+					MapKeyIO(&HCougar,	T9, 	TEMPO(0, EXEC("DX_Airbrake_Type_Set(-1);"),1000),			Analog_AirbrakeOn);
+					MapKeyRIO(&HCougar,	T9, 	0,															Analog_AirbrakeStop);
+					MapKey	(&HCougar,	T10, 	Analog_AirbrakeOff);
+					MapKeyR	(&HCougar,	T10, 	Analog_AirbrakeStop);
+					}
+				}
+			
+			else
+				{
+				if (ProfID == 2508)	//moved here from binary to analog in 2.61a, exclusive to rest of routine due to emer flaps retract
+					{
+					if (Script_Debug) printf("Airbrake Type %i Prof %i\xa",type,ProfID);
+					MapKeyIO(&HCougar,	T9, 	DX27,	Analog_AirbrakeOn);	//DX27 /I for emer flap retract
+					MapKeyRIO(&HCougar,	T9,		0,		Analog_AirbrakeStop);
+					AV8MapT10(GearState, ProfID);
+					}
+				else
+					{
+					if (Script_Debug) printf("Airbrake Type %i No Cycle\xa",type);
+					MapKey	(&HCougar,	T9, 		Analog_AirbrakeOn);
+					MapKey	(&HCougar,	T10, 		Analog_AirbrakeOff);
+					if (ProfID == 2586)	//added in 1.40
+						{
+						MapKeyR	(&HCougar,	T9, 		Analog_AirbrakeActiveStop);
+						MapKeyR	(&HCougar,	T10,		Analog_AirbrakeActiveStop);
+						}
+					else
+						{
+						MapKeyR	(&HCougar,	T9, 		Analog_AirbrakeStop);
+						MapKeyR	(&HCougar,	T10, 		Analog_AirbrakeStop);
+						}
+					}
+				}
+			printf("      Type %i (Analog-Momentary) Airbrake Set.\xa", type);
+			if (led)
+				{
+				Lights_LLED1(1);
+				DeferCall(2000, &Lights_LLED1,0);
+				}
+			}
+			if (wav) PlayWav("t3am.wav");
+		DeferCall(2200, &AnalogBrakePoll,1);	//Added in 1.23 to enable analog brake polling
+		}
+	
+	else		//type 0 or 1: binary airbrake (separate on/off)
+		{
+		AnalogBrakePoll(0);						//added in 1.23 to disable analog brake polling
+		if (type == 1)			//type 1: binary-discrete (MiG-21)
+			{
+			if (swap > 0)
+				{
+				if (swap == 3)	//FC3
+					{
+					
+					if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1))
+						{
+						if (Script_Debug) printf("Airbrake Type %i VR\xa",type);
+						MapKeyIO(&HCougar,	T9, 	TEMPO(0, EXEC("DCS_AcftSel(1);"),	SwapTempo),					Binary_AirbrakeOn);	
+						}						
+					else
+						{
+						if (Script_Debug) printf("Airbrake Type %i FC3 Cycle\xa",type);
+						MapKeyIO(&HCougar,	T9, 	TEMPO(0, EXEC("FC3_Airbrake_Type_Set(-1);"),1000),				Binary_AirbrakeOn);
+						}
+					MapKeyIO(&HCougar,	T10, 	0,																	Binary_AirbrakeOff);
+					}
+				else if (swap == 1)		//MiG-21 but can be used for any binary toggle
+					{
+					if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1))
+						{
+						if (Script_Debug) printf("Airbrake Type %i VR\xa",type);						
+						MapKeyIO(&HCougar,	T9, 	TEMPO(PULSE+DX27, EXEC("DCS_AcftSel(1);"),	SwapTempo),			Binary_AirbrakeOn);	
+						}
+					else
+						{
+						if (Script_Debug) printf("Airbrake Type %i Binary Cycle\xa",type);
+						MapKeyIO(&HCougar,	T9, 	TEMPO(PULSE+DX27, EXEC("Binary_Airbrake_Type_Set(-1);"),1000),	Binary_AirbrakeOn);		//DX27,DX28 added in 1.30 for parking brake on/off
+						}
+					MapKeyIO(&HCougar,	T10, 	PULSE+DX28,															Binary_AirbrakeOff);
+					}
+				else
+					{
+					if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1))
+						{
+						if (Script_Debug) printf("Airbrake Type %i FC3 Cycle\xa",type);
+						MapKeyIO(&HCougar,	T9, 	TEMPO(0, EXEC("DCS_AcftSel(1);"),	SwapTempo),					Binary_AirbrakeOn);	
+						}
+					else
+						{
+						if (Script_Debug) printf("Airbrake Type %i DX Cycle\xa",type);
+						MapKeyIO(&HCougar,	T9, 	TEMPO(0, EXEC("DX_Airbrake_Type_Set(-1);"),1000),				Binary_AirbrakeOn);
+						}
+					MapKey	(&HCougar,	T10, 	Binary_AirbrakeOff);
+					}
+				}
+
+			else
+				{
+				if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1))
+					{
+					if (Script_Debug) printf("Airbrake Type %i Prof %i VR\xa",type,ProfID);
+					MapKeyIO(&HCougar,	T9, 	TEMPO(0, EXEC("DCS_AcftSel(1);"),	SwapTempo),	Binary_AirbrakeOn);
+					}
+				else
+					{
+					if (Script_Debug) printf("Airbrake Type %i Prof %i VR\xa",type,ProfID);
+					MapKey	(&HCougar,	T9, 													Binary_AirbrakeOn);
+					}
+				MapKey	(&HCougar,	T10, 	Binary_AirbrakeOff);
+				}
+
+			//MapKeyR
+			if (ProfID == 2505)	//F-5E
+				{
+				if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1))				
+						MapKeyRIO(&HCougar,	T9, 	0,	F5E_SpeedBrake_Off_DX);
+				else	MapKeyR (&HCougar,	T9, 		F5E_SpeedBrake_Off_DX);
+				MapKeyR	(&HCougar,	T10, 				F5E_SpeedBrake_Off_DX);
+				}	
+			else if ((ProfID == 2537))	// & (GearState))	//added in 1.67 for when Viggen gear is down and brake must be held
+				{
+				if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1))
+						MapKeyRIO(&HCougar,	T9, 0,		EXEC("if (GearState) DeferCall(BrakeOffCycleTime, &flashLLED1,0);")	);
+				else	MapKeyR	(&HCougar,	T9, 		EXEC("if (GearState) DeferCall(BrakeOffCycleTime, &flashLLED1,0);")	);
+				MapKeyR	(&HCougar,	T10, 		0);
+				}
+			else
+				{			
+				MapKeyR (&HCougar,	T9, 		0);
+				MapKeyR	(&HCougar,	T10, 		0);
+				}
+
+			
+			printf("      Type %i (Binary-Discrete) Airbrake Set.\xa", type);	
+			if (led)
+				{	
+				flashLLED1(1,250);
+				DeferCall(2000,&flashLLED1,0);
+				}
+			if (wav) PlayWav("t1bd.wav");
+			}
+		else
+			{
+			if (swap > 0)
+				{
+				if (swap == 3)			//FC3; separate from MiG-21 because of the T10 IO/RIO
+					{
+					if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1))
+						{
+						if (Script_Debug) printf("Airbrake Type %i VR\xa",type);
+						MapKeyIO(&HCougar, 	T9,			TEMPO(PULSE+DX27, EXEC("DCS_AcftSel(1);"),	SwapTempo),			Binary_AirbrakeOn);		//State Toggle Shift+T9. 
+						}							
+					else
+						{
+						if (Script_Debug) printf("Airbrake Type %i FC3 Cycle\xa",type);
+						MapKeyIO(&HCougar, 	T9,			TEMPO(PULSE+DX27, EXEC("FC3_Airbrake_Type_Set(-1);"),1000),		Binary_AirbrakeOn);		//State Toggle Shift+T9. 
+						}						
+					MapKeyIO(&HCougar, 	T10,		0,																	Binary_AirbrakeOn);		//Shift+T10 enables drag chute on T6 short w/o popping boards.
+					MapKeyRIO(&HCougar, T10,		0,																	Binary_AirbrakeOff);
+					}
+				else if (swap == 1)		//MiG-21 but can be used for any binary toggle
+					{
+					if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1))
+						{
+						if (Script_Debug) printf("Airbrake Type %i VR\xa",type);
+						MapKeyIO(&HCougar, 	T9,			TEMPO(PULSE+DX27, EXEC("DCS_AcftSel(1);"),	SwapTempo),			Binary_AirbrakeOn);		//State Toggle Shift+T9.
+						}						
+					else
+						{
+						if (Script_Debug) printf("Airbrake Type %i Binary Cycle\xa",type);
+						MapKeyIO(&HCougar, 	T9,			TEMPO(PULSE+DX27, EXEC("Binary_Airbrake_Type_Set(-1);"),1000),	Binary_AirbrakeOn);		//State Toggle Shift+T9. 
+						}						
+					MapKeyIO(&HCougar, 	T10,		PULSE+DX28,															Binary_AirbrakeOn);		//DX27/28 added in 1.30 for parking brake
+					MapKeyRIO(&HCougar, T10,		0,																	Binary_AirbrakeOff);
+					}
+				else
+					{
+					if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1))
+						{
+						if (Script_Debug) printf("Airbrake Type %i VR\xa",type);
+						MapKeyIO(&HCougar, 	T9,			TEMPO(PULSE+DX27, EXEC("DCS_AcftSel(1);"),	SwapTempo),		Binary_AirbrakeOn);		//State Toggle Shift+T9.  
+						}
+					else
+						{
+						if (Script_Debug) printf("Airbrake Type %i DX Cycle\xa",type);
+						MapKeyIO(&HCougar, 	T9,			TEMPO(PULSE+DX27, EXEC("DX_Airbrake_Type_Set(-1);"),1000),	Binary_AirbrakeOn);		//State Toggle Shift+T9.  
+						}
+					MapKey	(&HCougar,	T10,																		Binary_AirbrakeOn);		
+					MapKeyR	(&HCougar,	T10,																		Binary_AirbrakeOff);
+					}
+				MapKeyRIO(&HCougar,	T9,		0,																		Binary_AirbrakeOff);
+		
+				}
+			else
+				{
+				if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1))
+					{
+					if (Script_Debug) printf("Airbrake Type %i VR\xa",type);
+					MapKeyIO(&HCougar, 	T9,			TEMPO(PULSE+DX27, EXEC("DCS_AcftSel(1);"),	SwapTempo),		Binary_AirbrakeOn);		//State Toggle Shift+T9.  
+					}
+				else
+					{
+					if (Script_Debug) printf("Airbrake Type %i No Cycle\xa",type);
+					MapKeyIO(&HCougar,	T9,			PULSE+DX27,													Binary_AirbrakeOn); 
+					}
+				MapKeyRIO(&HCougar, T9,				0,															Binary_AirbrakeOff);
+				MapKey	(&HCougar, T10,				Binary_AirbrakeOn);		
+				MapKeyR	(&HCougar, T10,				Binary_AirbrakeOff);
+				}
+			printf("      Type %i (Binary-Momentary) Airbrake Set.\xa", type);
+			if (led)
+				{	
+				flashLLED1(1,125);
+				DeferCall(2000,&flashLLED1,0);
+				}
+			}
+			if (wav) PlayWav("t0bm.wav");
+		}
+		
+	printf("         Brake Out = %i\xa         Brake In  = %i\xa", BrakeOnCycleTime, BrakeOffCycleTime);
+	}
+}
+
+
+int Airbrake_Map_Set_WH(int type, int swap = 3, int led = 0, int wav = 0)	//type is airbrake type, swap is whether the brakes can be hot selected (3 for FC3 enabled).  swap defaulted to 3 to allow DeferCall. 
+{
+if (Script_Debug) printf("Airbrake_Map_Set_WH(%i,%i,%i,%i)\xa",type,swap,led,wav);
+if (type > 1) 
+	{
+	if (type == 2)		//type 2: analog-pulse
+		{
+		if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1))
+			{
+			MapKeyIO(&Throttle,	SPDB, 	TEMPO(0, EXEC("DCS_AcftSel(1);"),	SwapTempo),				Analog_Pulse_AirbrakeOn);
+			MapKeyRIO(&Throttle,SPDB, 	0,															Analog_Pulse_AirbrakeOnStop);
+			MapKeyIO(&Throttle,	SPDF, 	0,															Analog_Pulse_AirbrakeOff);
+			MapKeyRIO(&Throttle,SPDF, 	0,						  									Analog_Pulse_AirbrakeOffStop);			
+			}
+		else if (swap > 0)
+			{
+			if (swap == 3)
+				{
+				MapKeyIO(&Throttle,	SPDB, 	TEMPO(0, EXEC("FC3_Airbrake_Type_Set(-1);"),1000),			Analog_Pulse_AirbrakeOn);
+				MapKeyIO(&Throttle,	SPDF, 	0,															Analog_Pulse_AirbrakeOff);
+				MapKeyRIO(&Throttle,SPDF, 	0,						  									Analog_Pulse_AirbrakeOffStop);
+				}
+			else
+				{
+				MapKeyIO(&Throttle,	SPDB, 	TEMPO(0, EXEC("DX_Airbrake_Type_Set(-1);"),1000),			Analog_Pulse_AirbrakeOn);
+				MapKey	(&Throttle,	SPDF, 	Analog_Pulse_AirbrakeOff);
+				MapKeyR	(&Throttle,	SPDF, 	Analog_Pulse_AirbrakeOffStop);
+				}
+			MapKeyRIO(&Throttle,	SPDB, 		0,															Analog_Pulse_AirbrakeOnStop);
+			}
+		else
+			{
+			MapKey	(&Throttle,	SPDB, 		Analog_Pulse_AirbrakeOn);
+			MapKeyR	(&Throttle,	SPDB, 		Analog_Pulse_AirbrakeOnStop);
+			MapKey	(&Throttle,	SPDF, 		Analog_Pulse_AirbrakeOff);
+			MapKeyR	(&Throttle,	SPDF, 		Analog_Pulse_AirbrakeOffStop);
+			}
+		printf("      Type %i (Analog-Pulse) Airbrake Set.\xa", type);
+		if (led) 
+			{
+			flashLLED1(1,500);
+			DeferCall(2000,&flashLLED1,0);
+			}
+		if (wav) PlayWav("t2ap.wav");
+		}
+	else		//type 3: analog momentary; allows for type set if type higher than max index	
+		{
+		if (swap > 0)
+			{
+			if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1))
+				{
+				MapKeyIO(&Throttle,	SPDB, 		TEMPO(0, EXEC("DCS_AcftSel(1);"),	SwapTempo),	Analog_AirbrakeOn);
+				MapKey	(&Throttle,	SPDF, 		Analog_AirbrakeOff);				
+				
+				if (ProfID == 2586)						//added in 2.49a (bug fix)
+					{
+					MapKeyRIO(&Throttle,SPDB,	0, 												Analog_AirbrakeActiveStop);
+					MapKeyR	 (&Throttle,SPDF,													Analog_AirbrakeActiveStop);
+					}
+				else
+					{
+					MapKeyRIO(&Throttle,SPDB, 	0,												Analog_AirbrakeStop);
+					MapKeyR	 (&Throttle,SPDF, 													Analog_AirbrakeStop);
+					}
+				}
+			else if (swap == 3)
+				{
+				MapKeyIO(&Throttle,	SPDB, 	TEMPO(0, EXEC("FC3_Airbrake_Type_Set(-1);"),1000),			Analog_AirbrakeOn);
+				MapKeyRIO(&Throttle,SPDB, 	0,															Analog_AirbrakeStop);
+				MapKeyIO(&Throttle,	SPDF, 	0,															Analog_AirbrakeOff);
+				MapKeyRIO(&Throttle,SPDF, 	0,															Analog_AirbrakeStop);
+				}
+			else if (swap == 4) //used for analog brakes with specific shifted functions like parking brakes (a-10, f-16)
+				{
+				if (ProfID == 2516)
+					{
+					MapKeyIO(&Throttle,	SPDB,	TEMPO(CHAIN(DX31,DX32,D(ModDelay),DX27),DX27,DefTempo),	Analog_AirbrakeOn);	//F-16C /I DX for antiskid/parking brake added in 2.45
+					MapKeyRIO(&Throttle,SPDB,	0,														Analog_AirbrakeStop);
+					}
+				else
+					{
+					MapKey	(&Throttle,	SPDB, 	Analog_AirbrakeOn);	//moved here in 1.40 for bug fix
+					MapKeyR	(&Throttle,	SPDB, 	Analog_AirbrakeStop);
+					}
+					
+				if (ProfID == 2510) A10CMapSPDF(GearDn_Ind_Default);	//A-10C
+				else if (ProfID == 2516)
+					{
+					MapKeyIO(&Throttle,	SPDF,PULSE+DX28,					Analog_AirbrakeOff);
+					MapKeyRIO(&Throttle,SPDF,CHAIN(DX31,DX32,D(ModDelay),DX27),	Analog_AirbrakeStop);					
+					}
+				else
+					{
+					//MapKey	(&Throttle,	SPDB, 			Analog_AirbrakeOn);	//remmed out/moved in 1.40 for bug fix
+					//MapKeyR	(&Throttle,	SPDB, 			Analog_AirbrakeStop);
+					MapKeyIO(&Throttle,	SPDF, 	DX29,	Analog_AirbrakeOff);
+					MapKeyRIO(&Throttle,SPDF, 	0,		Analog_AirbrakeStop);
+					}
+				}
+			else
+				{
+				MapKeyIO(&Throttle,	SPDB, 	TEMPO(0, EXEC("DX_Airbrake_Type_Set(-1);"),1000),			Analog_AirbrakeOn);
+				MapKeyRIO(&Throttle,SPDB, 	0,															Analog_AirbrakeStop);
+				MapKey	(&Throttle,	SPDF, 	Analog_AirbrakeOff);
+				MapKeyR	(&Throttle,	SPDF, 	Analog_AirbrakeStop);
+				}
+			}
+		
+		else if (ProfID == 2508)
+			{
+			if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1)	)
+					MapKeyIO(&Throttle,	SPDB, 	TEMPO(CHAIN(DOWN+DX27,D(EmerFlapRetract_AV8),UP+DX27), EXEC("DCS_AcftSel(1);"),	SwapTempo),	Analog_AirbrakeOn);
+			else	MapKeyIO(&Throttle,	SPDB, 	DX27,	Analog_AirbrakeOn);
+			MapKeyRIO(&Throttle,  SPDB, 	0,	Analog_AirbrakeStop);
+			AV8MapSPDF(GearState, ProfID);
+			}
+
+		else 
+			{
+			if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1))
+					MapKeyIO(&Throttle,	SPDB, 	TEMPO(0, EXEC("DCS_AcftSel(1);"),	SwapTempo),			Analog_AirbrakeOn);			
+			else	MapKey	(&Throttle,	SPDB, 															Analog_AirbrakeOn);
+			MapKey	(&Throttle,	SPDF, 		Analog_AirbrakeOff);
+			if (ProfID == 2586)	//added in 1.40
+				{
+				if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1))
+						MapKeyRIO(&Throttle,SPDB,	0,	Analog_AirbrakeActiveStop);
+				else	MapKeyR	(&Throttle,	SPDB, 		Analog_AirbrakeActiveStop);
+				MapKeyR	(&Throttle,	SPDF, 				Analog_AirbrakeActiveStop);
+				}
+			else
+				{
+				if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1))
+						MapKeyRIO(&Throttle,SPDB,	0,	Analog_AirbrakeStop);
+				else	MapKeyR	(&Throttle,	SPDB, 		Analog_AirbrakeStop);
+				MapKeyR	(&Throttle,	SPDF, 				Analog_AirbrakeStop);
+				}
+			}
+		printf("      Type %i (Analog-Momentary) Airbrake Set.\xa", type);
+		if (led > 0)
+			{
+			Lights_LLED1(1);
+			DeferCall(2000, &Lights_LLED1,0);
+			}
+		if (wav) PlayWav("t3am.wav");
+		}
+	DeferCall(2200, &AnalogBrakePoll,1);	//Added in 1.23 to enable analog brake polling
+	}
+
+else		//type 0 or 1: binary airbrake (separate on/off)
+	{
+	AnalogBrakePoll(0);						//added in 1.23 to disable analog brake polling
+	if (type == 1)			//type 1: binary-discrete (MiG-21)
+		{
+		if (swap > 0)
+			{
+			if (swap == 3)
+				{
+				if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1)	)
+						MapKeyIO(&Throttle,	SPDB, 	TEMPO(0, EXEC("DCS_AcftSel(1);"),	SwapTempo),					Binary_AirbrakeOn);
+				else	MapKeyIO(&Throttle,	SPDB, 	TEMPO(0, EXEC("FC3_Airbrake_Type_Set(-1);"),1000),				Binary_AirbrakeOn);
+				MapKeyIO(&Throttle,	SPDF, 	0,																		Binary_AirbrakeOff);
+				}
+			else if (swap == 1)		//MiG-21 but can be used for any binary toggle
+				{
+				if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1)	)
+						MapKeyIO(&Throttle,	SPDB, 	TEMPO(PULSE+DX27, EXEC("DCS_AcftSel(1);"),	SwapTempo),			Binary_AirbrakeOn);
+				else	MapKeyIO(&Throttle,	SPDB, 	TEMPO(PULSE+DX27, EXEC("Binary_Airbrake_Type_Set(-1);"),1000),	Binary_AirbrakeOn);		//DX27,DX28 added in 1.30 for parking brake on/off
+				MapKeyIO(&Throttle,	SPDF, 	PULSE+DX28,																Binary_AirbrakeOff);
+				}
+			else
+				{
+				if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1)	)
+						MapKeyIO(&Throttle,	SPDB, 	TEMPO(0, EXEC("DCS_AcftSel(1);"),	SwapTempo),					Binary_AirbrakeOn);
+				else	MapKeyIO(&Throttle,	SPDB, 	TEMPO(0, EXEC("DX_Airbrake_Type_Set(-1);"),1000),				Binary_AirbrakeOn);
+				MapKey	(&Throttle,	SPDF, 																			Binary_AirbrakeOff);
+				}
+			}
+
+		else
+			{
+			if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1)	)
+					MapKeyIO(&Throttle,	SPDB, 	TEMPO(0, EXEC("DCS_AcftSel(1);"),	SwapTempo),	Binary_AirbrakeOn);
+			else	MapKey	(&Throttle,	SPDB, 	Binary_AirbrakeOn);
+			MapKey	(&Throttle,	SPDF, 	Binary_AirbrakeOff);
+			}
+		
+		if (ProfID == 2505)	//F-5E
+			{
+			if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1)	)
+					MapKeyRIO(&Throttle,	SPDB,	0,	F5E_SpeedBrake_Off_DX);
+			else	MapKeyR (&Throttle,		SPDB, 		F5E_SpeedBrake_Off_DX);
+			MapKeyR	(&Throttle,	SPDF, 					F5E_SpeedBrake_Off_DX);
+			}
+		else if ((ProfID == 2537))	// & (GearState))	//added in 1.67 for when Viggen gear is down and brake must be held
+			{
+			//MapKeyR	(&Throttle,	SPDB, 		CHAIN(D(BrakeOffCycleTime), 	EXEC("flashLLED1(0,0);"))	);
+			if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1)	)
+					MapKeyRIO(&Throttle,SPDB,	0,	EXEC("if (GearState) DeferCall(BrakeOffCycleTime, &flashLLED1,0);")	);
+			else	MapKeyR	(&Throttle,	SPDB,		EXEC("if (GearState) DeferCall(BrakeOffCycleTime, &flashLLED1,0);")	);
+			MapKeyR	(&Throttle,	SPDF, 		0);
+			}
+			
+		else
+			{
+			if (Script_Debug) printf("   MapKeyR SPDB/F 0\xa");
+			MapKeyR (&Throttle,	SPDB, 		0);
+			MapKeyR	(&Throttle,	SPDF, 		0);
+			}
+		printf("      Type %i (Binary-Discrete) Airbrake Set.\xa", type);	
+		if (led)
+			{	
+			flashLLED1(1,250);
+			DeferCall(2000,&flashLLED1,0);
+			}
+		if (wav) PlayWav("t1bd.wav");
+		}
+	else
+		{
+		if (swap > 0)
+			{
+			if (swap == 3)			//FC3; separate from MiG-21 because of the T10 IO/RIO
+				{
+				if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1)	)
+						MapKeyIO(&Throttle, SPDB,		TEMPO(0, EXEC("DCS_AcftSel(1);"),	SwapTempo),					Binary_AirbrakeOn);		//State Toggle Shift+T9.  
+				else	MapKeyIO(&Throttle, SPDB,		TEMPO(PULSE+DX27, EXEC("FC3_Airbrake_Type_Set(-1);"),1000),		Binary_AirbrakeOn);		//State Toggle Shift+T9.  
+				MapKeyIO(&Throttle,	SPDF,		0,																		Binary_AirbrakeOn);		//Shift+T10 enables drag chute on T6 short w/o popping boards.
+				MapKeyRIO(&Throttle,SPDF,		0,																		Binary_AirbrakeOff);
+				}
+			else if (swap == 1)		//MiG-21 but can be used for any binary toggle
+				{
+				if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1)	)
+						MapKeyIO(&Throttle, SPDB,		TEMPO(PULSE+DX27, EXEC("DCS_AcftSel(1);"),	SwapTempo),			Binary_AirbrakeOn);		//State Toggle Shift+T9
+				else	MapKeyIO(&Throttle, SPDB,		TEMPO(PULSE+DX27, EXEC("Binary_Airbrake_Type_Set(-1);"),1000),	Binary_AirbrakeOn);		//State Toggle Shift+T9.  
+				MapKeyIO(&Throttle,	SPDF,		PULSE+DX28,																Binary_AirbrakeOn);		//DX27/28 added in 1.30 for parking brake
+				MapKeyRIO(&Throttle,SPDF,		0,																		Binary_AirbrakeOff);
+				}
+			else
+				{
+				if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1)	)
+						MapKeyIO(&Throttle, SPDB,		TEMPO(PULSE+DX27, EXEC("DCS_AcftSel(1);"),	SwapTempo),			Binary_AirbrakeOn);		//State Toggle Shift+T9.  
+				else	MapKeyIO(&Throttle, SPDB,		TEMPO(PULSE+DX27, EXEC("DX_Airbrake_Type_Set(-1);"),1000),		Binary_AirbrakeOn);		//State Toggle Shift+T9.  
+				MapKey	(&Throttle, SPDF,																				Binary_AirbrakeOn);		
+				MapKeyR	(&Throttle, SPDF,																				Binary_AirbrakeOff);
+				}
+			MapKeyRIO(&Throttle, SPDB,		0,																			Binary_AirbrakeOff);
+	
+			}
+		else
+			{
+			if (	((TrackIR > 1) & (VRBrakeProfileSwap > 0)) | (MFD_Count < 1)	)
+					MapKeyIO(&Throttle, SPDB,	TEMPO(PULSE+DX27, EXEC("DCS_AcftSel(1);"),	SwapTempo),	Binary_AirbrakeOn);		//State Toggle Shift+T9.  
+			else	MapKeyIO(&Throttle, SPDB,	PULSE+DX27,												Binary_AirbrakeOn); 
+			MapKeyRIO(&Throttle,SPDB,			0,														Binary_AirbrakeOff);
+			MapKey	(&Throttle, SPDF,			Binary_AirbrakeOn);		
+			MapKeyR	(&Throttle, SPDF,			Binary_AirbrakeOff);
+			}
+		printf("      Type %i (Binary-Momentary) Airbrake Set.\xa", type);
+		if (led > 0)
+			{	
+			flashLLED1(1,125);
+			DeferCall(2000,&flashLLED1,0);
+			}
+		if (wav) PlayWav("t0bm.wav");
+		}
+	}
+	
+printf("         Brake Out = %i\xa         Brake In  = %i\xa", BrakeOnCycleTime, BrakeOffCycleTime);
+}
+
+
+int DX_Airbrake_Type_Set(int type, int wav = 1, int index = 3)	//calls other functions in order with delay to force timing values prior to init
+//type is airbrake type, index for upper boundary of array (start at 0; allows for function expansion) and should always be last argument
+//index set to 2 to allow for all 3 selections.
+{
+if (Script_Debug) printf("DX_Airbrake_Type_Set(%i,%i,%i)\xa",type,wav,index);
+if ((type < 0) | (type > index)) type = (Airbrake_Type_Cur + 1)%(index+1);	//allows toggle/cycle
+if (Script_Debug) printf("DX Airbrake Select:\xa Current Airbrake Type: %i \xa Selected Airbrake Type: %1 \xa",Airbrake_Type_Cur,type);
+Airbrake_Type_Cur = type; 	//syncs airbrake type with current config
+if (Script_Debug) printf("Execute Airbrake_Map_Set(%i,1,%i,%i)\xa   Airbrake_Type_Cur = %i\xa",type,AirBrkFlash,Airbrake_Type_Cur,wav);
+Airbrake_Map_Set(type, 1, AirBrkFlash, wav);	//1 allows hotswap
+}
+
+int Binary_Airbrake_Type_Set(int type, int wav = 1, int index = 1)	//calls other functions in order with delay to force timing values prior to init
+//type is airbrake type, index for upper boundary of array (start at 0; allows for function expansion) and should always be last argument
+//index set to 1 to allow for binary types 0 and 1.
+{
+if (Script_Debug) printf("Binary_Airbrake_Type_Set(%i,%i,%i)\xa",type,wav,index);
+if ((type < 0) | (type > index)) type = (Airbrake_Type_Cur + 1)%(index+1);	//allows toggle/cycle
+if (Script_Debug) printf("Binary Airbrake Select:\xa Current Airbrake Type: %i \xa Selected Airbrake Type: %1 \xa",Airbrake_Type_Cur,type);
+Airbrake_Type_Cur = type; 	//syncs airbrake type with current config
+if (Script_Debug) printf("Execute Airbrake_Map_Set(%i,1,%i,i)\xa   Airbrake_Type_Cur = %i\xa",type,AirBrkFlash,Airbrake_Type_Cur,wav);
+Airbrake_Map_Set(type, 1, AirBrkFlash, wav);	//1 allows hotswap
+
+}
+
+
+//*******************************************
+//		Nicu's Analog Airbrake Routine
+//*******************************************
+
+int AirBrakeProc(int rex = 0)	//sys added in 2.61 replacing dummy to allow other counts (0 brakes, 1 flaps 2 gear 3 bomb bay)
+{
+int posit;
+int switch;
+int cycleon;
+int cycleoff;
+int led;
+
+
+
+//poss variable for LED state later
+
+if (rex == 8)
+	{
+	posit		=	BombBayPos;
+	switch		=	BombBaySwitch;
+	cycleon		=	BombBayCycleTimeOpen;
+	cycleoff	=	BombBayCycleTimeClose;	
+	}
+else if (rex == 2)
+	{
+	posit		=	GearPos;
+	switch		=	GearSwitch;
+	cycleon		=	GearCycleTimeDn;
+	cycleoff	=	GearCycleTimeUp;	
+	}
+else if (rex == 6)
+	{
+	posit		=	FlapsPos;
+	switch		=	FlapsSwitch;
+	cycleon		=	FlapsCycleTimeDn;
+	cycleoff	=	FlapsCycleTimeUp;	
+	}
+else
+	{
+	posit		=	AirBrakePos;
+	switch		=	AirBrakeSwitch;
+	cycleon		=	BrakeOnCycleTime;
+	cycleoff	=	BrakeOffCycleTime;	
+	}
+//if (Script_Debug) printf("AirBrakeProc(%i)\xa posit = %i\xa switch = %i\xa cycleon = %i\xa cycleoff = %i\xa",rex,posit,switch,cycleon,cycleoff);
+//	100%*1000(ms) / cycle time (ms)} * poll (ms)/1000(ms) = % per poll time, AirBrakeOn determines operand (-1 for retract)
+//	1000ms on front end numerator/back end denominator keeps value as integer
+	if		(switch > 0)	posit = posit + 100000/cycleon  * AirBrakePoll/1000;
+	else if (switch < 0) 	posit = posit - 100000/cycleoff * AirBrakePoll/1000;
+	
+	if(posit >= 100) 
+	{
+		posit = 100;
+		if (rex > 0) led = 0;
+		else AirbrakeLEDState = 1;
+	}
+	else if(posit <= 0) 
+	{
+		posit = 0;
+		if (rex > 0) led = 0;
+		else AirbrakeLEDState = 0;
+	}
+	else if (rex > 0) led = 1;	//solid
+	else AirbrakeLEDState = !AirbrakeLEDState;	//forces flash, use global variable because of flash
+	
+	if (rex > 0)	
+		{
+		if (rex == 8)		Lights_WHT1(led);	//bomb bay
+		else if (rex == 2)	
+			{
+			if (WarthogThrottle > 0)
+							Lights_WHT2(led);	//gear
+			else			Lights_LLED2(led);	//Cougar
+			}
+		else 				Lights_WHT3(led);	//flaps
+		//if ((posit > 0) & (posit < 100))	Lights_WHT1(AirbrakeLEDState);	//added in 2.61 to force LED to WHT and only flash in transition
+		//else	Lights_WHT1(0);
+		}
+	else		Lights_LLED1(AirbrakeLEDState);	//airbrake
+//if (Script_Debug) printf(" led = %i\xa posit (updated) = %i\xa",led,posit);
+
+if (rex == 8)
+	{
+	BombBayPos				=	posit;
+//	if (Script_Debug) printf(" BombBayPos = %i\xa",BombBayPos);
+	}
+else if (rex == 2)
+	{
+	GearPos					=	posit;
+//	if (Script_Debug) printf(" GearPos = %i\xa",GearPos);
+	}
+else if (rex == 6)
+	{
+	FlapsPos				=	posit;
+//	if (Script_Debug) printf(" FlapsPos = %i\xa",FlapsPos);
+	}
+else
+	{
+	AirBrakePos				=	posit;
+//	if (Script_Debug) printf(" AirBrakePos = %i\xa",AirBrakePos);
+	}
+
+
+}
+
+//int AirBrakeProc(int dummy=0)	//original in case something dorked up
+//{
+//	100%*1000(ms) / cycle time (ms)} * poll (ms)/1000(ms) = % per poll time, AirBrakeOn determines operand (-1 for retract)
+//	1000ms on front end numerator/back end denominator keeps value as integer
+
+//	if		(AirBrakeSwitch > 0)	AirBrakePos = AirBrakePos + 100000/BrakeOnCycleTime  * AirBrakePoll/1000;
+//	else if (AirBrakeSwitch < 0) 	AirBrakePos = AirBrakePos - 100000/BrakeOffCycleTime * AirBrakePoll/1000;
+	
+//	if(AirBrakePos >= 100) 
+//	{
+//		AirBrakePos = 100;
+//		AirbrakeLEDState = 1;
+//	}
+//	else if(AirBrakePos <= 0) 
+//	{
+//		AirBrakePos = 0;
+//		AirbrakeLEDState = 0;
+//	}
+//	else AirbrakeLEDState = !AirbrakeLEDState;
+	
+//	if (ProfID == 3606)	
+//		{
+//		if ((AirBrakePos > 0) & (AirBrakePos < 100))	Lights_WHT1(AirbrakeLEDState);	//added in 2.61 to force LED to WHT and only flash in transition
+//		else	Lights_WHT1(0);
+//		}
+//	else		Lights_LLED1(AirbrakeLEDState);	
+//}
+
+
+int AnalogBrakePoll(int active, int rex = 0)	//activates or deactivates analog polling (function to allow DeferCall in initialization); rex added in 2.61 to allow other counts (0 brakes, 2 gear 6 flaps 8 bomb bay)
+{
+int pollstatus;
+if 		(rex == 8) pollstatus = BombBayPollStatus;
+else if	(rex == 6) pollstatus = FlapsPollStatus;
+else if (rex == 2) pollstatus = GearPollStatus;
+else			   pollstatus = AirBrakePollStatus;
+
+if (Script_Debug) printf("      AirBrakeProc(%i,%i) AutoRepeat ",active,rex);
+if (active)
+	{
+	if (!pollstatus) AutoRepeat(rex, AirBrakePoll, &AirBrakeProc, rex);	//if command prevents doubling up on autorepeat
+	pollstatus = 1;
+	if (Script_Debug) printf("Enabled.\xa");
+	}
+else 
+	{
+	StopAutoRepeat(rex);
+	pollstatus = 0;
+	if	(rex == 8)		BombBayPos	=	0;
+	else if (rex == 6)	FlapsPos	=	0;
+	else if (rex == 2)	GearPos		=	GearDn_Ind_Default*100;
+	else				AirBrakePos	=	0;
+	if (Script_Debug) printf("Disabled.\xa");
+	}
+	
+if		(rex == 8)	BombBayPollStatus = pollstatus;
+else if (rex == 6)	FlapsPollStatus = pollstatus;
+else if (rex == 2)	GearPollStatus = pollstatus;
+else				AirBrakePollStatus = pollstatus;
+}
+//following useful for DeferCall
+int AnalogFlapsPoll(int active)
+{
+AnalogBrakePoll(active,6);
+}
+int AnalogGearPoll(int active)
+{
+AnalogBrakePoll(active,2);
+}
+int AnalogBombBayPoll(int active)
+{
+AnalogBrakePoll(active,8);
+}
+
+
+//*****************************************************************************************
+//S3 and Ejection Related Routines.  3 way check for S3+S4+T6; only T6 is TEMPO'd to 500ms.
+//*****************************************************************************************
+
+int S3_NWS(int gear, int prof = 0)	//added in 1.28 for F-86, and applied to FC3 F-15, diffbrakes added in 1.32, prof added in 1.33 (bug fix for FC3)
+{
+//if ((prof == 2505) & (!gear) & (AV8B_Custom_LUA > 0)) ActKey(DX19);
+if (WarthogStick > 0)
+	{
+	if (gear)
+		{
+		MapKey	(&Joystick,	S3,	CHAIN(DX30, D(ModDelay), DX19,		EXEC("S3S4Shifted(ProfID,RudderPedals,GearState,Helicopter);"))	);		//DX19 for NWS doubles with DFD, but shifted.  If used with DX26 DFD, make sure IO or DX29. 
+		if	(prof == 2505) MapKeyR (&Joystick,	S3,	EXEC("F5E_ClearComms(GearState,NWS_ClearComms_F5E,LMFD_Pwr_State,GraceFlag,ClearComms_Delay_F5E);"));
+		else	MapKeyR	(&Joystick,	S3,	0);	//GearState forced to 1 to prevent DX4.  
+
+		}
+	else
+		{
+		MapKey	(&Joystick,	S3, CHAIN(DX30, TEMPO(DX3,	EXEC("S3S4Shifted(ProfID,RudderPedals,GearState,Helicopter);"), ModTempo))	);		//short back to DX3 with 1.17, long(er) for modifier and eject check, moved here in 0.53, removed S4 and changed argument to "RudderPedals"
+		MapKeyR	(&Joystick,	S3, 						EXEC("S3Release(ProfID,RudderPedals,GearState,RevANTRudder,Helicopter);"));		//added in 0.53 to release "RudderPedals" argument in S3Shifted
+		}
+	}
+else
+	{
+	if (gear)
+		{
+		MapKey	(&HCougar,	S3,	CHAIN(DX30, D(ModDelay), DX19,		EXEC("S3S4Shifted(ProfID,RudderPedals,GearState,Helicopter);"))	);		//DX19 for NWS doubles with DFD, but shifted.  If used with DX26 DFD, make sure IO or DX29. 
+		if	(prof == 2505) MapKeyR (&HCougar,	S3,	EXEC("F5E_ClearComms(GearState,NWS_ClearComms_F5E,LMFD_Pwr_State,GraceFlag,ClearComms_Delay_F5E);"));
+		else	MapKeyR	(&HCougar,	S3,	0);	//GearState forced to 1 to prevent DX4.  
+		}
+	else
+		{
+		MapKey	(&HCougar,	S3, CHAIN(DX30, TEMPO(DX3,	EXEC("S3S4Shifted(ProfID,RudderPedals,GearState,Helicopter);"), ModTempo))	);		//short back to DX3 with 1.17, long(er) for modifier and eject check, moved here in 0.53, removed S4 and changed argument to "RudderPedals"
+		MapKeyR	(&HCougar,	S3, 						EXEC("S3Release(ProfID,RudderPedals,GearState,RevANTRudder,Helicopter);"));		//added in 0.53 to release "RudderPedals" argument in S3Shifted
+		}
+	}
+}
+
+
+int S3S4Shifted(int prof = 0,int rudder = 0, int gear = 0, int helo = 0, int dummy = 0)		//Checks for TrackIR Center as well as T6 for ejection; added helo in 0.68 and custlua in 1.19, forcebrake=0 removed in 1.52 (no known use); custlua removed (changed to dummy) in 1.57
+{
+if (Script_Debug) printf(" ProfID = %i\xa prof = %i\xa",ProfID,prof);	//for test purposes
+	if (	((Joystick[S3]) | (HCougar[S3]))	& 	(rudder == 2)	&	((gear > 0) | (helo > 0)) & (!S3holdNWS)	)		//!S3holdNWS added in 2.05 to prevent FOV while sustaining NWS
+		{
+		MapAxis(&HCougar, RDR_X, DX_XROT_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
+		DeferCall(LED_Delay,&Lights_LLED1,0);
+		}
+//	if (	((Joystick[S3]) | (HCougar[S3]))	&	!((Joystick[S4]) | (HCougar[S4])) & (prof == 2508) & (!GearState)	)	//obsolete
+//		{
+//		ActKey(KEYON+PULSE+AV8_TDC_NoAct);	//AV-8 toggle NoAction
+//		AV8_NoAction = 1;
+//		}
+
+//	else
+	if (	((Joystick[S3]) | (HCougar[S3])) & (	(prof == 2027) | (prof == 2033) | (prof == 2029)	) & (gear == 0) )					//FC3 and gear is up for setting relative Microstick axes (Ru fighter HOJ parameters).  Changed to RuF only and removed CustLua in 1.57
+		{
+		if (Script_Debug) printf("Set Microstick Relative\xa");	//for test purposes
+		if (!WarthogThrottle)
+			{
+			MapAxis(&HCougar, IN_POSITION_AXIS_SLIDER2, DX_THROTTLE_AXIS, AXIS_NORMAL, MAP_RELATIVE);		//Microstick X; line active due to bug in tmh
+			MapAxis(&HCougar, RDR_Y, DX_YROT_AXIS, AXIS_NORMAL, MAP_RELATIVE);								//Microstick Y
+			}
+		}
+	else if ((Joystick[S3]) & (WarthogThrottle == 1) & (prof == 1050))	BS2_Map_Thr(Eng_Sel_Sw_Current);	//forces remap on button press
+
+	if  ((Joystick[S4]) | (HCougar[S4]))
+		{
+		if ((HCougar[T6]) | (Throttle[LDGH])) Eject_Init(prof);
+		else ActKey(KEYON+PULSE+TIR_Center);
+		}
+	//else if ((prof == 2505) & (NWS_ClearComms_F5E > 0))	DeferCall(KBDelay,&ActKey,KEYON+PULSE+CommMenu);	//CommState_On(CommStateVAC);	//only if S4 not pressed
+}
+
+int S3Release(int prof = 0,int rudder = 0, int gear = 0, int rev = 0, int helo = 0)			//added in 0.53 to release MapAxis in S3S4Shifted, added helo in 0.68, int custlua = 0 and int sighttrack = 1 removed in 1.52
+{
+if (Script_Debug) printf(" ProfID = %i\xa prof = %i\xa",ProfID,prof);	//for test purposes
+if (	(rudder == 2) & ((gear > 0) | (helo > 0)) & (WarthogThrottle == 0)	)					
+	{
+	if (rev > 0) 	MapAxis(&HCougar, RDR_X, DX_ZROT_AXIS, AXIS_REVERSED, MAP_ABSOLUTE);
+	else 			MapAxis(&HCougar, RDR_X, DX_ZROT_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
+	DeferCall(LED_Delay,&Lights_LLED1,1);
+	}
+else if (	(prof == 2027) | (prof == 2033) | (prof == 2029) 	)					//FC3 forcing microstick to absolute (from relative if S3 held); no gear criteria since gear can be cycled while S3 is pressed; else if because no need to remap if gear or helo.  Changed to RuF only in 1.57
+	{
+	if (WarthogThrottle == 0)
+		{
+		if (Script_Debug) printf("Set Microstick Absolute\xa");	//for test purposes
+		MapAxis(&HCougar, IN_POSITION_AXIS_SLIDER2, DX_THROTTLE_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);		//Microstick X; line active due to bug in tmh
+		MapAxis(&HCougar, RDR_Y, DX_YROT_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);								//Microstick Y
+		}
+	}
+//2505 (F-5E) moved to S3_NWS()
+if ((WarthogThrottle == 1) & (prof == 1050) & (BS2_Throttlemove)) 
+	{
+	
+	if 	(BS2_Throttlemove) 
+		{
+		ActKey(DX31);	//resets DX called in throttle move
+		ActKey(DX32);
+		}
+	BS2_Throttlemove = 0;	//resets value regardless
+//	DeferCall(ModDelay,&BS2_Map_Thr,Eng_Sel_Sw_Current);	//defercall to allow remap after DX modifiers up.
+	}
+//else if ((prof == 2508) & (AV8_NoAction))	//obsolete
+//	{
+//	ActKey(KEYON+PULSE+AV8_TDC_NoAct);
+//	AV8_NoAction = 0;
+//	}
+}
+
+int	GearStateToggle(int prof=0, int init=1)		//Changed dummy argument to prof to allow for FC3 check in 1.36, sdded init in 1.73 for ka-50 switch state
+{
+int cycle = 1;
+if ((AirBrkFlash < 0) | (MFD_Count < 1) | (TrackIR > 1))	cycle = -1;
+
+if ((prof == 2025) | (prof == 2027) | (prof == 2033) | (prof == 2029) | (prof == 2509) | (prof == 2515))	GearStateInd(-1,prof,FixedGear,0,0,cycle,FlapState);		//Added FC3 flap check in 1.36; argument changed to prof
+else if (prof == 1050) GearStateInd(-1,prof,0,1,0,cycle,0,init);		//FixedGear, helo, time, cycle, flaps, init
+else			GearStateInd(-1,prof,FixedGear,Helicopter,0,cycle,0,0);							//changed to single line function in 1.26 to allow for defercall
+if (Script_Debug) printf("GearStateToggle to %i\xa Prof = %i\xa",(GearState + 1)%2,prof);
+}
+
+int EjectCheckT6(int prof=0)		//shift obsolete and removed in 0.53; GearState toggle added in 0.41.  Joystick (WH) added in 2.43
+{
+	if 		(	((HCougar[S3]) & (HCougar[S4]))	|	((Joystick[S3]) & (Joystick[S4]))	) Eject_Init(prof);
+	else if	(	(HCougar[S3]) 	|	(Joystick[S3])	)
+		{
+		if (prof == 1008) Mi8_S3T6(RangeKnob);	//Mi8_Searchlight_Sw_Dn(CurrentStation);
+		else if	((!GearState) & 	(TriggerZoom_state))	
+			{
+			TriggerZoom_toggle(0,1,0);
+			DeferCall(250,&GearStateToggle,prof);
+			}
+		else
+			{
+			GearStateToggle(prof);
+			}		
+		}
+	else if (prof == 2508) ActKey(KEYON+DX24);	//activates Airstart
+//	else if (prof == 2518) ActKey(KEYON+PULSE+F18_MasterCaution);	//removed in 2.26
+//	else if	(	(prof == 3551) & (!GearState)	)	ActKey(KEYON+DX24);	//activates WEP on T6 long
+}
+
+
+int EjectCheckLDGH(int prof=0)		//shift obsolete and removed in 0.53; GearState toggle added in 0.41,	HCougar added in 2.43
+{
+	if 		(	((HCougar[S3]) & (HCougar[S4]))	|	((Joystick[S3]) & (Joystick[S4]))	) Eject_Init(prof);
+	else if	(	(HCougar[S3]) 	|	(Joystick[S3])	)	
+		{
+		if	((!GearState) & 	(TriggerZoom_state))	
+			{
+			TriggerZoom_toggle(0,1,0);
+			DeferCall(250,&GearStateToggle,prof);
+			}
+		else
+			{
+			GearStateToggle(prof);
+			}		
+		}
+//	else if	(	(prof == 3551) & (!GearState)	)	ActKey(KEYON+DX24);	//activates WEP on T6 long
+}
+
+
+
+int Eject_Init(int prof,int key = 1)						//prof = ProfID for resetting variables and default staes
+{
+if ((Script_Debug > 0) | (key)) printf("Ejecting...");//for test purposes
+	if (Helicopter) CPTM_Trim(0);				//Added in 1.34.  Resets trim for Helos
+	else			TrimXYResetCheck(1);		//Added in 1.34.  Resets XY axis trim to 0 for fixed wing.
+	ActKey(DX4);								//clears DX4 for ground start
+	ActKey(DX24);								//clears T6 for warbirds
+	ActKey(DX29);								//clears brakes and modifiers for air start
+	ActKey(DX30);
+	ActKey(DX31);
+	ActKey(DX32);
+
+	if (key)
+		{
+//		if ((prof > 3999) & (prof < 5000)) ActKey(KEYON+PULSE+IL2GB_Eject);	//IL-2 GB with key for single LCTL+E
+//		else	
+		ActKey(KEYON+CHAIN(DOWN+L_CTL,D(ModDelay),PULSE+USB_E,D(),PULSE+USB_E,D(),PULSE+USB_E,D(),UP+L_CTL));
+		}
+
+	if (Script_Debug) printf("Riding the Rocket!\xa");				//for test purposes
+	else printf("\xa");
+	printf("Resetting GearState and profile arrays...\xa");	//added in 0.56 to reset profile states following ejection.
+//		if ((prof > 3999) & (prof < 5000)) GearStateInd(GearDn_Ind_Default_IL2, ProfID, FixedGear, Helicopter);	//added in 2.40 for IL-2
+//		else 
+		if 			(prof != 2537) GearStateInd(GearDn_Ind_Default, 	ProfID, FixedGear, Helicopter);	//added in 1.69 to put GearStateInd into Viggen routine (check for Trigger UNSAFE)
+		
+//		if (prof == 1008) StationCheck(prof,2,0,1,0);				//added in 2.30 for Mi-8 (left seat primary), removed in 2.50c (already factored in assignment)
+//		else	
+		StationCheck(prof,1,0,1,0);						//added in 0.60 to reset to default pilot view
+		
+		AirBrakePos = 0;									//added in 1.23 to reset analog airbrake (as required)
+		GearPos = GearDn_Ind_Default*100;					//added in 2.61
+		FlapsPos = 0;
+		BombBayPos = 0;
+		if (prof == 1542) SA342_Switch_Posit_Init();
+		else if (prof == 1008)
+				{
+				Mi8_Autopilot_Mapping(0, 0, Mi8_AP_MFD_Context, 0);	//resets autopilot RMFD mapping
+				Mi8_Autopilot_Mapping(1, 0, Mi8_AP_MFD_Context, 0);
+				Mi8_Switch_Posit_Init();
+				}
+		else if (prof == 2586) F86_Sight_Funct_Cur = 	1;
+		else if (prof == 2505) F5E_Switch_Init(GearDn_Ind_Default);
+		else if (prof == 2520) M2k_Array_Init(GearDn_Ind_Default);
+		else if (prof == 2605) A4EC_Array_Init(GearDn_Ind_Default);
+		else if ((prof == 2537)) AJS37_Array_Init(GearDn_Ind_Default);
+		else if (prof == 2514) F14_Array_Init(GearDn_Ind_Default);
+		else if (prof == 3516) I16_Switch_Init(GearDn_Ind_Default);
+		else if (prof == 1501)
+				{
+				ICS_Current = UH1_ICS_Start;					//resets Huey ICS to default
+				UH1_XM60_Cycle(0,UH1_XM60_Track, 0, 0);			//resets UH1_XM60_Current to 0 (stowed) and remaps keys without toggling key itself.
+				UH1_SetT1T6(RangeKnob,0, TrackIR);				//resets throttle to range knob setting (XM60 forced off)
+				//Added in 1.40
+				UH1_GunSel_Cur = 1;
+				if (GearDn_Ind_Default > 0) UH1_MasterArm_Cur = 0;
+				else UH1_MasterArm_Cur = 2;
+				}
+		else if (	(prof == 3551)	|	(prof == 3090)	| (prof == 3009)	|	(prof == 3509)	|	(prof == 3547)	|	(prof == 3606)	)				//Fw190 added in 1.28, Bf109 in 1.40, SpitLFIX in 1.66, mossie in 2.61
+				{
+				Rdo_Mode_Cur = 2;
+				if ((prof == 3090) | (prof == 3009)) Fw190_Settings_Init(GearDn_Ind_Default);
+				else //if (prof == 3551)	//also works for spit lf ixc and p-47
+					{
+					Rdo_Channel_Cur = 0;
+					if (prof == 3551)
+						{
+						IgnLRState_Reset();
+						P51D_HeatMgmt_Map(HeatMgmt_Default_P51D);
+						}
+					}
+				
+				}
+		else if ((prof == 2508) | (prof == 2510) | (prof == 2518) | (prof == 2516) | (prof == 2615))	//F-18 added in 2.20, F16 in 2.41, F-15E in 2.68
+				{
+				if (	((prof == 2508)) & (MFD_Default_Setting == 0))
+					{
+					LMFD_Pwr_State = 1;
+					RMFD_Pwr_State = 1;
+					if (Adjust_Backlighting > 0)
+						{
+						MFD_Backlight(&LMFD,X(MFD_Lt,1));
+						MFD_Backlight(&RMFD,X(MFD_Lt,1));
+						}
+					}
+				else
+					{
+					LMFD_Pwr_State = MFD_Default_Setting;
+					RMFD_Pwr_State = MFD_Default_Setting;
+					if (Adjust_Backlighting > 0)
+						{
+						MFD_Backlight(&LMFD,X(MFD_Lt,MFD_Default_Setting));
+						MFD_Backlight(&RMFD,X(MFD_Lt,MFD_Default_Setting));
+						}
+					}
+				printf("MFD Defaults (%i,%i):\xa",LMFD_Pwr_State,RMFD_Pwr_State);
+				if (prof == 2508) AV8_Array_Init(GearDn_Ind_Default);
+				else if (prof == 2516) F16C_Array_Init(GearDn_Ind_Default);
+				else if (prof == 2518) FA18C_Array_Init(GearDn_Ind_Default);
+				else if (prof == 2615) F15E_Array_Init(GearDn_Ind_Default);
+				else	//A-10C
+					{
+					if (GearDn_Ind_Default == 0) CMSP_Mode_Cur = 3;		//added in 0.52: Defaults CMSP Mode to Semi if gear defaults to up (air start)
+					else CMSP_Mode_Cur = 0;
+					}
+				}
+		else if	((prof == 2025) | (prof == 2011) | (prof == 2027) | (prof == 2033) | (prof == 2029) | (prof == 2509) | (prof == 2515))
+				{
+				FC3_Autopilot_Mode	=	'6'	;			//Defaults to Route mode if T6 used.
+				FlapState		=	0;					//Added in 1.36; defaults flaps to up
+				FC3_Nav_Lights_Cur = 0;					//added in 1.66
+				FC3_AntiColl_Lights_Cur = 0;			//added in 1.66
+				FC3_Refuel_Lights_Cur = 0;				//added in 1.72
+				Su33_Boom_Cur = 0;						//added in 2.28
+				Su33_ASC_Refuel_Cur = 0;				//added in 2.28
+				if ((WarthogThrottle > 0) & (AirBrkFlash > -1))	//added in 2.28
+					{
+					Lights_WHT5(0);
+					DeferCall(LED_Delay,&Lights_WHT4,0); 
+					}
+				if (DragChuteDeployed > 0)
+					{
+					DragChuteDeployed = 0;
+					flashRLED2(0);
+					}
+				}
+		else if (prof == 1050)
+				{
+				CommState_Off(1,prof,1,0,1);
+				UV26_Side_Current	=	BS2_UV26_Side_Start;
+				Eng_Sel_Sw_Current	=	BS2_Eng_Sel_Sw_Start;
+				RotorBrake_Toggle(BS2_RotorBrake_Default, 0, 100);	//0 cycles state without cycling key, 100ms delay to deconflict with GearState
+				BS2_Fuel_Sw_Lt_Cur 		=	(GearDn_Ind_Default+1)%2;	//added in 1.40 for WH ENG switches
+				BS2_Fuel_Sw_Rt_Cur		=	(GearDn_Ind_Default+1)%2;
+				BS2_Fuel_Sw_APU_Cur		=	0;
+				BS2_Fuel_Sw_Lt_Cover_Cur=	0;
+				BS2_Fuel_Sw_Rt_Cover_Cur=	0;
+				BS2_Fuel_Sw_APU_Cover_Cur=	0;
+				
+				if (WarthogThrottle != 1)
+					{
+					if		(HCougar[T7])	DF_Posit = 7;	//Dogfight switch check added in 1.27 (useful with ManRng mapping of comm switch)
+					else if (HCougar[T8])	DF_Posit = 8;
+					else					DF_Posit = 0;
+					}
+				else	DF_Posit = 0;
+				
+				if (WarthogThrottle > 0)
+					{
+					if 		(Throttle[PSF])	BS2_Searchlight_Cur = 2;		//one away from 0
+					else if (Throttle[PSM])	BS2_Searchlight_Cur = 1;		//2 away from 0
+					else BS2_Searchlight_Cur = 0;	
+				
+					if 		(Throttle[APPAT])	BS2_Salvo_Cur = 2;			//one away from 0
+					else if (Throttle[APAH])	BS2_Salvo_Cur = 1;			//2 away from 0
+					else BS2_Salvo_Cur = 0;	
+					}
+				
+				}
+		else if (prof == 2021)		//MiG-21
+				{
+				MiG21_Switch_Posit_Init(GearDn_Ind_Default);
+				}
+		else if (prof == 2015)		//MiG-15
+				{
+				MiG15_Switch_Posit_Init(GearDn_Ind_Default);
+				FlapState = 2;
+				}
+		else if ((prof == 2501) | (prof == 2601)) C101_Array_Init(GearDn_Ind_Default,prof);
+//		else if ((prof == 2512) & (WarthogThrottle > 0) & (GearDn_Ind_Default > 0))		//Hawk to kill switches
+				{
+				ActKey(DX11);
+				ActKey(DX12);
+				//ActKey(DX13);
+				ActKey(KEYON+DX14);	//Starter off
+				ActKey(DX15);
+				ActKey(DX16);
+				ActKey(DX17);
+				ActKey(DX18);
+				}
+	DeferCall(LongTempo,&Pause_TrackIR,0);					//defercall ensures it's after everything else
+	printf("Done.\xa");		
+}
+//End Ejection Routines
+
+
+//Engine Start/Stop Functions
+
+//Single Engine (added in 1.25)
+int EngineStartSingle(int delay, int light, int gear = 1)		//delay is only a Boolean operand for single engine.
+{
+	if (Script_Debug) printf("SU: flightidle..");		//for test purposes
+	FlightIdle = 1;						//indicates that throttle is at flight idle.  prerequisite for Engine Shutdown routine (later).
+	if ((delay > 0)	&	(FuelCutOff > 0)	&	(HCougar[S3])	&	(gear > 0)	)	//Will be 1 if coming from behind idle detent.  prerequisite for engine start (can't "come down").  Shifted state bypasses.
+		{
+		if(ProfID == 3090)
+			{
+			ActKey(KEYON+Fw190_Throttle_Idle);
+			//if(light > 0) Lights_RLED1(1);
+			DeferCall(300, &ActKey, Fw190_Throttle_Idle);
+			//if(light > 0) DeferCall(light, &Lights_RLED1,0);
+			}
+		else if (ProfID == 2021)
+			{
+			if (IdleDetentLow > 0) ActKey(KEYON+PULSE+MiG21_Throttle_StartStop_Toggle_DX);
+			}
+		else if ((ProfID == 2039)|(ProfID == 2040))	//RALT+HOME
+			{
+			ActKey(KEYON+Engine_Left_Start);
+			DeferCall(300, &ActKey, Engine_Left_Start);
+			}
+//		else if ((ProfID > 3999) & (ProfID < 5000))	//IL-2 GB
+//			ActKey(KEYON+PULSE+USB_E);	//IL2GB_EngineStart);
+		else if (	(ProfID == 2516)	)			//added in 2.41 for F-16, but can be used for any single engine that uses RSHIFT+Home/End
+			{
+			ActKey(KEYON+Engine_Single_RSStart);
+			DeferCall(300, &ActKey, Engine_Single_RSStart);
+			}
+		else
+			{
+			ActKey(KEYON+Engine_Single_Start);
+			DeferCall(300, &ActKey, Engine_Single_Start);
+			}
+		if (light > 0)
+			{
+			if (ProfID == 2516)	Engine_Start_Ind(2,light,1,2,MFD_StDelay_F16C);	//RLED2
+			else				Engine_Start_Ind(1,light,1);					//RLED1
+			}
+			
+			//Lights_RLED1(1);
+			//DeferCall(light, &Lights_RLED1,0);
+			//if (	(ProfID == 2516)	)	//added in 2.41 for F-16, but can be used for any single engine with MFDs tied to engine start
+			//	{
+			//	LMFD_Pwr_State = 2;
+			//	RMFD_Pwr_State = 2;
+			//	if (Adjust_Backlighting > 0)
+			//		{
+			//		DeferCall(light+1000,			&LMFD_Backlight,X(MFD_Lt,2));
+			//		DeferCall(light+1000+LED_Delay,	&RMFD_Backlight,X(MFD_Lt,2));
+			//		}
+			//	}
+			//}
+	}
+		FuelCutOff = 0;						//Regardless of engine start status, throttle is above Fuel Cut Off (i.e. not below idle detent).
+	if (Script_Debug) printf("not FCO\xa");				//for test purposes
+}
+
+
+int EngineShutDownSingle(int delay, int light, int gear = 1)		//delay is only a Boolean operand for single engine.
+{
+	if (Script_Debug) printf("SD: FCO...");				//for test purposes
+//	FuelCutOff = 1;						//indicates that throttle is below the idle detent (at Fuel Cut Off).  Moved to ThrottleEngineShutdown() in 1.33
+	if  ((delay > 0)	&	(FlightIdle > 0) &	(HCougar[S3])	&	(gear > 0)	)	//checks for shifted state and that the throttle is "coming down" from flight idle, to prevent inadvertent triggering from beneath idle
+		{
+		if(ProfID == 3090)
+			{
+			ActKey(KEYON+Fw190_Throttle_Stop);
+			DeferCall(300, &ActKey, Fw190_Throttle_Stop);
+			}
+		else if (ProfID == 2021)
+			{
+			if (IdleDetentLow > 0) ActKey(KEYON+PULSE+MiG21_Throttle_StartStop_Toggle_DX);
+			}
+		else if ((ProfID == 2039)|(ProfID == 2040))	//RAlt+END
+			{
+			ActKey(KEYON+Engine_Left_Stop);
+			DeferCall(300, &ActKey, Engine_Left_Stop);
+			}
+//		else if ((ProfID > 3999) & (ProfID < 5000))	//IL-2 GB
+//			ActKey(KEYON+PULSE+USB_E);	//IL2GB_EngineStart);	
+		else if (	(ProfID == 2516)	)			//added in 2.41 for F-16, but can be used for any single engine that uses RSHIFT+Home/End
+			{
+			ActKey(KEYON+Engine_Single_RSStop);
+			DeferCall(300, &ActKey, Engine_Single_RSStop);
+			}
+		else
+			{
+			ActKey(KEYON+Engine_Single_Stop);
+			DeferCall(300, &ActKey, Engine_Single_Stop);
+			}
+		if (light > 0)
+			{
+			if (ProfID == 2516)	Engine_Shutdown_Ind(2,light,1,0,MFD_StDelay_F16C);	//RLED2
+			else				Engine_Shutdown_Ind(1,light,1);						//RLED1
+			}			
+			//{
+			//flashRLED1(500);
+			//DeferCall(light,&flashRLED1,0);
+			//DeferCall(light+LED_Delay, &Lights_RLED1,0);
+			//if (	(ProfID == 2516)	)	//added in 2.41 for F-16, but can be used for any single engine with MFDs tied to engine start
+			//	{
+			//	LMFD_Pwr_State = 0;
+			//	RMFD_Pwr_State = 0;
+			//	if (Adjust_Backlighting > 0)
+			//		{
+			//		DeferCall(light+1000+LED_Delay,		&LMFD_Backlight,X(MFD_Lt,0));
+			//		DeferCall(light+1000+2*LED_Delay,	&RMFD_Backlight,X(MFD_Lt,0));
+			//		}
+			//	}
+			//}
+		}
+	FlightIdle = 0;						//regardless of whether engine was shut down, throttle is below flight idle, and is turned off.  Prevents inadvertent re-shutdown.
+	if (Script_Debug) printf("not flightidle\xa");		//for test purposes
+}
+
+
+//Twin Engine
+int EngineStartLR(int delay, int light, int gear = 1)			//ms is time (in ms) between starting of left and right engines.
+{
+	if (Script_Debug) printf("SU: flightidle..");		//for test purposes
+	FlightIdle = 1;						//indicates that throttle is at flight idle.  prerequisite for Engine Shutdown routine (later).
+	if ((delay > 0)	&	(FuelCutOff > 0)	&	(HCougar[S3])	&	(gear > 0)	)	//Will be 1 if coming from behind idle detent.  prerequisite for engine start (can't "come down").  Shifted state bypasses.
+		{
+		ActKey(KEYON+Engine_Left_Start);
+		if (light > 0) Lights_RLED1(1);		//doesnt use Engine_Start_Ind() due to DeferCalls
+		DeferCall(300, &ActKey, Engine_Left_Start);
+		if(light > 0) DeferCall(light, &Lights_RLED1,0);
+		
+		DeferCall(delay+300, &ActKey, KEYON+Engine_Right_Start);
+		if(light > 0) DeferCall(delay+300, &Lights_RLED2,1);
+		DeferCall(delay+600, &ActKey, Engine_Right_Start);
+		if(light > 0) DeferCall(delay+light+300, &Lights_RLED2,0);
+		}
+	FuelCutOff = 0;						//Regardless of engine start status, throttle is above Fuel Cut Off (i.e. not below idle detent).
+	if (Script_Debug) printf("not FCO\xa");				//for test purposes
+}
+
+int EngineShutDownLR(int delay, int light, int gear = 1)		//ms is time (in ms) between shutting down of left and right engines.  5000 is good rule of thumb.
+{
+	if (Script_Debug) printf("SD: FCO...");				//for test purposes
+//	FuelCutOff = 1;						//indicates that throttle is below the idle detent (at Fuel Cut Off).  Moved to ThrottleEngineShutdown() in 1.33
+	if  ((delay > 0)	&	(FlightIdle > 0) &	(HCougar[S3])	&	(gear > 0)	)	//checks for shifted state and that the throttle is "coming down" from flight idle, to prevent inadvertent triggering from beneath idle
+		{
+		ActKey(KEYON+Engine_Left_Stop);
+		if (light > 0) flashRLED1(500);		//doesnt use Engine_Shutdown_Ind() due to DeferCalls
+		DeferCall(300, &ActKey, Engine_Left_Stop);
+		if (light > 0)
+			{
+			DeferCall(light,&flashRLED1,0);
+			DeferCall(light+LED_Delay, &Lights_RLED1,0);
+			}
+		
+		DeferCall(delay+300, &ActKey, KEYON+Engine_Right_Stop);
+		if (light > 0) DeferCall(delay+300,&flashRLED2,500);
+		DeferCall(delay+600, &ActKey, Engine_Right_Stop);
+		if (light > 0)
+			{
+			DeferCall(delay+light+300,&flashRLED2,0);
+			DeferCall(delay+light+LED_Delay+300,&Lights_RLED2,0);
+			}
+		}
+	FlightIdle = 0;						//regardless of whether engine was shut down, throttle is below flight idle, and is turned off.  Prevents inadvertent re-shutdown.
+	if (Script_Debug) printf("not flightidle\xa");		//for test purposes
+}
+//End Engine Start/Stop Functions
+
+
+int Engine_Start_Ind(int LED_no, int light, int Eng_Start = 0, int mfd = -1, int mfdd = 50)	//allows LEDs on RMFD to illuminate when started with MFDs (or on command). mfd added in 2.41 to do MFD background if adjustable lighting enabled (0-2 for backlighting state, -1 for disable), mfdd is delay
+{																								//LED_no: 1 for left, 2 for right, Eng_Start is whether routine is activated
+int mfdi;
+int mfd1;
+if ( (Eng_Start > 0) & (light > 0))
+	{
+	if (LED_no > 1)
+		{
+		Lights_RLED2(1);
+		DeferCall(light, &Lights_RLED2,0);
+		}
+	else
+		{
+		Lights_RLED1(1);
+		DeferCall(light, &Lights_RLED1,0);
+		}
+	}
+if ((light > 0) & (mfd > -1))	//added in 2.41 for F-16, but can be used for any single engine with MFDs tied to engine start
+	{
+	if (mfd > 2) mfd = 2;	//error trap for high end (no need for low end)
+	if (mfdd < LED_Delay) mfdd = LED_Delay;	//error trap for timing
+	mfdi = X(MFD_Lt,mfd);
+	mfd1 = X(MFD_Lt,1);
+	if (Adjust_Backlighting > 0)
+		{
+		DeferCall(light+mfdd,				&LMFD_Backlight,mfdi);
+		DeferCall(LED_Delay+light+mfdd,		&RMFD_Backlight,mfdi);
+		}
+	}
+if (mfd > -1)
+	{
+	LMFD_Pwr_State = mfd;
+	RMFD_Pwr_State = mfd;
+	}
+}
+	
+int Engine_Shutdown_Ind(int LED_no, int light, int Eng_Start = 0, int mfd = -1, int mfdd = 50)	//mfd added in 2.41 to do MFD background if adjustable lighting enabled (0-2 for backlighting state, -1 for disable), mfdd is delay
+{
+int mfdi;
+if ( (Eng_Start > 0) & (light > 0) )
+	{
+	if (LED_no > 1)
+		{
+		flashRLED2(500);
+		DeferCall(light,&flashRLED2,0);
+		DeferCall(light+LED_Delay, &Lights_RLED2,0);
+		}
+	else
+		{
+		flashRLED1(500);
+		DeferCall(light,&flashRLED1,0);
+		DeferCall(light+LED_Delay, &Lights_RLED1,0);
+		}
+	}
+if ((light > 0) & (mfd > -1))	//added in 2.41 for F-16, but can be used for any single engine with MFDs tied to engine start
+	{		
+	if (mfd > 2) mfd = 2;	//error trap for high end (no need for low end)
+	if (mfdd < LED_Delay) mfdd = LED_Delay;	//error trap for timing
+	mfdi = X(MFD_Lt,mfd);
+	
+	if (Adjust_Backlighting > 0)
+		{
+		if (LMFD_Pwr_State > 0)	DeferCall(light+mfdd+LED_Delay,		&LMFD_Backlight,mfdi);
+		if (RMFD_Pwr_State > 0)	DeferCall(light+mfdd+2*LED_Delay,	&RMFD_Backlight,mfdi);
+		}
+	}
+if (mfd > -1)
+	{
+	LMFD_Pwr_State = mfd;
+	RMFD_Pwr_State = mfd;
+	}
+}
+
+int ThrottleEngineShutdown(int eng)		//routine added in 1.33 for delay when using throttle.  sdcheck is time delay in ms, eng is # of engines (1 or 2)
+{
+if (Script_Debug) printf(" ThrottleEngineShutdown(%i)\xa Throttle Absolute Position = %i\xa",eng,ThrAbsPosit);		//For Test Purposes
+FuelCutOff = 1;						//indicates that throttle is below the idle detent (at Fuel Cut Off)
+if ((HCougar[S3]) & (ThrAbsPosit == 0)) //S3 held down and throttle fully aft
+	{
+	if (eng > 1) 		EngineShutDownLR(Eng_Stop_x,Engine_Shutdown_Ind_Time, GearState);
+	else if (eng == 1)	EngineShutDownSingle(1,Engine_Shutdown_Ind_Time, GearState);
+	}	
+}
+
+
+
+//*************************************************
+//				TriggerZoom
+//*************************************************
+
+
+
+int TriggerZoom_toggle(int state = -1, int led = 1, int gear=0, int flaps=0) //set discrete in 0.72.  State for discrete setting, led = 0 allows bypass LED check (saves processing overhead).  flaps added in 1.36
+{     
+if ( (TriggerZoomEnabled > 0) &	(TG1Zoom > 0) & ((FixedGear) | (!gear))	)	//1.26 added gear state check (gear up or fixed gear)
+	{
+	if ((state < 0) | (state > 1)) TriggerZoom_state = (TriggerZoom_state == 0); // toggle
+	else TriggerZoom_state = state;
+	if (ProfID != 999) TriggerZoomPoll(TriggerZoom_state);						//added in 1.26, CA != added in 2.27; set to trigger release w/ defercall
+	
+	if (	((ProfID == 2021) | (ProfID == 2039) | (ProfID == 2040))	&	((HCougar[T8]) | (Throttle[FLAPD]))	)
+		printf("Gear Down Engaged...remap T8/FLAPD on release.\xa");			//added in 1.29 to remove remap while MiG-21 T8/FLAPD is active (WH and L-39 added in 2.05)
+	else if (ProfID != 999) TriggerZoom_MapGearDn(TriggerZoom_state, ProfID);	// CA != added in 2.27
+	
+	if (led > 0) TriggerZoom_LED_Check(flaps);
+	}
+}
+
+int TriggerZoom_LED_Check(int flaps=0)	//sets lights; flaps added in 1.36 to clear flap flashing indications before starting TGZ LED
+{
+    if(TriggerZoom_state > 0)
+    	{
+    	if (Script_Debug) printf("TGZ On");		//for test purposes
+    	if (flaps > 0)
+    		{
+    		flashLLED2(0);
+    		DeferCall(LED_Delay+1000,&flashLLED2_250,1);
+    		}
+    	else flashLLED2(1,250);  // see Common\MFD_Lights.tmc
+    	}
+    else if (TriggerZoom_state == 0)
+    	{
+        flashLLED2(0,250);
+        if (Script_Debug) printf("TGZ Off");	//for test purposes
+        TriggerZoom_out();
+       // if (((ProfID == 2025) | (ProfID == 2027) | (prof == 2033) | (ProfID == 2029) | (ProfID == 2509) | (ProfID == 2515)) & (FlapState > 0)) Flap_LED_Set(FlapState,500+LED_Delay,AirBrkFlash);	//added in 1.36, disabled in 1.66
+ 	   }
+}
+
+int TriggerZoom_in()    	//for All enabled aircraft, not just A-10C   
+{
+	if (Script_Debug) printf("TriggerZoom In\xa");	//for testing
+    if (TriggerZoom_state)
+		{
+		//if ((ProfID == 3090) & (!Sight_Offset_State))	//added sight offset for Fw-190 in 1.28, obsolete in 2.40
+		//	{
+		//	ActKey(KEYON+DX5);
+		//	DeferCall(Fw190_Sight_Offset,&ActKey,DX5);
+		//	Sight_Offset_State = 1;
+		//	}
+		ZoomTime=0;
+//		if ((ProfID >= 4100) & (ProfID < 5000))	//IL2 1946
+//			{
+			//if ((!Throttle[BSF]) & (!HCougar[T8]))	
+//			ActKey(KEYON+PULSE+IL2_ViewGS);
+//			}
+//		else if ((ProfID < 4000) & (TrackIR > 1))	//VR for DCS
+//			ActKey(KEYON+VR_Zoom);
+//		else 
+		if (TriggerZoomEnabled == 2)	//added in 2.05 for Harrier (or anything that uses KP*/
+			{
+			ActKey(KEYON+DX30);
+			DeferCall(ModDelay, &ActKey, KEYON+ZoomIn_slow);	
+			}
+	    else ActKey(KEYON+ZoomIn_slow);
+	    TriggerZoomSwitch = 1;
+		}
+}
+
+int TriggerZoom_out(int dummy=0)       //for All enabled aircraft, not just A-10C 
+{
+	if (Script_Debug) printf("TriggerZoom Out\xa");	//for testing
+    if (TriggerZoom_state)
+		{
+//		if ((ProfID >= 4100) & (ProfID < 5000))	//IL2 1946
+//			{
+			//if 		((Throttle[BSB]) & (!HCougar[T7]))	ActKey(KEYON+PULSE+IL2_ViewWide);
+			//else if ((Throttle[BSM]) & (!HCougar[DFM]))	
+//			ActKey(KEYON+PULSE+IL2_ViewNormal);
+//			}
+//		else 
+		if ((TrackIR > 1) & (ProfID < 4000))	DeferCall(KBDelay, &ActKey, VR_Zoom);	//VR for DCS releases key
+		else if (	(TG1ZoomReset > 0)	)	// | ((ProfID > 3999) & (ProfID < 5000))	)		//added in 2.05; resets to default FOV rather than zooming out.  IL-2 added in 2.40
+			{
+			ZoomTime = 0;
+			TriggerZoomSwitch = 0;
+			if (TriggerZoomEnabled == 2)
+					DeferCall(2*TG1ZoomPoll+KBDelay, &ActKey, KEYON+PULSE+FOV_Center_Shift);	//added in 2.05 for Harrier (or anything that uses KP*/
+//			else if ((ProfID > 3999) & (ProfID < 5000))										//IL-2 delay for funky keystrokes
+//				{
+//				if (TrackIR > 1)	DeferCall(2*(TG1ZoomPoll+KBDelay+ModDelay_IL2GB), &ActKey, FOV_Center);	//VR releases key
+//				else				DeferCall(2*(TG1ZoomPoll+KBDelay+ModDelay_IL2GB), &ActKey, KEYON+PULSE+FOV_Center);
+//				}
+			else					DeferCall(2*TG1ZoomPoll+KBDelay, &ActKey, KEYON+PULSE+FOV_Center);		//DeferCall to deconflict with Zoom In on short TG1 pull		
+			}
+		else
+			{
+			TriggerZoomSwitch =-1;
+			if (TriggerZoomEnabled == 2)
+					DeferCall(2*TG1ZoomPoll+KBDelay, &ActKey, KEYON+ZoomOut_slow_Shift);	//added in 2.20 (fix)
+			else	DeferCall(2*TG1ZoomPoll+KBDelay, &ActKey, KEYON+ZoomOut_slow);			//DeferCall to deconflict with Zoom In on short TG1 pull
+			//if (TriggerZoomEnabled == 2) DeferCall(2*TG1ZoomPoll+KBDelay+ModDelay, &ActKey, DX30);	//added in 2.05 for Harrier (or anything that uses KP*/
+			}
+		}	
+}
+
+
+int TriggerZoomProc(int dummy=0)	//periodically checks to see if zoom time exceeds TG1Zoom (the desired zoom time)
+{
+if (TrackIR < 2)	//non-VR, as VR should sustain zoom
+	{
+	if		(TriggerZoomSwitch > 0)
+		{
+		ZoomTime = ZoomTime + TG1ZoomPoll;
+		if			(	(ZoomTime >= TG1Zoom) & (	((HCougar[TG1]) & (!HCougar[S3])) | ((Joystick[TG1]) & (!Joystick[S3]))	)	)	//|	((ZoomTime < TG1Zoom) & (ZoomTime > 0) & (!HCougar[TG1]))	)
+			{
+			TriggerZoomSwitch = 0;
+			ActKey(ZoomIn_slow);
+			if (TriggerZoomEnabled == 2) DeferCall(ModDelay, &ActKey, DX30);
+			}
+		}
+	
+	else if (TriggerZoomSwitch < 0)
+		{
+		ZoomTime = ZoomTime - TG1ZoomPoll;
+		if	(	(ZoomTime <= 0) & (	((!HCougar[TG1]) & (!WarthogStick))	| ((!Joystick[TG1]) & (WarthogStick > 0)))	)
+			{
+			ZoomTime = 0;
+			TriggerZoomSwitch = 0;
+			DeferCall(2*TG1ZoomPoll+KBDelay, &ActKey,ZoomOut_slow); 	//same defer as KEYON to keep interval the same.
+			if (TriggerZoomEnabled == 2) DeferCall(2*TG1ZoomPoll+KBDelay+ModDelay, &ActKey, DX30);
+			}
+		}
+	}
+}
+
+int TriggerZoomPoll(int active)	//activates or deactivates analog polling (function to allow DeferCall in initialization)
+{
+if (Script_Debug) printf("TriggerZoom Polling ");
+if (active)
+	{
+	if (!TriggerZoomPollStatus) AutoRepeat(3, TG1ZoomPoll, &TriggerZoomProc, 0);	//if command prevents doubling up on autorepeat
+	TriggerZoomPollStatus = 1;
+	if (Script_Debug) printf("Enabled.\xa");
+	}
+else 
+	{
+	StopAutoRepeat(3);
+	ActKey(ZoomIn_slow);
+	ActKey(ZoomOut_slow);
+	ActKey(VR_Zoom);
+	//if(Sight_Offset_State)	//resets offset view for German WW2 fighers; obsolete in 2.40
+	//	{
+	//	ActKey(KEYON+PULSE+SnapView5t);
+	//	Sight_Offset_State=0;
+	//	}
+	ZoomTime = 0;
+	TriggerZoomPollStatus = 0;
+	if (Script_Debug) printf("Disabled.\xa");
+	}
+}
+
+
+
+//******************************************************
+//					Differential Braking
+//	H/T Scrim for idea of Analog Braking added in 1.33
+//******************************************************
+
+
+int DiffBraking(int rudder, int brakes, int geardn, int toe = 0, int analog = 0, int nws = 0, int fullbrk = 1, int release = 0, int mult=2)	//modified in 1.33.  rudder = RudderPedals and brakes = DiffBrakes (both settings from DCS World.tmc).  geardn = GearState.  toe=rudder position.
+{		//analog added in 1.33 to use if DiffBrakes==2,  nws also enables DX19 with S4 if NWSwithBrake enabled.  release is whether S4 is being released (1 allows for axis trim on no S4) mult is multiplier for ModDelay, should not be entering argument. fullbrk added in 1.35, set to 0 if only left/right brakes exist in-game.
+	if (
+			(	(	((ProfID == 2518) | (ProfID == 2615))	)	&	((!S4Brake_USN) | ((AB_L_On) | (AB_R_On)))	)	//	|	//Afterburning Aircraft
+//			(	((ProfID == 2604))	&	(!S4Brake_USN)	)									//Non-AB aircraft (no longer A-4)
+			)	geardn = 0;	//added in 2.20 for F/A-18 to force NWS release; A-4E added in 2.26
+	if (	(HCougar[S4])	|	(Joystick[S4])	|	((T6WheelBrake)	 & (HCougar[T6]))	)
+	//paddle switch on (or T6 in P-51/FW190/Bf109 and Gear State down)
+		{
+		if (!geardn)
+			{
+//			if (	((ProfID == 2604))	&	(GearState)	) ActKey(KEYON+DX19);	//for modules that use separate S4 for brake/NWS and airborne function (e.g. A-4)
+			//else 
+			if (ProfID == 2019) ActKey(KEYON+MiG19_AirbrakeOn);
+			else ActKey(KEYON+DX4);		//added in 0.32. DX4 if GearState = 0 (up).  No need to add nws conditions because it's taken care of in S3_NWS().
+			
+			if (	((ProfID == 2027) | (ProfID == 2011) | (ProfID == 2029) | (ProfID == 2033))	) ActKey(KEYON+Su33_STL_Override_DX);	//added in 2.24
+			}
+		else if ((ProfID == 2033) & ((Throttle[LDGH]) | (HCougar[T6]))	)	//Wheelbrake Start (Su-33)
+			{
+			
+			flashLLED1(0);	
+			ActKey(KEYON+Su33_Wheelbrake_Start_DX);	
+			Su33_Startbrake = 1;
+			DeferCall(500,&Su33_WheelbrakeLED,1);			
+			}
+		else	
+			{
+			if (	(analog > 0) & ((HCougar[S4]) | (Joystick[S4]))	)// | ((nws < 0) & (brakes > 1))	)	//added in 1.33 for analog stick braking; brakes>1 and nws==-1 for F-15C (otherwise will be digital for other FC3 acft);revising for new diff.lua
+				{
+				ActKey(KEYON+DX30);
+				if (rudder > 0) printf("Analog Joy Y + Rudder braking ");	//for test purposes; rem in next build
+				else 
+					{
+					if (WarthogStick > 0)	TrimDXAxis(DX_X_AXIS, SET(-Joystick[JOYX]/32));						//neutralizes X axis prior to shift
+					else					TrimDXAxis(DX_X_AXIS, SET(-HCougar[JOYX]/32));
+					if (Script_Debug) printf("Analog Joy XY Differential Braking ");	//for test purposes; rem in next build
+					}
+										//NWS/analog compatibility
+				if (JoyYMax > -1)
+					{
+					if (WarthogStick > 0)	TrimDXAxis(DX_Y_AXIS, SET(-Joystick[JOYY]/32));		//sets Y to center to neutralize axis prior to axis shift, otherwise NWS and differential X only
+					else					TrimDXAxis(DX_Y_AXIS, SET(-HCougar[JOYY]/32));		//sets Y to center to neutralize axis prior to axis shift, otherwise NWS and differential X only
+					}
+				if ((brakes > 0) & (toe == 1))				//right rudder analog
+					{
+					DeferCall(ModDelay,&ActKey,KEYON+DX32);
+					DeferCall(ModDelay,&ActKey,DX31); 
+					if ((!fullbrk) & (analog))				//added in 1.35 for L/R analog brakes only (no master wheelbrake)
+						{
+						StopAutoRepeat(9);
+						TrimDXAxis(DX_YROT_AXIS, SET(0));
+						AutoRepeat(9, CenterPositTrimmer, &MSX_Trim_Y, 0);
+						}
+					}
+				else if ((brakes > 0) & (toe == 2))			//left rudder analog
+					{
+					DeferCall(ModDelay,&ActKey,KEYON+DX31);
+					DeferCall(ModDelay,&ActKey,DX32);
+					if ((!fullbrk) & (analog))				//added in 1.35 for L/R analog brakes only (no master wheelbrake)
+						{
+						StopAutoRepeat(9);
+						AutoRepeat(9, CenterPositTrimmer, &MSY_Trim_Y, 0);
+						TrimDXAxis(DX_THROTTLE_AXIS, SET(0));
+						}					
+					}
+				else						//center (0 or 3)
+					{
+					DeferCall(ModDelay,&ActKey,KEYON+DX31);
+					DeferCall(ModDelay,&ActKey,KEYON+DX32);
+					if ((!fullbrk) & (analog))				//added in 1.35 for L/R analog brakes only (no master wheelbrake)
+						{
+						StopAutoRepeat(9);
+						AutoRepeat(9, CenterPositTrimmer, &Microstick_Trim_Y, 0);
+						}						
+					}
+				if (	((nws != 0) & (JoyYMax < 0))	&	(!CougarToeBrakes)	)	//!CougarToeBrakes added in 1.40
+					{
+					if (Script_Debug) printf("with NWS ");	//for test purposes; rem in next build
+					SetCustomCurve(&HCougar, JOYY, LIST(0,100, 40,50, 50,50, 100,100));		//sets curve to offset parabola for NWS Y braking
+					DeferCall(mult*ModDelay, &ActKey,KEYON+DX29);	//enables brake if rudder differential
+					//DeferCall(mult*ModDelay, &SetTrimY,-HCougar[JOYY]/16);	//should reverse Y axis while braking with NWS (16 is 32/2)
+
+					DeferCall(mult*ModDelay,&ActKey,KEYON+DX19);		//NWS
+					}
+				else 
+					{
+					if (nws < 0) DeferCall(mult*ModDelay,&ActKey,KEYON+DX29);	//Enable Wheel brake (mainly for other FC3 acft)
+					else ActKey(DX29);						//release brake					
+					ActKey(DX19);							//force release NWS
+					
+					}
+				DeferCall(mult*ModDelay,&SetTrimY,0);					//reverts Y to original position after axis shift
+				if (rudder < 1) DeferCall(mult*ModDelay,&SetTrimX,0);	//reverts X to original position after axis shift
+				if (Script_Debug) printf("\xa");	//for test purposes; rem in next build
+				}
+			else if ((rudder > 0) & (brakes > 0))							//original (digital) part of routine
+				{
+				if (Script_Debug) printf("Digital S4+Rudder braking(%i) ",toe);	//for test purposes; rem in next build
+				if (toe == 1) 					//right rudder
+					{
+//					if ((ProfID > 3999) & (ProfID < 5000))	//added in 2.35 fir Il-2
+//						{
+//						ActKey(KEYON+USB_COMMA);
+//						ActKey(USB_PERIOD);
+//						ActKey(USB_SLASH);
+//						}
+//					else
+//						{
+						ActKey(KEYON+DX32);
+						ActKey(DX31);
+//						if (ProfID > 3999) ActKey(DX29);
+//						}						
+					}
+				else if (toe == 2)				//left rudder
+					{
+//					if ((ProfID > 3999) & (ProfID < 5000))	//added in 2.35 for Il-2
+//						{
+//						ActKey(USB_COMMA);
+//						ActKey(KEYON+USB_PERIOD);
+//						ActKey(USB_SLASH);
+//						}
+//					else
+//						{
+						ActKey(KEYON+DX31);
+						ActKey(DX32);
+//						if (ProfID > 3999) ActKey(DX29);
+//						}
+					}
+				else
+					{
+//					if ((ProfID > 3999) & (ProfID < 5000))	//added in 2.35 for Il-2
+//						{
+//						ActKey(USB_COMMA);
+//						ActKey(USB_PERIOD);
+//						ActKey(KEYON+USB_SLASH);
+//						}
+//					else
+//						{
+//						if (ProfID > 3999)
+//							{
+//							ActKey(KEYON+DX29);
+//							ActKey(DX31);				//center (0 or 3)
+//							ActKey(DX32);
+//							}
+//						else
+//							{
+							ActKey(KEYON+DX31);			//center (0 or 3)
+							ActKey(KEYON+DX32);
+//							}
+					}
+				if ((JoyYMax < 0) & (nws != 0))	//stick fwd of center and NWS enabled;
+					{
+					DeferCall(ModDelay,&ActKey,KEYON+DX19);	//regular NWS
+					if (toe < 3) DeferCall(ModDelay,&ActKey,KEYON+DX29);	//brake only if differential
+					else ActKey(DX29);
+					if (Script_Debug) printf("(NWS)");	//for test purposes; rem in next build
+					}
+				else
+					{
+					ActKey(DX19);										//force release NWS
+//					if (ProfID < 4000)
+					DeferCall(ModDelay,&ActKey,KEYON+DX29);				//actual non-modifier button, ProfID added in 2.35 to make exclusive to DCS
+					//if (!fullbrk)	ActKey(KEYON+WheelBrake);		//added in 1.35 for L/R braking with single button.  Not currently needed, but can be added/modified later
+					}
+				if (Script_Debug) printf("\xa");	//for test purposes; rem in next build
+				}
+			else
+				{
+				if (Script_Debug) printf("Digital S4 Full Braking\xa");	//for test purposes; rem in next build
+//				if (ProfID > 3999) ActKey(KEYON+DX29);	//not modifer, delay necessary//Added in 2.35 to isolate for DCS profiles
+//				else			
+//					{
+					ActKey(KEYON+DX31);
+					ActKey(KEYON+DX32);
+					DeferCall(ModDelay,&ActKey,KEYON+DX29);	//not modifer, delay necessary
+//					}
+				}		
+			}
+		}
+	else
+	//paddle switch off
+		{
+		if (	((ProfID == 2518) | (ProfID == 2615))	&	(S4Brake_USN)	&	(GearState)	) //| (ProfID == 2604)	//GearState because geardn may already be forced
+			{
+			//if ((ProfID == 2604))	ActKey(DX19);	//added for A-4 in 2.26
+			//else
+			ActKey(DX4);	
+
+			ActKey(DX29);
+			ActKey(DX31);
+			ActKey(DX32);
+			}
+		else if (!geardn) 
+			{
+			if (ProfID == 2019) ActKey(KEYON+MiG19_AirbrakeOff);
+			else ActKey(DX4);		//added in 0.32.  DX4 release if GearState = 0 (up)
+			if (	((ProfID == 2027) | (ProfID == 2011) | (ProfID == 2029) | (ProfID == 2033))	) ActKey(Su33_STL_Override_DX);	//added in 2.24
+			}			
+		else
+			{
+			if ((ProfID == 2033) & (Su33_Startbrake))	//Su-33  
+				{
+				ActKey(Su33_Wheelbrake_Start_DX);
+				Lights_LLED1(0);
+				Su33_Startbrake = 0;
+				}
+			if ((analog > 0) )// | (nws < 0))	//added in 1.33 for analog stick braking; nws==2 for F-15C (uses DX29 instead of DX19, but still calls analog and DX30)
+				{
+				if (rudder > 0)
+					{
+					if (Script_Debug) printf("Analog Joy Y+Rudder Brake Release ");	//for test purposes; rem in next build
+					if (nws != 0)
+						{
+						if (WarthogStick > 0)
+								SetCustomCurve(&Joystick,JOYY, LIST(0,0, 40,40, 50,50, 100,100));		//resets curve to linear if NWS
+						else	SetCustomCurve(&HCougar, JOYY, LIST(0,0, 40,40, 50,50, 100,100));		//resets curve to linear if NWS
+						}
+					}
+				else
+					{
+					if (release)
+						{				
+						if (WarthogStick > 0)
+								TrimDXAxis(DX_X_AXIS, SET(-Joystick[JOYX]/32));		//sets X to center to release brake prior to axis shift (if actually released)
+						else	TrimDXAxis(DX_X_AXIS, SET(-HCougar[JOYX]/32));		//sets X to center to release brake prior to axis shift (if actually released)
+						}
+					if (Script_Debug) printf("Analog Joy XY Brake Release ");	//for test purposes; rem in next build
+					}
+				if ((AnalogParkingBrake) & (JoyYMax > 0)) ParkingBrake_Set(ProfID,1,fullbrk,mult);	//added in 1.33; if brake enabled, will leave stick in place while releasing modifiers (effectively braking stick).  Routine for modules with parking brakes except for P51D
+				else 
+					{
+					if (release)	//((JoyYMax < 1) & (release))	//was (JoyYMax > -1) which is not in NWS.  Why is that?  Now set to less than parking brake (which makes sense)
+						{
+						if (!fullbrk) 
+							{
+							if (Script_Debug) printf("Stop Microstick Trim.\xa");	//for test purposes
+							StopAutoRepeat(9);	//added in 1.35 for L/R full braking
+							Microstick_Trim_Set(0);
+							}
+						if (JoyYMax > -1)
+							{
+							if (WarthogStick > 0)
+									TrimDXAxis(DX_Y_AXIS, SET(-Joystick[JOYY]/32));		//sets Y to center to release brake prior to axis shift (if actually released)
+							else	TrimDXAxis(DX_Y_AXIS, SET(-HCougar[JOYY]/32));		//sets Y to center to release brake prior to axis shift (if actually released)
+							}
+						else 
+							{
+							if (WarthogStick > 0)
+									TrimDXAxis(DX_Y_AXIS, SET(Joystick[JOYY]/32));	
+							else	TrimDXAxis(DX_Y_AXIS, SET(HCougar[JOYY]/32));
+							}							
+						if (Script_Debug) printf("/ TTC %i ", JoyYMax);	//for test purposes; remove this and bracket in previous line when done
+						}
+					if (AnalogParkingBrake) printf ("(Parking Brake Release)");	//add \xa in next build after remming test lines
+					if (!Script_Debug) printf("\xa");
+					}
+				if (nws != 0)
+					{
+					if (Script_Debug) printf("(NWS)");	//for test purposes; rem in next build
+					ActKey(DX29);
+					ActKey(DX19);
+					}
+				if (Script_Debug) printf("\xa");	//for test purposes; rem in next build
+//				if ((ProfID > 3999) & (ProfID < 5000))	//added in 2.35 for IL-2
+//					{
+//					ActKey(USB_SLASH);
+//					ActKey(USB_PERIOD);
+//					ActKey(USB_COMMA);
+//					}
+//				else
+//					{
+					DeferCall(ModDelay,&ActKey,DX30);	//added in 1.33 to release DX30 only if S3 not pressed. 
+					DeferCall(ModDelay,&ActKey,DX31);
+					DeferCall(ModDelay,&ActKey,DX32);
+//					}
+				if (release)
+					{
+					if (rudder < 1) DeferCall(mult*ModDelay,&SetTrimX,0);		//reverts X to original position after axis shift
+					DeferCall(mult*ModDelay,&SetTrimY,0);						//reverts Y to original position after axis shift
+					}
+				}
+			else
+				{
+				//if (Script_Debug) printf("Digital S4 Brake Release ");	//for test purposes; rem in next build
+				if (AnalogParkingBrake*JoyYMax > 0) ParkingBrake_Set(ProfID,0);	//added in 1.33; if brake enabled, will leave stick in place while releasing modifiers (effectively braking stick).  Routine for modules with parking brakes except for P51D and MiG21
+				//else if (AnalogParkingBrake) printf ("(Parking Brake Release)\xa");	//add \xa in next build after remming test lines
+				//if (Script_Debug) printf("\xa");	//for test purposes; rem in next build
+				ActKey(DX19);
+				ActKey(DX29);
+				ActKey(DX31);
+				ActKey(DX32);
+				//if (!fullbrk)	ActKey(WheelBrake);		//added in 1.35 for L/R braking with single button.  Not necessary for digital, but can be enabled/modified later
+				}
+			}
+		}
+//	}	//Placeholder
+}
+
+
+
+
+//----------------------------------------------------------
+//		TARGET Conventional Trim Functions added in 1.34
+//----------------------------------------------------------
+
+
+int TrimX(int amt)			//added in 1.34 to allow X trim in DeferCall.  Sets Relative.
+{
+TrimDXAxis(DX_X_AXIS, amt);
+}
+int TrimY(int amt)			//added in 1.34 to allow Y trim in DeferCall.  Sets Relative.
+{
+TrimDXAxis(DX_Y_AXIS, amt);
+}
+
+int SetTrimX(int trim)		//added in 1.33 to allow X trim in DeferCall.  Sets absolute
+{
+TrimDXAxis(DX_X_AXIS, SET(trim));
+}
+int SetTrimY(int trim)		//added in 1.33 to allow Y trim in DeferCall.  Sets Absolute
+{
+TrimDXAxis(DX_Y_AXIS, SET(trim));
+}
+
+int Microstick_Trim_Set(int trim)	//added in 1.35 to allow for L/R Braking with single axis
+{
+if (WarthogThrottle > 0)
+		TrimDXAxis(DX_XROT_AXIS, SET(trim));
+else	TrimDXAxis(DX_THROTTLE_AXIS, SET(trim));
+TrimDXAxis(DX_YROT_AXIS, SET(trim));
+}
+int	Microstick_Trim_Y(int dummy=0)
+{
+if (WarthogThrottle > 0)
+	{
+	TrimDXAxis(DX_XROT_AXIS,		SET(Joystick[JOYY]/32)	);
+	TrimDXAxis(DX_YROT_AXIS,		SET(Joystick[JOYY]/32)	);
+	}
+else
+	{
+	TrimDXAxis(DX_THROTTLE_AXIS,	SET(HCougar[JOYY]/32)	);
+	TrimDXAxis(DX_YROT_AXIS,		SET(HCougar[JOYY]/32)	);
+	}
+}
+int	MSX_Trim_Y(int dummy=0)
+{
+if (WarthogThrottle > 0)
+		TrimDXAxis(DX_YROT_AXIS,		SET(Joystick[JOYY]/32)	);
+else
+		TrimDXAxis(DX_THROTTLE_AXIS,	SET(HCougar[JOYY]/32)	);
+}
+int	MSY_Trim_Y(int dummy=0)
+{
+if (WarthogThrottle > 0)
+		TrimDXAxis(DX_YROT_AXIS,			SET(Joystick[JOYY]/32)	);
+else	TrimDXAxis(DX_THROTTLE_AXIS,		SET(HCougar[JOYY]/32)	);
+}
+
+int TrimXYResetCheck(int flag, int axis=0, int amt=0)	//set flag value to be 3 in 1.40 to time with soubletapped H1D (forced 3)
+{
+if (flag == 3) 
+	{
+	TrimDXAxis(DX_X_AXIS, SET(0));
+	TrimDXAxis(DX_Y_AXIS, SET(0));
+	if (Script_Debug) printf("TARGET Trim Reset.\xa");	//for test purposes
+	}
+else if (axis > 0)
+	{
+	if (axis>1) 	REXEC(2,XYAxisTrim_Rate,"TrimDXAxis(DX_Y_Axis,amt)");	//2+ for Y axis
+	else 			REXEC(2,XYAxisTrim_Rate,"TrimDXAxis(DX_X_Axis,amt)");	// 1 for X axis
+	if (Script_Debug) printf("TARGET Trim Axis %i by %i.\xa",axis,amt);	//for test purposes
+	}
+else
+	{
+	if ((axis < 0) & (SnapViewState == 0)) ActKey(KEYON+PULSE+UnlockView);	//default to POVD shifted state if axis < 0
+	if (Script_Debug) printf("No TARGET Trim applied.\xa");	//for test purposes
+	}
+}
+
+
+
+int ParkingBrake_Set(int prof, int analog = 1, int fullbrk = 1, int mult=2)
+{
+	if	 	(prof == 1050)	DeferCall(2*mult*ModDelay,&ActKey,KEYON+PULSE+BS2_Parking_Brake);
+	else if (prof == 2510)	DeferCall(2*mult*ModDelay,&ActKey,KEYON+A10C_E_Brake_DX);
+	else if (((prof == 2025) | (prof == 2027) | (prof == 2033) | (prof == 2029) | (prof == 2509) | (prof == 2515)) | (!analog))
+							DeferCall(2*mult*ModDelay,&ActKey,KEYON+DX29);	//digital
+	else if ((analog) & (!fullbrk)) StopAutoRepeat(9);
+	printf("(Parking Brake Set)");		//add \xa in next build after remming test lines
+}
+
+int Determine_Differential_Braking(int brakes, int ctoe = 0)
+{
+if ((brakes > 1) & (ctoe == 0)) JoyAsAnalogBrake = 1;	//CougarToeBrakes added in 1.40
+else JoyAsAnalogBrake = 0;
+DiffBrakes = brakes;
+if (Script_Debug) printf("Differential Braking:\xa           Input = %i\xa          Analog = %i\xa    Differential = %i",brakes, JoyAsAnalogBrake, DiffBrakes);
+printf("\xa");
+}
+
+//*************************************************
+//					Snap Views
+//*************************************************
+
+int SetSnapViewT(int kp,int mod=0,int prof = 0)	//kp is keypad number, mod is whether DX31/32 are also activated (and delay time), prof is the ProfID; timing values changed to multiples of KBDelay in 1.34
+{
+if (SnapViewState == 0)
+	{
+	ActKey(KEYON+SnapViewHold);
+	DeferCall(2*KBDelay, &ActKey,SnapViewHold);
+	SnapViewState = 1;
+	if (kp > 0) DeferCall(3*KBDelay,&ActKey,KEYON+PULSE+X(SnapViewsT,kp));	//added in 1.34; SnapViews using 0 are satisfied with SnapViewHold and if condition prevents kp0 from resetting the view
+	if (mod > 0)	//applies DX31/32 modifiers for special inputs (like CDU)
+		{
+		DeferCall(3*KBDelay+mod, &ActKey,KEYON+DX31);
+		DeferCall(3*KBDelay+mod, &ActKey,KEYON+DX32);
+		}
+	}
+else
+	{
+	if (kp == 0)	//releases view then resets to 0; added in 1.34
+		{
+		ActKey(KEYON+PULSE+SnapViewRelease);
+		DeferCall(  KBDelay, &ActKey,KEYON+SnapViewHold);
+		DeferCall(2*KBDelay, &ActKey,SnapViewHold);
+		}
+	else ActKey(KEYON+PULSE+X(SnapViewsT,kp));
+	if (mod > 0)	//applies DX31/32 modifiers for special inputs (like CDU)
+		{
+		DeferCall(mod, &ActKey,KEYON+DX31);
+		DeferCall(mod, &ActKey,KEYON+DX32);
+		}
+	}
+if (mod > 0)
+	{												//RMFDs not DX32 to prevent lifting the modifier while SnapView is active
+	if (prof == 2518)
+		{
+		MapKey	(&LMFD,	OSB01,	AV8_UFC_TMR); 
+		MapKey	(&LMFD,	OSB02,	AV8_UFC_IFF);
+		//MapKeyIO(&LMFD, OSB02,	AV8_UFC_WOF,	TEMPO(CHAIN(DX31,D(ModDelay),DX2),AV8_UFC_IFF, DefTempo));
+		//MapKey(&LMFD,	OSB03,	AV8_UFC_TCN); 
+		MapKeyIO(&LMFD, OSB03,	AV8_UFC_BCN,	TEMPO(AV8_UFC_TCN, AV8_UFC_BCN, DefTempo));	// /I ILS
+		//MapKey(&LMFD,	OSB04,	AV8_UFC_AWL); 
+		MapKeyIO(&LMFD, OSB04,	AV8_UFC_ALT,	TEMPO(AV8_UFC_AWL, AV8_UFC_ALT, DefTempo));	// /I BCN /O D/L
+		//MapKeyIO(&LMFD,	OSB05,	AV8_UFC_EMCON,TEMPO(AV8_UFC_WPN,AV8_UFC_EMCON,DefTempo));
+		//MapKeyIO(&LMFD, OSB05,	AV8_UFC_EMCON,	TEMPO(CHAIN(DX31,D(ModDelay),DX5),AV8_UFC_WPN, DefTempo));	// On/Off
+		MapKey	(&LMFD, OSB05,	AV8_UFC_WPN);	// On/Off
+	
+		MapKey(&LMFD,	OSB06,	AV8_ODU1);
+		MapKey(&LMFD,	OSB07,	AV8_ODU2);				//LSK R3
+		MapKey(&LMFD,	OSB08,	AV8_ODU3);				//LSK R5
+		MapKey(&LMFD,	OSB09,	AV8_ODU4);				//LSK R7
+		MapKey(&LMFD,	OSB10,	AV8_ODU5);				//LSK R9
+		}
+	else if (prof == 2508)
+		{
+		MapKey(&LMFD,	OSB01,	DX1); 
+		MapKey(&LMFD,	OSB02,	DX2);
+		MapKey(&LMFD,	OSB03,	DX3); 
+		MapKey(&LMFD,	OSB04,	DX4); 
+		MapKey(&LMFD,	OSB05,	DX5);
+		
+		MapKey(&LMFD,	OSB06,	KB_LOSB06);
+		MapKey(&LMFD,	OSB07,	KB_LOSB07);			//LSK R3
+		MapKey(&LMFD,	OSB08,	KB_LOSB08);			//LSK R5
+		MapKey(&LMFD,	OSB09,	KB_LOSB09);			//LSK R7
+		MapKey(&LMFD,	OSB10,	KB_LOSB10);			//LSK R9
+		}
+	else
+		{
+		MapKey(&LMFD,	OSB01,	DX1); 
+		MapKey(&LMFD,	OSB02,	DX2);
+		MapKey(&LMFD,	OSB03,	DX3); 
+		MapKey(&LMFD,	OSB04,	DX4); 
+		MapKey(&LMFD,	OSB05,	DX5);
+
+		MapKey(&LMFD,	OSB06,	DX6);
+		MapKey(&LMFD,	OSB07,	DX7);				//LSK R3
+		MapKey(&LMFD,	OSB08,	DX8);				//LSK R5
+		MapKey(&LMFD,	OSB09,	DX9);				//LSK R7
+		MapKey(&LMFD,	OSB10,	DX10);				//LSK R9
+		}	
+
+
+	MapKey(&RMFD,	OSB01,	DX1); 
+	MapKey(&RMFD,	OSB02,	DX2);
+	MapKey(&RMFD,	OSB03,	DX3); 
+	MapKey(&RMFD,	OSB04,	DX4); 
+	MapKey(&RMFD,	OSB05,	DX5);
+
+
+
+	if (prof == 2510)
+		{
+		MapKeyIO(&LMFD,	OSB11,	DX28, TEMPO(DX11,CDU_DE_Prev,DefTempo)	);				//FPM short, PREV long or shifted
+		MapKeyIO(&RMFD,	OSB11,	DX28, TEMPO(DX11,CDU_DE_Prev,DefTempo)	);				//FPM short, PREV long or shifted, long changed to DX28 in 2.10
+		}
+	else if ((prof == 2508)	|	(prof == 2518))
+		{
+		MapKey(&LMFD,	OSB11,	KB_LOSB11);
+		if (prof == 2508)
+				MapKey(&RMFD,	OSB11,	KB_LOSB11);		//Same for UFC
+		else	MapKey(&RMFD,	OSB11,	KB_ROSB11);	
+		}	
+	else
+		{
+		MapKey(&LMFD,	OSB11,	DX11);
+		MapKey(&RMFD,	OSB11,	DX11);
+		}
+
+	if ((prof == 2508) | (prof == 2518))
+		{
+		MapKey(&LMFD,	OSB12,	KB_LOSB12);				//OSET
+		MapKey(&LMFD,	OSB13,	KB_LOSB13);				//WP
+		MapKey(&LMFD,	OSB14,	KB_LOSB14);				//NAV
+		MapKey(&LMFD,	OSB15,	KB_LOSB15);				//SYS
+	
+		MapKey(&LMFD,	OSB16,	KB_LOSB16);				//LSK L9
+		MapKey(&LMFD,	OSB17,	KB_LOSB17);				//LSK L7
+		MapKey(&LMFD,	OSB18,	KB_LOSB18);				//LSK L5
+		MapKey(&LMFD,	OSB19,	KB_LOSB19);				//LSK L3
+
+		MapKey(&RMFD,	OSB12,	KB_ROSB12);				//OSET
+		MapKey(&RMFD,	OSB13,	KB_ROSB13);				//WP
+		MapKey(&RMFD,	OSB14,	KB_ROSB14);				//NAV
+		MapKey(&RMFD,	OSB15,	KB_ROSB15);				//SYS
+	
+		MapKey(&RMFD,	OSB16,	KB_ROSB16);				//LSK L9
+		MapKey(&RMFD,	OSB17,	KB_ROSB17);				//LSK L7
+		MapKey(&RMFD,	OSB18,	KB_ROSB18);				//LSK L5
+		MapKey(&RMFD,	OSB19,	KB_ROSB19);				//LSK L3
+			
+		if (prof == 2518)
+			{
+//			MapKey(&RMFD,	OSB06,	DX6);
+			MapKey(&RMFD,	OSB06,	KB_ROSB06);			//Changed to KB in 2.68
+			MapKey(&RMFD,	OSB07,	DX7);				//LSK R3
+			MapKey(&RMFD,	OSB08,	DX8);				//LSK R5
+			MapKey(&RMFD,	OSB09,	DX9);				//LSK R7
+			MapKey(&RMFD,	OSB10,	DX10);				//LSK R9
+			}
+		else	//KB_LOSB for RMFD because of DX31/32.  Poss change for later if we need more DE mapping
+			{
+			MapKey(&RMFD,	OSB06,	KB_LOSB06);
+			MapKey(&RMFD,	OSB07,	KB_LOSB07);				//LSK R3
+			MapKey(&RMFD,	OSB08,	KB_LOSB08);				//LSK R5
+			MapKey(&RMFD,	OSB09,	KB_LOSB09);				//LSK R7
+			MapKey(&RMFD,	OSB10,	KB_LOSB10);				//LSK R9
+			}
+		}
+	else
+		{
+		MapKey(&LMFD,	OSB12,	DX12);				//OSET
+		MapKey(&LMFD,	OSB13,	DX13);				//WP
+		MapKey(&LMFD,	OSB14,	DX14);				//NAV
+		MapKey(&LMFD,	OSB15,	DX15);				//SYS
+	
+		MapKey(&LMFD,	OSB16,	DX16);				//LSK L9
+		MapKey(&LMFD,	OSB17,	DX17);				//LSK L7
+		MapKey(&LMFD,	OSB18,	DX18);				//LSK L5
+		MapKey(&LMFD,	OSB19,	DX19);				//LSK L3
+		
+		MapKey(&RMFD,	OSB06,	DX6);
+		MapKey(&RMFD,	OSB07,	DX7);				//LSK R3
+		MapKey(&RMFD,	OSB08,	DX8);				//LSK R5
+		MapKey(&RMFD,	OSB09,	DX9);				//LSK R7
+		MapKey(&RMFD,	OSB10,	DX10);				//LSK R9
+		
+		MapKey(&RMFD,	OSB12,	DX12);				//OSET
+		MapKey(&RMFD,	OSB13,	DX13);				//WP
+		MapKey(&RMFD,	OSB14,	DX14);				//NAV
+		MapKey(&RMFD,	OSB15,	DX15);				//SYS
+	
+		MapKey(&RMFD,	OSB16,	DX16);				//LSK L9
+		MapKey(&RMFD,	OSB17,	DX17);				//LSK L7
+		MapKey(&RMFD,	OSB18,	DX18);				//LSK L5
+		MapKey(&RMFD,	OSB19,	DX19);				//LSK L3
+		}
+	MapKey(&LMFD,	OSB20,	DX24);
+	MapKey(&RMFD,	OSB20,	DX24);
+	
+
+
+
+	
+	if (prof == 2510)				//Sets CMSP Mode for A-10C (Shifted)
+		{
+		MapKeyIO(&LMFD,	SYMU,	EXEC("SetCMSPMode(5);" ), KB_SYMU);
+		MapKeyIO(&LMFD,	SYMD,	EXEC("SetCMSPMode(-1);"), KB_SYMD);
+		MapKeyIO(&RMFD,	SYMU,	EXEC("SetCMSPMode(5);" ), KB_SYMU);
+		MapKeyIO(&RMFD,	SYMD,	EXEC("SetCMSPMode(-1);"), KB_SYMD);
+		}
+	else
+		{
+		MapKey(&LMFD,	SYMU,	KB_LSYMU);
+		MapKey(&LMFD,	SYMD,	KB_LSYMD);
+		MapKey(&RMFD,	SYMU,	KB_SYMU);
+		MapKey(&RMFD,	SYMD,	KB_SYMD);
+		}
+
+	if (prof == 1050) 					//Sets PVI-800 (normal mapping because of A-10C next)
+		{
+		MapKey	(&LMFD,	CONU,	KB_CONU);
+		MapKey	(&LMFD,	COND,	KB_COND);
+		MapKey	(&LMFD,	BRTU,	KB_BRTU);
+		MapKey	(&LMFD,	BRTD,	KB_BRTD);
+		
+		MapKey	(&RMFD,	BRTU,	KB_BRTU);
+		MapKey	(&RMFD,	BRTD,	KB_BRTD);
+		BS2_RCON_Map(1);			//sets RCON to REXEC
+		}
+	else if (prof == 2510)				//sets AAP macros, S3 or TEMPO Long for MFCD Swap
+		{
+		MapKeyIO(&LMFD,	CONU,	DX25, TEMPO(EXEC("AAP_Page_Cycle(4);"),		CHAIN(DX30,D(ModDelay),DX25),DefTempo)	);
+		MapKeyIO(&LMFD,	COND,	DX25, TEMPO(EXEC("AAP_Page_Cycle(-1);"),	CHAIN(DX30,D(ModDelay),DX25),DefTempo)	);
+		MapKeyIO(&LMFD,	BRTU,	DX25, TEMPO(EXEC("AAP_Stpt_Cycle(4);"),		CHAIN(DX30,D(ModDelay),DX25),DefTempo)	);
+		MapKeyIO(&LMFD,	BRTD,	DX25, TEMPO(EXEC("AAP_Stpt_Cycle(-1);"),	CHAIN(DX30,D(ModDelay),DX25),DefTempo)	);
+
+		MapKeyIO(&RMFD,	CONU,	DX25, TEMPO(EXEC("AAP_Page_Cycle(4);"),		CHAIN(DX30,D(ModDelay),DX25),DefTempo)	);
+		MapKeyIO(&RMFD,	COND,	DX25, TEMPO(EXEC("AAP_Page_Cycle(-1);"),	CHAIN(DX30,D(ModDelay),DX25),DefTempo)	);
+		MapKeyIO(&RMFD,	BRTU,	DX25, TEMPO(EXEC("AAP_Stpt_Cycle(4);"),		CHAIN(DX30,D(ModDelay),DX25),DefTempo)	);
+		MapKeyIO(&RMFD,	BRTD,	DX25, TEMPO(EXEC("AAP_Stpt_Cycle(-1);"),	CHAIN(DX30,D(ModDelay),DX25),DefTempo)	);
+		MapKeyR	(&RMFD,	CONU,	0);
+		MapKeyR	(&RMFD,	COND,	0);
+		}
+	else
+		{
+		MapKey	(&LMFD,	CONU,	KB_LCONU);
+		MapKey	(&LMFD,	COND,	KB_LCOND);
+		MapKey	(&LMFD,	BRTU,	KB_LBRTU);
+		MapKey	(&LMFD,	BRTD,	KB_LBRTD);
+		
+		MapKey	(&RMFD,	CONU,	KB_CONU);
+		MapKey	(&RMFD,	COND,	KB_COND);
+		MapKeyR	(&RMFD,	CONU,	0);
+		MapKeyR	(&RMFD,	COND,	0);
+		MapKey	(&RMFD,	BRTU,	KB_BRTU);
+		MapKey	(&RMFD,	BRTD,	KB_BRTD);
+		}
+	if ((prof == 2508) & (Adjust_Backlighting > 0))
+		{
+		MapKey	(&LMFD,	GAINU,	CHAIN(KB_GAINU,  EXEC("LMFD_Power(2,1);"),D(LED_Delay),EXEC("WHT_Power_Check(2, RMFD_Pwr_State);"))	);	//add led stuff for day/night
+		MapKey	(&LMFD,	GAIND,	CHAIN(KB_GAIND,  EXEC("LMFD_Power(1,1);"),D(LED_Delay),EXEC("WHT_Power_Check(1, RMFD_Pwr_State);"))	);
+	
+		MapKey	(&RMFD,	GAINU,	CHAIN(KB_GAINU,  EXEC("RMFD_Power(2,1);"),D(LED_Delay),EXEC("WHT_Power_Check(LMFD_Pwr_State, 2);"))	);
+		MapKey	(&RMFD,	GAIND,	CHAIN(KB_GAIND,  EXEC("RMFD_Power(1,1);"),D(LED_Delay),EXEC("WHT_Power_Check(LMFD_Pwr_State, 1);"))	);	
+		}
+	else
+		{
+		MapKey(&LMFD,	GAINU,	KB_GAINU);
+		MapKey(&LMFD,	GAIND,	KB_GAIND);
+	
+		MapKey	(&RMFD,	GAINU,	KB_GAINU);
+		MapKey	(&RMFD,	GAIND,	KB_GAIND);
+		}
+	if ((prof == 2510) & (TS3_DX > 0)) Complex_A10C_Comm_Init(TS3_DX,0);	//reverts other radios to keyboard to prevent inadvertent CDU activation
+
+	}
+	
+else if (prof == 1501)	//Huey specific mapping for pedestal view
+	{
+	if (kp == 2) 	UH1_PedestalView = 1;	//pedestal view to activate
+	else 			UH1_PedestalView = 0;	//deactivate off pedestal
+	UH1_Radio_Cycle_Map(UH1_PedestalView, ICS_Current);
+	}
+else	//regular assignment
+	{
+	ActKey(DX31);
+	ActKey(DX32);
+	MFD_Init(ProfID);
+	}
+}
+
+int SnapViewModRelease(int mod = 50, int prof = 0, int shift = 0)	//releases snap view and DX31/32 modifiers (if mod used in SetSnapViewT)
+{
+if (Script_Debug) printf("SnapViewModRelease(%i,%i)\xa",mod,prof);
+SnapViewState = 0;
+ActKey(DX31);
+ActKey(DX32);
+if ((prof == 2510) & (TS3_DX > 0))
+	{
+	Complex_A10C_Comm_Init(TS3_DX,TS3_DX);
+	if (Script_Debug) printf("Complex_A10C_Comm_Init(%i,%i)\xa",TS3_DX,TS3_DX);
+	}
+else if (Script_Debug) printf(" Prof = %i\xa TS3_DX = %i\xa",prof, TS3_DX);
+if (shift)	//added in 2.28 to clean up forced DX30 in unshifted snapviews (Shift_Snapview)
+	{
+	ActKey(KEYON+DX30);
+	DeferCall(mod+KBDelay,&ActKey,DX30);
+	}
+DeferCall(mod, &ActKey, KEYON+PULSE+SnapViewRelease);
+MFD_Init(ProfID);
+
+}
+
+int SnapViewModRel_H(int de = 0, int prof = 0)	//added in 1.61 for releasing snapview out of momentary hold.  Identical to SnapViewModRleease() except for actual release key. de is for direct entry mode
+{
+if (Script_Debug) printf("SnapViewModRel_H(%i,%i)\xa",de,prof);
+SnapViewState = 0;
+if (de)
+	{
+	ActKey(DX31);
+	ActKey(DX32);
+	if ((prof == 2510) & (TS3_DX > 0))
+		{
+		Complex_A10C_Comm_Init(TS3_DX,TS3_DX);
+		if (Script_Debug) printf ("Complex_A10C_Comm_Init(%i,%i)\xa",TS3_DX,TS3_DX);
+		}
+	else if (Script_Debug) printf(" Prof = %i\xa TS3_DX = %i\xa",prof, TS3_DX);
+	MFD_Init(ProfID);
+	}
+}
+
+
+int StationCheck1(int prof)	//for DeferCall
+{
+StationCheck(prof,1);
+//if (Script_Debug) printf(" TARS/SRS = %i\xa StnCheckDisabled = %i\xa Sum = %i\xa",TARS,StnCheckDisabled,TARS+StnCheckDisabled); 
+}
+int StationCheck2(int prof)	//for DeferCall
+{
+StationCheck(prof,2);
+//if (Script_Debug) printf(" TARS/SRS = %i\xa StnCheckDisabled = %i\xa Sum = %i\xa",TARS,StnCheckDisabled,TARS+StnCheckDisabled); 
+}
+
+int StationCheck(int prof, int stn, int force = 0, int key = 1, int wav = 1, int change = -1)				// force changes even if trackir active (for non-hat macros), prof = MFD_Ver, stn = crew station, key is whether the station is actually actuated, wav (added in 2.49b) is whether the station wav is played, change is a dummy entry that is manipulated within the function
+{
+if (Script_Debug) printf("Station Check:\xa prof = %i\xa stn = %i\xa force = %i\xa key = %i\xa change = %i\xa CurrentStation = %i\xa CrewCount = %i\xa",prof,stn,force,key,change,CurrentStation,CrewCount);
+
+if (stn != CurrentStation)	//moved out of 1501 in 2.42 for use with F-14
+	{
+	if (stn > CrewCount)
+		{
+		if (	((prof == 2514) | (prof == 2615)) & (stn > 1) & (CurrentStation > 1)) change = 0;	//for tomcat or mudhen > pilot = rio
+		else if ((CrewCount > 1) & (stn-2 != CurrentStation)) change = 1;
+		}
+	else change = 1;	
+	}
+else if (change < 0) change = 0;		//allows force of 0 without above argument changing it.
+
+if (Script_Debug) printf(" change(r1) = %i\xa",change);
+
+if 		(prof == 1501)
+	{
+	if (Script_Debug) printf("  UH-1: ");
+		else CommState_Off(1,ProfID);	//forces commstate off if locked out
+	CurrentStation = stn;
+	if (Script_Debug) printf("%i\xa",CurrentStation);
+	UH1_MapTrigger(CurrentStation, PositionSwitchComms, ICS_Current);
+		if (stn > 2) 	Pause_TrackIR(1,PauseTIRGunner*PauseTIRGunner_UH1);	//1=paused (variable is for paused, not active)
+		else			Pause_TrackIR(0,PauseTIRGunner*PauseTIRGunner_UH1);
+	//SetUH1SnapView(CurrentStation, PauseTIRGunner, change);	//obsolete
+	}
+else if (prof == 1008)		//Mi-8MTV2
+	{
+	if (Script_Debug) printf("  Mi-8: ");
+	//if (stn > 3) stn = 3;	//removed in 1.71 (4 for gunner)
+	if (stn == 4) ActKey(KEYON+PULSE+USB_4);	//since no DX for gunner (added 1.71)
+	if (	(	(((CurrentStation <2) & (stn >1))	|	((CurrentStation >1) & (stn < 2)))	& (!WarthogStick)	)	)	// & (Searchlight_Current)	)	//forces H1 back to default if switching between pilot/fe and copilot; searchlight_current argument added in 1.31 (obsolete); !WarthogStick added in 1.40
+		Mi8_H1_Toggle(0, TrackIR, PadlockEnabled, stn);
+	
+	CurrentStation = stn;
+	if (Script_Debug) printf("%i\xa",CurrentStation);
+	if (stn == 4) 	Pause_TrackIR(1,PauseTIRGunner*PauseTIRGunner_Mi8);	//1=paused (variable is for paused, not active)
+	else			Pause_TrackIR(0,PauseTIRGunner*PauseTIRGunner_Mi8);
+	Mi8_H3_Map(CurrentStation);
+	Mi8_LMFD_Map(CurrentStation);	//added in 1.40
+	if (WarthogThrottle > 0)
+		{
+		Mi8_SetSCCSLTB(CurrentStation);	//, PositionSwitchComms);
+		if (!Throttle[SC]) Mi8_SCXY(CurrentStation, 1);	//, PositionSwitchComms);	//remaps SCXY if SC not in use (1 is !Throttle[SC]), positswitchcomms disabled in 2.50c
+		//else	Mi8_SCXY(CurrentStation, 0, PositionSwitchComms);	//not needed because already AXMAPped to 0 and will remap on SC release, positswitchcomms disabled in 2.50c
+		}
+	else	
+		{
+		Mi8_SetT1T6(RangeKnob, CurrentStation,TrackIR);	
+		Mi8_Microstick(CurrentStation,1);	
+		}
+	}
+else if	(	((Helicopter > 0) & (HeloHatTrim > 0)) | ((!Helicopter) & (CrewCount == 2))	)		// Any 2 seat fixed wing acft or helo with hat trim
+	{
+	if (Script_Debug)
+		{
+		if ((Helicopter > 0) & (HeloHatTrim > 0))	printf(" Helo with hat trim\xa");
+		else										printf(" 2 seat aircraft\xa");
+		}
+	if ((stn > 2) & (stn <= 4))
+		{
+		if (Script_Debug) printf("  CurrentStation currently %i\xa  %i between 2 and 4.\xa  ",CurrentStation,stn);
+		CurrentStation = stn - 2;		// w/ TrackIR, Trim does stns 1/2, rudder trim (S3+H1LR) does stns 3/4 readded in 2.31 for Tomcat
+		}
+	else if (TrackIR != 1)	//(TrackIR > 1) was VR now can also be POV
+		{
+		if (Script_Debug) printf("  VR/POV: ");
+		CurrentStation = stn;	//replaces old traps in 2.30 for VR users
+		}
+	else
+		{
+		if (Script_Debug) printf("  Unshifted - no station change\xa  ");
+		stn = CurrentStation;					// removes change for regular H1L/R for trim, doesnt work with VR
+		change = 0;								// no MFDisplay update for F-14
+		if (!force) key = 0;					// no keying of station
+		}
+	if (Script_Debug) printf("CurrentStation now %i\xa",CurrentStation);
+	if ((prof == 1541) | (prof == 1542))
+		{
+		Pause_TrackIR(0,PauseTIRGunner*PauseTIRGunner_SA342);	//added in 2.25d to release TrackIR pause if enabled
+		}
+	else if ((prof == 2501) | (prof == 2601)) C101_Seat_Mapping(CurrentStation,prof,C101_MasterArm_Cur,C101_MasterMode_Cur);
+//	else if (prof == 2615) FA18C_MFD_Init(prof,CurrentStation);
+	else if ((prof == 2514) | (prof == 1024) | (prof == 2615))
+		{
+		if 		(prof == 2514) F14_Seat_Map(CurrentStation,GearState,change);	//added in 2.31, change argument added in 2.42
+		else if (prof == 2615) 
+			{
+			if (Script_Debug) printf(" Stn1 %i\xa Stn2 %i\xa",F15E_DispMode_Stn1_Cur,F15E_DispMode_Stn2_Cur);
+			if ((F15E_DispMode_Stn1_Cur != F15E_DispMode_Stn2_Cur) & (DispMode_Sync_F15E > ModDelay))	// > ModDelay because DX32 is DeferCall Sync-ModDelay
+				{
+				if (CurrentStation > 1)  
+						F15E_DispMode_Set(F15E_DispMode_Stn1_Cur,1,2);	//sync up to vacated station; note force (3rd argument) = 2.
+				else	F15E_DispMode_Set(F15E_DispMode_Stn2_Cur,1,2);
+				}
+			FA18C_MFD_Init(prof,CurrentStation);
+			}
+		if ((strlen(&mfdispfile) > 0) & (MFDisplayEnabled > 0)) 
+			{
+			if (CurrentStation > 1)
+				{
+				if (prof == 1024)		sprintf(&mfdispfile, &MFDisp_Mi24G);
+				else if (prof == 2615)	sprintf(&mfdispfile, &MFDisp_F15ER);
+				else					sprintf(&mfdispfile, &MFDisp_F14R);
+				if (prof != 2514)		MFDisplay_Launch();  //factored in HCS_Init for F-14 and would use MFDisplay_Launch(1) for subs
+				}
+			else
+				{
+				if (prof == 1024) 		sprintf(&mfdispfile, &MFDisp_Mi24C);
+				else if (prof == 2615)	sprintf(&mfdispfile, &MFDisp_F15EP);
+				else					sprintf(&mfdispfile, &MFDisp_F14P);
+				MFDisplay_Launch();
+				}
+			}
+		}
+	//else CurrentStation = stn;
+	
+	if (Script_Debug) printf("  CurrentStation: %i\xa change(final): %i\xa",CurrentStation,change);
+	}
+else
+	{
+	CurrentStation = 1;
+	if (Script_Debug) printf("  CurrentStation defaults to %i\xa",CurrentStation);
+	}
+if ((CrewCount > 1) & (key))
+	{
+	if (StationChangeModifier > 1)
+		{
+		if ((CurrentStation == 4) & (CrewCount > 3))		ActKey(KEYON+PULSE+CrewStation4LS);
+		else if ((CurrentStation == 3) & (CrewCount > 2))	ActKey(KEYON+PULSE+CrewStation3LS);
+		else if (CurrentStation == 2)	ActKey(KEYON+PULSE+CrewStation2LS);
+		else ActKey(KEYON+PULSE+CrewStation1LS);
+		}
+	else if (StationChangeModifier == 1)
+		{
+		if ((CurrentStation == 4) & (CrewCount > 3))		ActKey(KEYON+PULSE+CrewStation4RS);
+		else if ((CurrentStation == 3) & (CrewCount > 2))	ActKey(KEYON+PULSE+CrewStation3RS);
+		else if (CurrentStation == 2)	ActKey(KEYON+PULSE+CrewStation2RS);
+		else ActKey(KEYON+PULSE+CrewStation1RS);
+		}
+	else
+		{
+		if ((CurrentStation == 4) & (CrewCount > 3))		ActKey(KEYON+PULSE+CrewStation4);
+		else if ((CurrentStation == 3) & (CrewCount > 2))	ActKey(KEYON+PULSE+CrewStation3);
+		else if (CurrentStation == 2)						ActKey(KEYON+PULSE+CrewStation2);
+		else ActKey(KEYON+PULSE+CrewStation1);
+		}
+	}
+if	((CrewCount > 1) & (PlayWavStnChangeDelay > 0) & (wav))	//wav added in 2.49b
+	{
+	PlayWav("station.wav");
+	if ((CurrentStation == 4) & (CrewCount > 3))		DeferCall(PlayWavStnChangeDelay,&PlayWav,"4.wav");
+	else if ((CurrentStation == 3) & (CrewCount > 2))	DeferCall(PlayWavStnChangeDelay,&PlayWav,"3.wav");
+	else if (CurrentStation == 2)						DeferCall(PlayWavStnChangeDelay,&PlayWav,"2.wav");
+	else 												DeferCall(PlayWavStnChangeDelay,&PlayWav,"1.wav");
+	}
+}
+
+int	Pause_TrackIR(int state, int delay = 300, int setpov=0)	//set 0 for unpaused, (delay in ms for defercall, 0 = no consent to pause), -1 to toggle, setpov added in 1.40, determines whether Hat1 remapped for POV/Trim
+{
+if ((TrackIR > 0)	&	(delay > 0))
+	{
+	if (setpov) H1_Init(TrackIR, PadlockEnabled, ProfID, XYAxisTrim, state);	//added in 1.40.  TracKIR for tirpaused instead of tir because tirpaused is a flag for whether TIR toggle commands are given.  state is actual H1 state.
+	if (state == -1) 
+		{
+		state = (TIR_Paused + 1)%2;	//toggle
+		delay = 1;					//sets instantaneous toggle for defercall
+		}
+	if (TIR_Paused != state)
+		{
+		DeferCall(delay,&ActKey,KEYON+PULSE+TIR_Pause);	
+		TIR_Paused = state;
+		}
+	}
+}
+
+
+//Generic radio channel cycle with variable array size
+
+int Cycle_RdoChannel_Rotary(int index, int ch, int flip = 0, int delay = 200, int time = 0)	//flip is whether the array will cycle back to the opposite end if below min/max.
+{
+//flip is faulty logic; need to revise for indexed addition/subtraction
+if (	(ch >= index) | (ch < 0)	)					// 4 is the basic cycle state up without flipping to 0 (i.e. discrete up keypress)
+	{
+	if (ch >= index) 
+		{
+		ch = (Rdo_Channel_Cur+1);					
+		//if ((ch < index) | (flip))	ActKey(KEYON+PULSE+Rdo_Channel_Incr);	//full index to offset check because ch is cur+1 to offset check
+		ActKey(KEYON+PULSE+Rdo_Channel_Incr);
+		if (ch > index-1) ch = index-1;										//separate if, not else in case flip is 1
+		}
+	else if (ch < 0)
+		{
+		ch = (Rdo_Channel_Cur-1);	
+		//if ((ch >= 0) | (flip))	ActKey(KEYON+PULSE+Rdo_Channel_Decr);
+		ActKey(KEYON+PULSE+Rdo_Channel_Decr);		
+		if (ch < 0) ch = 0;										//separate if, not else in case flip is 1
+		}
+	Rdo_Channel_Cur = ch;						//sets equality for next press
+
+	}
+else												//discrete channel selection
+	{
+	while (Rdo_Channel_Cur != ch)					//do loop with if/then based on </>
+		{
+		if (Rdo_Channel_Cur > ch)					
+			{
+			DeferCall(time, &ActKey, KEYON+PULSE+Rdo_Channel_Decr);	
+			Rdo_Channel_Cur = (Rdo_Channel_Cur-1);
+			if (Rdo_Channel_Cur < 0) Rdo_Channel_Cur = 0;
+			}
+		else if (Rdo_Channel_Cur < ch)
+			{
+			DeferCall(time, &ActKey, KEYON+PULSE+Rdo_Channel_Incr);	
+			Rdo_Channel_Cur = (Rdo_Channel_Cur+1);
+			if (Rdo_Channel_Cur > index-1) Rdo_Channel_Cur = index-1;
+			}
+		time = time + delay;
+		}
+	}
+if (Script_Debug) printf ("Rdo_Channel_Cur = %i\xa",Rdo_Channel_Cur);	//for test purposes
+}
+
+int IgnLRState_Reset(int state=0)	//added in 1.40 to reset persistent EOxIGN state.  Will default to 0 regardless unless 1 in argument (for IGN as default), then only if switch not in EOxMOTOR.
+{
+if (WarthogThrottle > 0)
+	{
+	if (Throttle[EOLMOTOR]) IgnLState = 0;
+	else	IgnLState = state;
+	
+	if (Throttle[EORMOTOR])	IgnRState = 0;
+	else	IgnRState = state;
+	}
+else	//0 if no WH Throttle
+	{
+	IgnLState = 0;
+	IgnRState = 0;
+	}
+}
+
+
+//******************************************************
+//	Helicopter Central Position Trimmer Mode Routines
+//******************************************************
+
+int CPTM_Trim(int trim, int prof=0, int poll=2)	//Engages/releases the TARGET trim and rudder trim on command.  Poll = 2 because that is the REXEC flag for both polling trimmers.
+{
+//if (	(prof == 1050) & (CenterPositRudder == 0)	) BS2_ReleaseRudderTrim();	//if rudder trim disengaged this will still kill rudder trim to BS2 regardless of TEMPO or setting.  ANT as Rudder check moved to H4U /P instead of /R here.  == 0 instead of < 1 to allow for bypass if -1.  Obsolete as of 1.2.16u2 (rudder trim now selectable in Options)
+
+if (CenterPositTrimmer) 
+	{
+	if (Script_Debug) printf("CPTM_Engaged = %i\xa",CPTM_Engaged);	//for test purposes only
+	StopAutoRepeat(poll);	//should stop any polling of previous trimmers
+	
+	if (trim)			//trim enabled (doesn't need to be CPTM TEMPO)
+		{
+
+		if (CPTM_Engaged)	//forces axis trim if TEMPO long; nested if/then to exit routine if TEMPO short
+			{
+			if (WarthogStick > 0)
+				{
+				TrimDXAxis(DX_X_AXIS, SET(-Joystick[JOYX]/32));	//divide by 32 because the axis has 65536 values and trim has 2048
+				TrimDXAxis(DX_Y_AXIS, SET(-Joystick[JOYY]/32));
+				}
+			else
+				{
+				TrimDXAxis(DX_X_AXIS, SET(-HCougar[JOYX]/32));	//divide by 32 because the axis has 65536 values and trim has 2048
+				TrimDXAxis(DX_Y_AXIS, SET(-HCougar[JOYY]/32));
+				}
+			if (	(CenterPositRudder > 0) & (RudderPedals == 1)	) TrimDXAxis(DX_ZROT_AXIS, SET(-HCougar[RUDDER]/32));	//changed from <2 to ==1 in 1.40 for Warthog Users w/o Rudders (no HCougar call)
+			CPTM_LED(1,CPTM_Flash);
+			}
+		}
+	else	//trim reset
+		{
+		if (Script_Debug) printf("Trim Reset.\xa");
+		TrimDXAxis(DX_X_AXIS, SET(0));
+		TrimDXAxis(DX_Y_AXIS, SET(0));
+		if (	(CenterPositRudder > 0) & (RudderPedals == 1)	) TrimDXAxis(DX_ZROT_AXIS, SET(0));	//changed from <2 to ==1 in 1.40 for Warthog Users w/o Rudders (no HCougar call)
+		CPTM_LED(0,0);
+		}
+
+
+	CPTM_Engaged = 0;
+	if (Script_Debug) printf("CPTM_Engaged = %i\xa",CPTM_Engaged);	//for test purposes only
+	CPTM_Mapping(trim, ProfID);
+	}
+}
+
+
+
+int CPTM_Recenter_Active()	//routine that actively counter-trims the stick to center while it is being moved back (hold S3 or H4D)
+{
+if (Script_Debug) printf("Recenter Active...");	//for test purposes
+if (WarthogStick > 0)
+	{
+	if (Script_Debug) printf("Warthog\xa");	//for test purposes
+	TrimDXAxis(DX_X_AXIS, SET(-Joystick[JOYX]/32));	//divide by 32 because the axis has 65536 values and trim has 2048
+	TrimDXAxis(DX_Y_AXIS, SET(-Joystick[JOYY]/32));
+	}
+else
+	{
+	if (Script_Debug) printf("Cougar\xa");	//for test purposes
+	TrimDXAxis(DX_X_AXIS, SET(-HCougar[JOYX]/32));	//divide by 32 because the axis has 65536 values and trim has 2048
+	TrimDXAxis(DX_Y_AXIS, SET(-HCougar[JOYY]/32));
+	}
+if (	(CenterPositRudder > 0) & (RudderPedals == 1)	) TrimDXAxis(DX_ZROT_AXIS, SET(-HCougar[RUDDER]/32));	//changed from <2 to ==1 in 1.40 for Warthog Users w/o Rudders (no HCougar call)
+}
+
+int	CPTM_Center_Poll(int dz)	//Routine that actively checks for stick/rudder recenter without requiring input from user (default after trim long) and resets TARGET trim after recenter.  dz is deadzone value
+{
+if (	(	((WarthogStick > 0) & (abs(Joystick[JOYX]) < dz) & (abs(Joystick[JOYY]) < dz)) |	((WarthogStick == 0) & (abs(HCougar[JOYX]) < dz) & (abs(HCougar[JOYY]) < dz))	) & //WH added
+	(	((CenterPositRudder > 0) & (RudderPedals == 1) & (abs(HCougar[RUDDER]) < dz))
+		| ((CenterPositRudder < 1) | (RudderPedals != 1))	)	) //all axes within dead zone
+	{
+	CPTM_Trim(0);
+	CPTM_LED(0,0);
+	}
+}
+
+
+int CPTM_Mapping(int trim, int prof = 0)	//remaps to prevent commstate and S3/H4D to allow recentering.  Activates when trimmer is engaged and until S3/H4D released or stick recentered.
+{
+if (Script_Debug) printf("CPTM Mapping ");	//for test purposes
+if ((CenterPositTrimmer > 0) & (WarthogStick > 0))
+	{
+	if (Script_Debug) printf("(Warthog)\xa");	//for test purposes
+	if (trim)
+		{
+		if (prof == 1008)
+			{
+			MapKey	(&Joystick,	S1,		0);		//prevents CommState
+			}
+		else if (prof == 1501)					//prevents CommState
+			{
+			MapKeyIO(&Joystick, S1, 	TEMPO(	EXEC("UH1_AP_Cycle(-1);"),										//shifted short cycles autopilot modes
+												EXEC("UH1_AP_Cycle(0);"),										//shifted long forces level flight mode	
+												DefTempo),																//standard TEMPO delay
+										0);
+			}
+		if (	(prof == 1008) | (prof == 1501)	)	//trigger vox only to prevent CommState
+			{
+			MapKey	(&Joystick,	TG1,	0);
+			MapKey	(&Joystick,	TG2,	CHAIN(PTT_Common,		EXEC("Lights_RLED1(1);")));
+			MapKeyR	(&Joystick,	TG2,	EXEC("Lights_RLED1(0);"));
+			}
+		if (prof == 1050) 			//s2 vox only to prevent commstate
+			{
+			MapKey	(&Joystick, S2,	CHAIN(PTT_Common, 	EXEC("Lights_RLED1(1);")));
+			MapKeyR	(&Joystick, S2,	EXEC("Lights_RLED1(0);"));
+			}	
+		MapKey	(&Joystick, H4D,	CHAIN(		EXEC("StopAutoRepeat(2);"), D(30), REXEC(2,CenterPositTrimmer, "CPTM_Recenter_Active();")));		
+		MapKeyR	(&Joystick, H4D,	EXEC("CPTM_Trim(0);"));	
+		MapKey	(&Joystick, S3, 	CHAIN(DX30,	EXEC("StopAutoRepeat(2);"), D(30), REXEC(2,CenterPositTrimmer, "CPTM_Recenter_Active();")));		
+		MapKeyR	(&Joystick, S3, 	EXEC("CPTM_Trim(0);"));
+		}
+	else	//release
+		{
+		H4D_CPTM(prof);
+		if (prof == 1008)
+			{
+			MapKey	(&Joystick, S1, 	TEMPO(DX5,EXEC("UH1_Intercom_Cycle(-1,1,8);"),LongTempo));
+			UH1_MapTrigger(1,1,1);		//sets trigger for pilot controls
+			}
+		else if (prof == 1501) UH1_Map_S1();
+		StationCheck(prof, CurrentStation,0,0,0);		//takes care of UH1_MapTrigger for UH-1
+		
+		if (prof == 1050)
+			{
+			BS2_CommState_Init();
+			if (GearState) 	DeferCall(CenterPositMapDelay,&BS2_Map_S3_D,BS2_ForceCommStateOff);	//added for S3 to force commstate off, changed to _D in 1.36
+			else 			DeferCall(CenterPositMapDelay,&BS2_Map_S3_U,BS2_ForceCommStateOff);	//_U added in 1.36
+			}
+		else DeferCall(CenterPositMapDelay,&UH1_Map_S3,0);	
+		}
+	}
+else if (CenterPositTrimmer)
+	{
+	if (Script_Debug) printf("(Cougar)\xa");	//for test purposes
+	if (trim)
+		{
+		if (prof == 1008)
+			{
+			MapKey	(&HCougar,	S1,		0);		//prevents CommState
+			}
+		if (prof == 1501)							//prevents CommState
+			{
+			MapKeyIO(&HCougar, S1, 	TEMPO(	EXEC("UH1_AP_Cycle(-1);"),										//shifted short cycles autopilot modes
+						EXEC("UH1_AP_Cycle(0);"),										//shifted long forces level flight mode	
+						DefTempo),																//standard TEMPO delay
+						0);
+			}
+		if (	(prof == 1008) | (prof == 1501)	)	//trigger vox only to prevent CommState
+			{
+			MapKey	(&HCougar,	TG1,	0);
+			MapKey	(&HCougar,	TG2,	CHAIN(PTT_Common,		EXEC("Lights_RLED1(1);")));
+			MapKeyR	(&HCougar,	TG2,	EXEC("Lights_RLED1(0);"));
+			}
+		if (prof == 1050) 			//s2 vox only to prevent commstate
+			{
+			MapKey	(&HCougar, S2,	CHAIN(PTT_Common, 	EXEC("Lights_RLED1(1);")));
+			MapKeyR	(&HCougar, S2,	EXEC("Lights_RLED1(0);"));
+			}	
+		MapKey	(&HCougar, H4D, CHAIN(EXEC("StopAutoRepeat(2);"), D(30), REXEC(2,CenterPositTrimmer,"CPTM_Recenter_Active();")));		
+		MapKeyR	(&HCougar, H4D, EXEC("CPTM_Trim(0);"));	
+		MapKey	(&HCougar, S3, 	CHAIN(DX30,EXEC("StopAutoRepeat(2);"), D(30), REXEC(2,CenterPositTrimmer, "CPTM_Recenter_Active();")));		
+		MapKeyR	(&HCougar, S3, 	EXEC("CPTM_Trim(0);"));
+		}
+	else	//release
+		{
+		H4D_CPTM(prof);
+		if (prof == 1008)
+			{
+			MapKey	(&HCougar, S1, 	TEMPO(DX5,EXEC("UH1_Intercom_Cycle(-1,1,8);"),LongTempo));
+			UH1_MapTrigger(1,1,1);		//sets trigger for pilot controls
+			}
+		else if (prof == 1501) UH1_Map_S1();
+		StationCheck(prof, CurrentStation,0,0,0);		//takes care of UH1_MapTrigger for UH-1
+		
+		if (prof == 1050)
+			{
+			BS2_CommState_Init();
+			if (GearState) 	DeferCall(CenterPositMapDelay,&BS2_Map_S3_D,BS2_ForceCommStateOff);	//added for S3 to force commstate off, changed to _D in 1.36
+			else 			DeferCall(CenterPositMapDelay,&BS2_Map_S3_U,BS2_ForceCommStateOff);	//_U added in 1.36
+			}
+		else DeferCall(CenterPositMapDelay,&UH1_Map_S3,0);	
+		}
+	}
+}
+
+int H4UD_CPTM(int prof = 0)	//initializes H4U/H4P mappings and calls H4D
+{
+if (Script_Debug) printf("Start H4UD_CPTM\xaProfID = %i\xa",prof);	//for test purposes
+if (WarthogStick > 0)
+	{
+	if (prof == 1050)	//added in 1.40
+		{
+		MapKeyIO(&Joystick,	H4U,	TEMPO(CHAIN(EXEC("CPTM_Engaged = 0;"),DX15), CHAIN(EXEC("CPTM_Engaged = 0;"),PULSE+DX15,D(KBDelay),EXEC("SetTrimY(-BS2_Trim_Neutral_Offset);CPTM_LED(1,500);"),UP+DX30), DefTempo),		//DX15+DX30 for reset, SetTrimY for offset (negative for forward), release DX30 and DX15 for retrim (hold)
+									CHAIN(DOWN+DX30,D(ModDelay),PULSE+DX17,D(KBDelay),UP+DX30));		//countermeasures on
+		}
+	else if (prof == 1564)	//AH-64 added in 2.64
+		{
+		MapKeyIO(&Joystick,	H4U,	CHAIN(EXEC("CPTM_Engaged = 0;"),DX15),
+									TEMPO(CHAIN(EXEC("CPTM_Engaged = 0;"),DX15), CHAIN(EXEC("CPTM_LED(0,0); CPTM_Engaged = 1;"),DX15),CenterPositTempo));		//Force Trim Set; shift reset like Cougar
+		MapKeyRIO(&Joystick,H4U,	EXEC("StopAutoRepeat(2);CPTM_Trim(1,ProfID); DeferCall(30,&CPTM_Center_Poll,2048);"), CHAIN(	EXEC("CPTM_Trim(1,ProfID);"),	REXEC(2, CenterPositTrimmer, "CPTM_Center_Poll(CenterPositZone);"))	);		// /I"Recenters" trim stick setting regardless of position, /O like Cougar
+		}
+	else
+		{
+		MapKeyIO(&Joystick,	H4U,	CHAIN(EXEC("CPTM_Engaged = 0;"),DX15),
+									CHAIN(DOWN+DX30,D(ModDelay),PULSE+DX17,D(KBDelay),UP+DX30));		//countermeasures on
+		MapKeyRIO(&Joystick,H4U,	EXEC("StopAutoRepeat(2);CPTM_Trim(1,ProfID); DeferCall(30,&CPTM_Center_Poll,2048);"), 0);		// /I"Recenters" trim stick setting regardless of position
+
+		}
+	
+	MapKey	(&Joystick,	H4P,	TEMPO(CHAIN(EXEC("CPTM_Engaged = 0;"),DX15), CHAIN(EXEC("CPTM_LED(0,0); CPTM_Engaged = 1;"),DX15),CenterPositTempo));		//Force Trim Set; shift reset, shift long reset+offset	
+	MapKeyR	(&Joystick,	H4P,	CHAIN(	EXEC("CPTM_Trim(1,ProfID);"),	REXEC(2, CenterPositTrimmer, "CPTM_Center_Poll(CenterPositZone);"))	);	
+	}
+else
+	{
+	if (prof == 1050)	//added in 1.35
+		MapKeyIO(&HCougar,	H4U,	TEMPO(CHAIN(EXEC("CPTM_Engaged = 0;"),DX15), CHAIN(EXEC("CPTM_Engaged = 0;"),PULSE+DX15,D(KBDelay),EXEC("SetTrimY(-BS2_Trim_Neutral_Offset);CPTM_LED(1,500);"),UP+DX30), DefTempo),			//DX15+DX30 for reset, SetTrimY for offset (negative for forward), release DX30 and DX15 for retrim (hold)
+									TEMPO(CHAIN(EXEC("CPTM_Engaged = 0;"),DX15), CHAIN(EXEC("CPTM_LED(0,0); CPTM_Engaged = 1;"),DX15),CenterPositTempo));	//Force Trim Set; shift reset, shift long reset+offset		
+	else
+		MapKeyIO(&HCougar,	H4U,	CHAIN(EXEC("CPTM_Engaged = 0;"),DX15),
+									TEMPO(CHAIN(EXEC("CPTM_Engaged = 0;"),DX15), CHAIN(EXEC("CPTM_LED(0,0); CPTM_Engaged = 1;"),DX15),CenterPositTempo));	//Force Trim Set; shift reset
+	MapKeyRIO(&HCougar, H4U,	EXEC("StopAutoRepeat(2);CPTM_Trim(1,ProfID); DeferCall(30,&CPTM_Center_Poll,2048);"), 		//"Recenters" trim stick setting regardless of position
+								CHAIN(	EXEC("CPTM_Trim(1,ProfID);"),	REXEC(2, CenterPositTrimmer, "CPTM_Center_Poll(CenterPositZone);"))	);	
+	}
+DeferCall(CenterPositMapDelay, &H4D_CPTM, prof);
+}
+
+int H4D_CPTM(int prof = 0)	//sets default H4D settings when trim not directly engaged
+{
+if (Script_Debug) printf("Start H4D_CPTM...");	//for test purposes
+if (!S3_CommState_Delay)
+	{
+	if (WarthogStick > 0)
+		{
+		if (prof == 1501)	//UH-1
+			{
+			if (CenterPositRelTempo)
+					MapKeyIO(&Joystick,	H4D,	CHAIN(	PULSE+DX17,D(200),
+														PULSE+DX17,D(200),
+														PULSE+DX17,D(200),
+														PULSE+DX17,D(200),
+														PULSE+DX17), TEMPO(DX17,0,CenterPositRelTempo)	);	//short flare; shift for 5x flares
+			else	MapKeyIO(&Joystick,	H4D,	TEMPO(DX17,
+												CHAIN(	PULSE+DX17,D(200),
+														PULSE+DX17,D(200),
+														PULSE+DX17,D(200),
+														PULSE+DX17,D(200),
+														PULSE+DX17),DefTempo), 0);	//shift short flare; shift long for 5x flares
+			MapKeyR	(&Joystick,	H4D,	0);
+			}
+		else
+			{
+			if (CenterPositRelTempo) 
+				{
+				if (prof == 1564)
+						MapKey	(&Joystick,	H4D,	DX17);
+				else	MapKeyIO(&Joystick,	H4D,	DX17,	TEMPO(DX17,0,CenterPositRelTempo)	);		//countermeasures (short stop, shift start)
+				MapKeyR	(&Joystick,	H4D,	0);
+				}	
+			else
+				{
+				if (prof == 1564)
+						MapKey	(&Joystick,	H4D,	DX17);
+				else	MapKeyIO(&Joystick,	H4D,	TEMPO(CHAIN(DOWN+DX30,D(ModDelay),PULSE+DX17,D(KBDelay),UP+DX30), 	DX17,	DefTempo),	0	);		//countermeasures (shifted short stop, shifted long start)
+				MapKeyRIO(&Joystick,H4D,			CHAIN(D(KBDelay),EXEC("if (!Joystick[S3]) ActKey(DX30);")),	0);	//just in case S3 is released before first KBDelay
+				}	
+			}
+		}
+	else
+		{
+		if (prof == 1501)
+			{
+			if (CenterPositRelTempo)
+					MapKeyIO(&HCougar,	H4D,	CHAIN(	PULSE+DX17,D(200),
+														PULSE+DX17,D(200),
+														PULSE+DX17,D(200),
+														PULSE+DX17,D(200),
+														PULSE+DX17), TEMPO(DX17,0,CenterPositRelTempo)	);	//short flare; shift for 5x flares
+			else	MapKeyIO(&HCougar,	H4D,	TEMPO(DX17,
+												CHAIN(	PULSE+DX17,D(200),
+														PULSE+DX17,D(200),
+														PULSE+DX17,D(200),
+														PULSE+DX17,D(200),
+														PULSE+DX17),DefTempo), 0);	//shift short flare; shift long for 5x flares
+			MapKeyR	(&HCougar,	H4D,	0);
+			}
+		else
+			{
+			if (CenterPositRelTempo) 
+				{
+				if (prof == 1564)
+						MapKey	(&HCougar,	H4D,	DX17);	
+				else	MapKeyIO(&HCougar,	H4D,	DX17,	TEMPO(DX17,0,CenterPositRelTempo)	);		//countermeasures (short stop, shift start)
+				MapKeyR	(&HCougar,	H4D,	0);
+				}
+			else
+				{
+				if (prof == 1564)
+						MapKey	(&HCougar,	H4D,	DX17);
+				else	MapKeyIO(&HCougar,	H4D,	TEMPO(CHAIN(UP+DX30,D(ModDelay),PULSE+DX17,D(KBDelay),DOWN+DX30), 	DX17,	DefTempo),	0	);		//countermeasures (shifted short stop, shifted long start)
+				MapKeyRIO(&HCougar,	H4D,	CHAIN(D(KBDelay),EXEC("if (!HCougar[S3]) ActKey(DX30);")),	0);	//just in case S3 is released before first KBDelay
+				}	
+			}
+		}
+	if (Script_Debug) printf ("Finish H4D_CPTM\xa");	//for test purposes
+	}
+else if (Script_Debug)  printf("S2 not timed out; H4D_CPTM aborted.\xa");	//for test purposes
+}
+
+int CPTM_LED(int state, int time = 250)
+{
+if ((RudderPedals < 2) & (AirBrkFlash > -1))	
+	{
+	if (AirBrkFlash > 0) flashLLED1(state,time);
+	else Lights_LLED1(state);
+	}
+}
+
+int CPTM_Recenter_Rex(int active = 1)	//so it can be added to if/then EXEC command (H4U /RI).  active is whether S3 is active; just allows same function for both REXEC commands
+{
+if (active) REXEC(2, CenterPositTrimmer, "CPTM_Recenter_Active();");
+else		REXEC(2, CenterPositTrimmer, "CPTM_Center_Poll(CenterPositZone);");
+}
+
+int WHT_Throttle_Lock(int axis, int lock, int led = 0)	//added in 2.61 for throttle axes.  1 for right, 0 for left.  for LED, 1 to map to LMFD, 2 to map to RMFD, 0 for no LEDs.  poss neg values for WHT TBI
+{
+if (axis)
+	{
+	LockAxis(&Throttle, THR_RIGHT, lock);
+	AxisLockR_Cur = lock;
+	if ((MFD_Count > 0) & (AirBrkFlash > -1))
+		{
+		if ((led > 1) & (MFD_Count > 1))	Lights_RLED2(lock); 
+		else if (led == 1)					Lights_LLED2(lock);
+		}
+	}
+else
+	{
+	LockAxis(&Throttle, THR_LEFT, lock);
+	AxisLockL_Cur = lock;
+	if ((led > 0) & (MFD_Count > 0) & (AirBrkFlash > -1))
+		{
+		if ((led > 1) & (MFD_Count > 1))	Lights_RLED1(lock); 
+		else if (led == 1)					Lights_LLED1(lock);
+		}	
+	}
+}
+
+int Helo_Throttle_PS_Init(int lt)	//lt for WH_LT_Throttle_helo, added in 2.66 for alternate Pinky Switch functionality
+{
+HeloThrottle = 1+lt;
+if (lt < 0)	Helicopter = 1;
+else Helicopter = HeloThrottle;
+}

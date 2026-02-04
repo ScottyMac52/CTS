@@ -229,6 +229,18 @@ Set_Acft_Array_Cur(ProfID);
 
 //DeferCall(LED_Delay,&flashRLED2,1);	//added in 1.28 since you can't see LED shift after profile selection
 //DeferCall(LED_Delay+2000,&flashRLED2,0);
+
+// --- CTS S3HELD LATCH BEGIN ---
+    // Ensure profile-selection chord sees S3 held (modules sometimes override S3 mapping)
+    if(HornetStick) {
+        MapKey(&JoystickF18, S3, CHAIN(EXEC("S3Held=1;"), BTN_S3P));
+        MapKeyR(&JoystickF18, S3, CHAIN(EXEC("S3Held=0;"), BTN_S3R));
+    } else {
+        MapKey(&Joystick, S3, CHAIN(EXEC("S3Held=1;"), BTN_S3P));
+        MapKeyR(&Joystick, S3, CHAIN(EXEC("S3Held=0;"), BTN_S3R));
+    }
+// --- CTS S3HELD LATCH END ---
+
 }
 
 

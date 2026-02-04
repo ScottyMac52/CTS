@@ -1,0 +1,29 @@
+Thrustmaster Recovery Checklist (AVA + Warthog + MFDs)
+
+1. Uninstall driver package
+   - In Apps & Features: remove “Thrustmaster Drivers” (HOTAS/TPR).
+   - Leave TARGET installed.
+
+2. Purge device instances + old drivers
+   - Plug in all TM gear.
+   - Run the purge script (removes all VID_044F devices + Thrustmaster OEM drivers).
+   - When it prints “HARD RESET COMPLETE,” unplug everything and reboot.
+
+3. Reinstall drivers
+   - Run the HOTAS/TPR driver installer as Admin, with devices unplugged.
+   - When prompted, plug devices in one by one.
+   - Finish installer and reboot.
+
+4. Apply filter drivers
+   - Run TARGET Device Analyzer (Admin).
+   - Click Enumerate HID Devices.
+   - For each device (AVA, Throttle, MFD1–4), click Install filter.
+   - Reboot.
+
+5. Verify
+   - Open joy.cpl → confirm Thrustmaster Combined is present and responsive.
+   - Device Manager → System devices → Thrustmaster Bus Enumerator should list all devices.
+   - Launch DCS → profile initializes with “main returned 0”.
+
+---
+Keep this checklist in your CTS repo or documents so you can recover quickly without trial and error.

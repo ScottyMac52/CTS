@@ -1,0 +1,14 @@
+include "target.tmh"
+
+int main()
+{
+    if(Init(&EventHandle)) return 1;
+
+    MapAxis(&AVA_F16, JOYX, DX_X_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
+    MapAxis(&AVA_F16, JOYY, DX_Y_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
+}
+
+int EventHandle(int type, alias o, int x)
+{
+    DefaultMapping(&o, x);
+}

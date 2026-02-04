@@ -1,0 +1,14 @@
+include "target.tmh"
+
+int main()
+{
+    // No Configure() needed for this quick test
+    MapAxis(&Joystick, JOYX, DX_X_AXIS);
+    MapAxis(&Joystick, JOYY, DX_Y_AXIS);
+
+    MapAxis(&Throttle, THR_RIGHT, DX_Z_AXIS);
+    MapAxis(&Throttle, THR_LEFT,  DX_RZ_AXIS);
+
+    printf("=== DIAG: Joystick X/Y and Throttle Z/RZ mapped ===\n");
+    return 0;
+}

@@ -1,0 +1,22 @@
+// zz_fix_selmod.tmc — Minimal, surgical override for Select Module
+// Place this include at the END of your main profile after all other includes and init calls.
+// Then call:  ZZ_Fix_SelMod();
+
+int ZZ_Fix_SelMod()
+{
+    // Harden S3 on modern sticks (AVA/Warthog/Hornet). Harmless if already mapped.
+    MapKey (&Joystick, S3,  EXEC("GraceFlag=1; printf(\"[ZZ] S3 down, GraceFlag=%d\n\", GraceFlag);"));
+    MapKeyR(&Joystick, S3,  EXEC("printf(\"[ZZ] S3 up, GraceFlag=%d\n\", GraceFlag); if(GraceFlag) Cancel_HOTAS_Init(ProfID,GearState); GraceFlag=0;"));
+
+    // Optional: keep legacy Cougar mapping if present (harmless if not connected)
+    MapKey (&HCougar,  S3,  EXEC("GraceFlag=1; printf(\"[ZZ] Cougar S3 down, GraceFlag=%d\n\", GraceFlag);"));
+    MapKeyR(&HCougar,  S3,  EXEC("printf(\"[ZZ] Cougar S3 up, GraceFlag=%d\n\", GraceFlag); if(GraceFlag) Cancel_HOTAS_Init(ProfID,GearState); GraceFlag=0;"));
+
+    // Failsafe: while S3 is held, OSB1 ALWAYS triggers aircraft selector.
+    // This sits on top of any prior OSB1 mapping.
+    MapKey(&LMFD,  OSB01, EXEC("printf(\"[ZZ] LMFD OSB1 pressed, GraceFlag=%d\n\", GraceFlag); if(GraceFlag){ DCS_AcftSel(); }"));
+    // If your profile uses LMFD1 alias, include this too (harmless if alias not present):
+    MapKey(&LMFD1, OSB01, EXEC("printf(\"[ZZ] LMFD1 OSB1 pressed, GraceFlag=%d\n\", GraceFlag); if(GraceFlag){ DCS_AcftSel(); }"));
+
+    return 0;
+}
