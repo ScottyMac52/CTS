@@ -554,14 +554,6 @@ int DCS_Global()
 {
 printf("DCS_Global() Start.\xa");
 
-// --- Add your F4U-1D Corsair profile initialization here ---
-if (ProfID == 3518) {
-	Helicopter = 0;
-	FixedGear = 0; // Retractable gear
-	RudderPedals = 1; // Use rudder pedals
-	AirBrkFlash = 1; // Enable airbrake LED
-}
-
 S1R_VR			=	EXEC("VRZoom_Init(1);DeferCall(ModDelay,&VRZoom_Set,1);DeferCall(DoubleTap,&VRZoom_Set,0);");
 
 //WH_LED_ArrayI = 	SEQ (
@@ -1065,6 +1057,7 @@ int GearStateInd(int state, int prof, int fixed = 0, int helo = 0, int time = 0,
 {
 int mfdps; //power state for MFD illum
 
+
 GearPos = GearDn_Ind_Default*100;	//added in 2.61
 if (fixed == 0)	//added in 0.60 for Huey, changed to == in 1.40
 	{
@@ -1225,19 +1218,6 @@ if (fixed == 0)	//added in 0.60 for Huey, changed to == in 1.40
 		if (	((prof == 3090) | (prof == 3190))	&	(WarthogThrottle == 0)	) Fw190_Map_Starter(state,prof);	//added in 2.40 (previously overlooked)
 		//else if (prof == 3009) Bf109_LTB_Map(state);		//obsolete
 		}
-	// Add Corsair-specific gear/flap logic
-	else if(prof == 3518)
-	{
-		if (state == 1) { // Gear down
-			ActKey(KEYON+PULSE+F4U_Gear_Down);
-			Lights_LLED2(1); // Green LED for gear down
-		} else { // Gear up
-			ActKey(KEYON+PULSE+F4U_Gear_Up);
-			Lights_LLED2(0);
-		}
-    // Flaps (analog axis mapped to Throttle slider)
-    MapAxis(&Throttle, THR_FC, DX_ZROT_AXIS);
-	}
 	else if (prof == 2586) 									//added in 1.28 for F-86
 		{
 		P51DMapT6(state,prof);
@@ -1309,10 +1289,10 @@ if((AirBrkFlash > 0) & (GearCycling))	//uses global variable instead of argument
 
 int Landing_Gear_Toggle(int state, int prof, int fixed = 0, int helo = 0, int delay = 0, int cycle = 1, int flaps=0, int init = 0)
 {
-	if ((GearState != state) & (!fixed))		//fixed added in 0.60 for huey
+if ((GearState != state) & (!fixed))		//fixed added in 0.60 for huey
 	{
-		ActKey(KEYON+PULSE+Landing_Gear_Toggle_Key);
-		GearStateInd(state, prof, fixed, helo, delay, cycle,flaps,init);
+	ActKey(KEYON+PULSE+Landing_Gear_Toggle_Key);
+	GearStateInd(state, prof, fixed, helo, delay, cycle,flaps,init);
 	}
 }
 

@@ -1,7 +1,7 @@
 //==========================================================================================
 //		DCS World Initialization Subroutines for HOTAS Cougar/Warthog and Cougar MFDs
-//						by Michael Scott "Spaz" McIntosh
-//							last updated: 02FEB2026
+//						by Don "Home Fries" Heumphreus
+//							last updated: 15JUL2023
 //	Change Log:
 //	0.1		Initial Beta Release
 //	0.11	Added Engine Start/Stop routine with LEDs
@@ -155,7 +155,6 @@
 //	2.64	AH-64: Updated DCS_Axis_Init() THR_LEFT to allow for detent
 //	2.68	Added F-15E to S4Brake_USN parameter in SetDigitalThrottle()
 //	2.69	Updated MFD_Init() to account for UFC_MFD1_Suppress_F15E options on LOSB01/20
-//  2.72	Fixing profile selection bug
 //			
 //
 //==========================================================================================
@@ -260,50 +259,13 @@ int abdelta;	//added in 2.40 for Elite Dangerous (diff b/t abhi and ablo)
 	if (WarthogStick > 0)
 		{
 		printf("      Axis mapping Warthog Stick...");
-// Stick axes: map from the selected physical stick source (AVA variants or classic &Joystick)
-if(StickSource == 1) { // &AVA_F16
-    MapAxis(&AVA_F16, JOYX, DX_X_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
-    MapAxis(&AVA_F16, JOYY, DX_Y_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
-    SetSCurve(&AVA_F16, JOYX, 0, 0, 0, 0, 0 );
-    SetSCurve(&AVA_F16, JOYY, 0, 0, 0, 0, 0 );
-}
-else if(StickSource == 2) { // &AVA_F16L
-    MapAxis(&AVA_F16L, JOYX, DX_X_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
-    MapAxis(&AVA_F16L, JOYY, DX_Y_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
-    SetSCurve(&AVA_F16L, JOYX, 0, 0, 0, 0, 0 );
-    SetSCurve(&AVA_F16L, JOYY, 0, 0, 0, 0, 0 );
-}
-else if(StickSource == 3) { // &AVA_F18
-    MapAxis(&AVA_F18, JOYX, DX_X_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
-    MapAxis(&AVA_F18, JOYY, DX_Y_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
-    SetSCurve(&AVA_F18, JOYX, 0, 0, 0, 0, 0 );
-    SetSCurve(&AVA_F18, JOYY, 0, 0, 0, 0, 0 );
-}
-else if(StickSource == 4) { // &AVA_F18L
-    MapAxis(&AVA_F18L, JOYX, DX_X_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
-    MapAxis(&AVA_F18L, JOYY, DX_Y_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
-    SetSCurve(&AVA_F18L, JOYX, 0, 0, 0, 0, 0 );
-    SetSCurve(&AVA_F18L, JOYY, 0, 0, 0, 0, 0 );
-}
-else if(StickSource == 5) { // &AVA_SolR
-    MapAxis(&AVA_SolR, JOYX, DX_X_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
-    MapAxis(&AVA_SolR, JOYY, DX_Y_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
-    SetSCurve(&AVA_SolR, JOYX, 0, 0, 0, 0, 0 );
-    SetSCurve(&AVA_SolR, JOYY, 0, 0, 0, 0, 0 );
-}
-else if(StickSource == 6) { // &AVA_SolRL
-    MapAxis(&AVA_SolRL, JOYX, DX_X_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
-    MapAxis(&AVA_SolRL, JOYY, DX_Y_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
-    SetSCurve(&AVA_SolRL, JOYX, 0, 0, 0, 0, 0 );
-    SetSCurve(&AVA_SolRL, JOYY, 0, 0, 0, 0, 0 );
-}
-else {
-    // Classic CTS behavior
-    MapAxis(&Joystick, JOYX, DX_X_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
-    MapAxis(&Joystick, JOYY, DX_Y_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
-    SetSCurve(&Joystick, JOYX, 0, 0, 0, 0, 0 );
-    SetSCurve(&Joystick, JOYY, 0, 0, 0, 0, 0 );
-}}			
+
+			MapAxis(&Joystick, JOYX, DX_X_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
+			MapAxis(&Joystick, JOYY, DX_Y_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
+			SetSCurve(&Joystick, JOYX, 0, 0, 0, 0, 0	);			
+			SetSCurve(&Joystick, JOYY, 0, 0, 0, 0, 0	);
+
+		}			
 	else
 		{
 		printf("      Axis mapping Cougar Stick...");
@@ -1729,10 +1691,10 @@ int rosb20o;
 
 //LOSB1 for NS430
 if ((NS430_Enabled) & (MFD_Count < 3))
-		LOSB01I		=	TEMPO(EXEC("if(S3Held) DCS_AcftSel(); else ActKey(NS430_Toggle);"),	EXEC("DCS_AcftSel();"),		SwapTempo);	//S3+LOSB1 chord enters Acft Select
+		LOSB01I		=	TEMPO(NS430_Toggle,						EXEC("DCS_AcftSel();"),		SwapTempo);	//added in 2.21 for NS430
 else if (Scratchpad_Enabled)
-		LOSB01I		=	TEMPO(EXEC("if(S3Held) DCS_AcftSel(); else ActKey(Scratchpad_Hotkey);"),	EXEC("DCS_AcftSel();"),		SwapTempo);	//S3+LOSB1 chord enters Acft Select
-else 	LOSB01I		=	TEMPO(EXEC("if(S3Held) DCS_AcftSel(); else {ActKey(DX31); DeferCall(ModDelay,&ActKey,DX1);}"),	EXEC("DCS_AcftSel();"),		SwapTempo);	//S3+LOSB1 chord enters Acft Select
+		LOSB01I		=	TEMPO(Scratchpad_Hotkey,				EXEC("DCS_AcftSel();"),		SwapTempo);	//added in 2.28 for DCS Scratchpad plugin
+else 	LOSB01I		=	TEMPO(CHAIN(DX31,D(ModDelay),DX1),		EXEC("DCS_AcftSel();"),		SwapTempo);
 
 if (Script_Debug) printf("   Enabling Aircraft Modules...");
 

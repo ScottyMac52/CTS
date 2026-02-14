@@ -3932,13 +3932,3 @@ define	AH64_RMPD_Mono						R_CTL+R_SHIFT+USB_M
 //define	CE2_Smoke_On						R_SHIFT+USB_T
 //define	CE2_Smoke_Off						R_CTL+USB_T
 
-// ******************************************************
-//				   F4U-1D Corsair
-// ******************************************************
-define F4U_Gear_Down CHAIN(DX30, L_SHIFT+USB_G, EXEC("if (debugEnabled) printf(\"[DEBUG] S3+CHF: Gear Down\\xa\");"))
-define F4U_Gear_Up   CHAIN(DX30, USB_G, EXEC("if (debugEnabled) printf(\"[DEBUG] S3+CHB: Gear Up\\xa\");"))
-define F4U_Mixture_Rich CHAIN(USB_INSERT, EXEC("if (debugEnabled) printf(\"[DEBUG] CHF: Mixture Rich\\xa\");"))
-define F4U_Mixture_Lean CHAIN(USB_DELETEFORWARD, EXEC("if (debugEnabled) printf(\"[DEBUG] CHB: Mixture Lean\\xa\");"))
-define F4U_Flaps_Dn CHAIN(L_SHIFT+USB_F, EXEC("if (debugEnabled) printf(\"[DEBUG] FLAPD: Flaps Down\\xa\");"))
-define F4U_Flaps_Up CHAIN(L_CTL+USB_F, EXEC("if (debugEnabled) printf(\"[DEBUG] FLAPU: Flaps Up\\xa\");"))
-

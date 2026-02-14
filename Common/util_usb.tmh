@@ -172,3 +172,4 @@ define USB_RIGHTALT            USB[0xE6] // [231] Right Alt
 define USB_RIGHTGUI            USB[0xE7] // [232] Right GUI
 //                             0xE8-0xFFFF Reserved
 define USB__RESERVED           USB[0xFFFF]
+

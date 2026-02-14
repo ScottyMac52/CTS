@@ -331,18 +331,6 @@ else	Map_Cougar_ToeBrakes(0);
 
 printf("\xa DCS F-5E Tiger II Init Complete!\xa");	
 Set_Acft_Array_Cur(ProfID);
-
-// --- CTS S3HELD LATCH BEGIN ---
-    // Ensure profile-selection chord sees S3 held (modules sometimes override S3 mapping)
-    if(HornetStick) {
-        MapKey(&JoystickF18, S3, CHAIN(EXEC("S3Held=1;"), BTN_S3P));
-        MapKeyR(&JoystickF18, S3, CHAIN(EXEC("S3Held=0;"), BTN_S3R));
-    } else {
-        MapKey(&Joystick, S3, CHAIN(EXEC("S3Held=1;"), BTN_S3P));
-        MapKeyR(&Joystick, S3, CHAIN(EXEC("S3Held=0;"), BTN_S3R));
-    }
-// --- CTS S3HELD LATCH END ---
-
 }
 
 int	F5E_IGN_Map(int enabled = 0, int gear = 0)
