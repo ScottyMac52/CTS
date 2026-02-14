@@ -146,9 +146,8 @@ int TrackIR=2;
 int RudderPedals=0;
 int WarthogThrottle=1;
 int WarthogStick=1;
-
-
-
+int AVAStick = 1;  // Set to 1 to enable AVA Stick support
+alias AVA = &AVA_R_Viper; // Alias for the AVA (R) Viper device
 
 //=========================================
 // Default Initial Configuration
@@ -835,6 +834,7 @@ if (	(WarthogStick > 0) & (WarthogThrottle == 1) & (RudderPedals == 0)	) Configu
 if (!WarthogStick) 		Configure(&Joystick,MODE_EXCLUDED);	//added in 1.67
 if (!WarthogThrottle) 	Configure(&Throttle,MODE_EXCLUDED);	//added in 1.67
 if (!HornetStick)		Configure(&JoystickF18,MODE_EXCLUDED);	//added in 2.40
+if (!AVAStick) 			Configure(AVA, MODE_EXCLUDED); // added in 2.80 MSM
 if (MFD_Count < 2)											//added in 2.20 for troubleshooting, modified in 2.42 to force exclusion with low MFD_Count
 	{
 	if (MFD_Count < 1) Configure(&LMFD,MODE_EXCLUDED);
