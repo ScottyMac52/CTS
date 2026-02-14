@@ -236,13 +236,8 @@ printf("\xa\xa");
 printf("DCS_Init (Profile v%i.%i):\xa",MajorVersion,MinorVersion);
 
 Lights_ALL(0);
-HOTAS_Cougar_Button_Init();	//moved before axis in 1.33; this is the default profile selection in DCS World.tmc
 
-// AVA Stick
-if (AVAStick > 0)
-{
-    MapKey(AVA, S3, 0); // Assign S3 as the global shift/modifier
-}
+HOTAS_Cougar_Button_Init();	//moved before axis in 1.33; this is the default profile selection in DCS World.tmc
 
 }
 
@@ -311,7 +306,6 @@ int abdelta;	//added in 2.40 for Elite Dangerous (diff b/t abhi and ablo)
 	
 		}
 		printf("Done!\xa");
-	
 //	}
 	if (	(WarthogThrottle == 1)	|	((WarthogThrottle > 1) & (!WH_Use_TQS))	)	//either exclusive WH Throttle or WHT and TQS disabled (added in 2.43)
 		{
@@ -519,17 +513,8 @@ int abdelta;	//added in 2.40 for Elite Dangerous (diff b/t abhi and ablo)
 								if (Script_Debug) printf("Call SetDigitalThrottle(2)\xa");	//for test purposes
 								}
 				}
-			}
 
-	// Check for the AVA 
-	if (AVAStick > 0)
-	{
-		printf("      Axis mapping AVA Stick...");
-		MapAxis(AVA, JOYX, DX_X_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
-		MapAxis(AVA, JOYY, DX_Y_AXIS, AXIS_NORMAL, MAP_ABSOLUTE);
-		SetSCurve(AVA, JOYX, 0, 0, 0, 0, 0);
-		SetSCurve(AVA, JOYY, 0, 0, 0, 0, 0);
-	}
+			}
 	
 	Aux_Axis_Init(prof, eng, ms);
 	printf("...Done!\xa");
