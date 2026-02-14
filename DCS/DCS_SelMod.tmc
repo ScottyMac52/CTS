@@ -865,7 +865,7 @@ DX_Resettable_Buttons = SEQ(	DX7,		//exclusions: 1-6 are for triggers, 20-23 are
 
 int DCS_AcftSel(int hotas = 1)	//hotas argument added in 2.34 for VR
 {
-SetKBRate(KBPress, KBDelay);	//added in 2.40 to allow for different KBRate for non-DCS modules (e.g. IL-2).  Modules with differing KBRates SetKBRate in module init()
+SetKBRate(KBPress, KBDelay);
 if (MFDisplayEnabled > 0)	MFDisplay_Launch_ProfSel();		//added in 2.42 to launch selection graphics
 
 LastSel_Helo_Red_Init	=	X(RedHelo_Array,	RedHelo_Cur);
@@ -879,14 +879,14 @@ DX_Button_Reset(); //added in 1.69 to clear discrete switch settings
 
 if (WarthogThrottle > 0) 
 	{
-	flashWHT5(0);												//added in 1.68 to cnx Viggen nav state indicator.
-	DeferCall(400,&WHT_Lights_Dn,0); 							//added in 1.68 to cnx Viggen nav state indicator.  400 in use because flash is 500, profile swap delay max 250, and execution time is 250
-	DeferCall(400+LED_Delay,&flashWHT3,0);						//added in 2.44 for JF17
-	DeferCall(2*LED_Delay+400,&Lights_WHT3,0);					//added in 2.44 for JF17
-	DeferCall(Flap_PS_Check_Delay,&PSM_FLAPM_Check,ProfID); 	//added in 1.61
+	flashWHT5(0);
+	DeferCall(400,&WHT_Lights_Dn,0); 							
+	DeferCall(400+LED_Delay,&flashWHT3,0);
+	DeferCall(2*LED_Delay+400,&Lights_WHT3,0);					
+	DeferCall(Flap_PS_Check_Delay,&PSM_FLAPM_Check,ProfID); 	
 	ProfileSwapDelay = LED_Delay;
 	}
-else ProfileSwapDelay = 0;	
+else ProfileSwapDelay = 0;
 
 if (TriggerZoom_state)		//Ensure TriggerZoom is disabled
 	{
@@ -894,43 +894,63 @@ if (TriggerZoom_state)		//Ensure TriggerZoom is disabled
 	TriggerZoom_toggle(0,1,0);
 	}
 
-
-DeferCall(ProfileSwapDelay,&Lights_ALL,0);	//zeroes out MFD lights so people know profile selection in order
-
+DeferCall(ProfileSwapDelay,&Lights_ALL,0);
 Backlight_Max_Init(0);
 
+// --- AVA Base Support ---
+if (AVAStick)
+{
+	if (HornetStick)
+	{
+		MapKeyR	(&AVA_F18,	S1,	0);
+		MapKey	(&AVA_F18,	S2,	0);
+		MapKey	(&AVA_F18, S3, EXEC("GraceFlag = 1; DeferCall(ModTempo,&Grace_Flag,0);"));
+		MapKeyR	(&AVA_F18, S3, EXEC("Acft_Sel_S3_Init(1);"));
+		MapKeyR	(&AVA_F18,	TG1,0);
+		MapKeyR	(&AVA_F18,	TG2,0);
+		MapKeyR	(&AVA_F18,	S2,	0);
+		MapKeyR	(&AVA_F18,	S4,	0);
+	}
+	else
+	{
+		MapKeyR	(&AVA_F16,	S1,	0);
+		MapKey	(&AVA_F16,	S2,	0);
+		MapKey	(&AVA_F16, S3, EXEC("GraceFlag = 1; DeferCall(ModTempo,&Grace_Flag,0);"));
+		MapKeyR	(&AVA_F16, S3, EXEC("Acft_Sel_S3_Init(1);"));
+		MapKeyR	(&AVA_F16,	TG1,0);
+		MapKeyR	(&AVA_F16,	TG2,0);
+		MapKeyR	(&AVA_F16,	S2,	0);
+		MapKeyR	(&AVA_F16,	S4,	0);
+	}
+}
+
+// --- Warthog/Cougar Logic ---
 if (WarthogStick > 0)
 	{
-	MapKeyR	(&Joystick,	S1,	0);	//added in 2.28 due to FC3 MapKeyR for Su-33
+	MapKeyR	(&Joystick,	S1,	0);
 	MapKey	(&Joystick,	S2,	0);
-	
 	MapKey	(&Joystick, S3, EXEC("GraceFlag = 1; DeferCall(ModTempo,&Grace_Flag,0);"));
-	MapKeyR	(&Joystick, S3, EXEC("Acft_Sel_S3_Init(WarthogStick);"));	//separate routine to prevent global mapping on initial release
-	
-	MapKeyR	(&Joystick,	TG1,0);	//Sanitize added in 2.40
+	MapKeyR	(&Joystick, S3, EXEC("Acft_Sel_S3_Init(WarthogStick);"));
+	MapKeyR	(&Joystick,	TG1,0);	
 	MapKeyR	(&Joystick,	TG2,0);
 	MapKeyR	(&Joystick,	S2,	0);
 	MapKeyR	(&Joystick,	S4,	0);
-	
 	}
 else
 	{
-	MapKeyR	(&HCougar,	S1,	0);	//added in 2.28 due to FC3 MapKeyR for Su-33
+	MapKeyR	(&HCougar,	S1,	0);
 	MapKey	(&HCougar,	S2, 0);
 	MapKey	(&HCougar,	S3, EXEC("GraceFlag = 1; DeferCall(ModTempo,&Grace_Flag,0);"));
 	MapKeyR	(&HCougar,	S3, EXEC("Acft_Sel_S3_Init(WarthogStick);"));
-	
 	MapKeyR	(&HCougar,	TG1,0);
 	MapKeyR	(&HCougar,	TG2,0);
 	MapKeyR	(&HCougar,	S2, 0);
 	MapKeyR	(&HCougar,	S4, 0);
-	
 	}
-//S2 to be set by individual profile selects
 
-if (WarthogThrottle > 0) 	//for use with WH
+if (WarthogThrottle > 0) 	
 	{
-	LockAxis(&Throttle, THR_LEFT, 0);	//added in 2.25; frees up Left throttle Axis if locked (Helo or P-51)
+	LockAxis(&Throttle, THR_LEFT, 0);
 	MapKeyIO(&Throttle,	BSB,	0,	EXEC("if (LastSel_Helo_Blue) 		{ActKey(KEYON+PULSE+X(BlueHelo_Array,BlueHelo_Cur));Acft_Sel_LBRT(1);}	else {ActKey(KEYON+PULSE+X(RedHelo_Array,RedHelo_Cur));	Acft_Sel_LBRT(0);}")	);
 	MapKeyIO(&Throttle,	BSM,	0,	TEMPO(0,EXEC("if (LastSel_Jet_Blue) {ActKey(KEYON+PULSE+X(BlueJet_Array,BlueJet_Cur));	Acft_Sel_LBRT(1);}	else {ActKey(KEYON+PULSE+X(RedJet_Array,RedJet_Cur));	Acft_Sel_LBRT(0);}"),DoubleTap)		);
 	MapKeyIO(&Throttle,	BSF,	0,	EXEC("if (LastSel_Prop_Blue) 		{ActKey(KEYON+PULSE+X(BlueProp_Array,BlueProp_Cur));Acft_Sel_LBRT(1);}	else {ActKey(KEYON+PULSE+X(RedProp_Array,RedProp_Cur));	Acft_Sel_LBRT(0);}")	);
@@ -938,7 +958,7 @@ if (WarthogThrottle > 0) 	//for use with WH
 	MapKeyR	(&Throttle,	BSF,	0);
 	MapKeyR	(&Throttle,	BSM,	0);
 	}
-if (WarthogThrottle != 1) 	//for use with TQS (non exclusive)
+if (WarthogThrottle != 1) 	
 	{
 	MapKeyIO(&HCougar,	T7,		0,	EXEC("if (LastSel_Helo_Blue) 		{ActKey(KEYON+PULSE+X(BlueHelo_Array,BlueHelo_Cur));Acft_Sel_LBRT(1);}	else {ActKey(KEYON+PULSE+X(RedHelo_Array,RedHelo_Cur));	Acft_Sel_LBRT(0);}")	);
 	MapKeyIO(&HCougar,	DFM,	0,	TEMPO(0,EXEC("if (LastSel_Jet_Blue) {ActKey(KEYON+PULSE+X(BlueJet_Array,BlueJet_Cur));	Acft_Sel_LBRT(1);}	else {ActKey(KEYON+PULSE+X(RedJet_Array,RedJet_Cur));	Acft_Sel_LBRT(0);}"),DoubleTap)		);
@@ -948,48 +968,99 @@ if (WarthogThrottle != 1) 	//for use with TQS (non exclusive)
 	MapKeyR	(&HCougar,	DFM,	0);
 	}
 
+// --- Hat Cycle Mapping for AVA ---
+if (AVAStick)
+{
+	if (HornetStick)
+	{
+		MapKey	(&AVA_F18,	H2L,	EXEC("DCS_Acft_Cycle(0,-1);	Acft_Sel_LBRT(0);"));	
+		MapKey	(&AVA_F18,	H2R,	EXEC("DCS_Acft_Cycle(0, 1);	Acft_Sel_LBRT(0);"));
+		MapKey	(&AVA_F18,	H2U,	EXEC("DCS_Acft_Cycle(1, 1);"));
+		MapKey	(&AVA_F18,	H2D,	EXEC("DCS_Acft_Cycle(1,-1);"));	
+		MapKey	(&AVA_F18,	H3R,	TEMPO(EXEC("TARSActive(1);"),	EXEC("TARS_PTT_Common_Active(1);"),DefTempo)	);	
+		MapKey	(&AVA_F18,	H3L,	TEMPO(EXEC("TARSActive(0);"),	EXEC("TARS_PTT_Common_Active(0);"),DefTempo)	);	
+		MapKey	(&AVA_F18,	H3U,	TEMPO(EXEC("VACActive(1);"), EXEC("VAC_AIRIOActive(1);"), DefTempo));
+		MapKey	(&AVA_F18,	H3D,	TEMPO(EXEC("VACActive(0);"), EXEC("VAC_AIRIOActive(0);"),	 DefTempo));
+		MapKey	(&AVA_F18,	H4U,	TEMPO(EXEC("CommStateActive(1);"),	EXEC("CommStateActive(2);"),	DefTempo)	);
+		MapKey	(&AVA_F18,	H4D,	TEMPO(EXEC("CommStateActive(0);"),	EXEC("H1_Set(4,ForceVRCycle);"),DefTempo)	);
+		MapKey	(&AVA_F18,	H4R,	TEMPO(EXEC("PTTState(1);"),	EXEC("HOTASGripSelect(1);"),	DefTempo)	);
+		MapKey	(&AVA_F18,	H4L,	TEMPO(EXEC("PTTState(0);"),	EXEC("HOTASGripSelect(0);"),	DefTempo)	);
+		MapKeyR	(&AVA_F18,	H2R,	0);
+		MapKeyR	(&AVA_F18,	H2L,	0);
+		MapKeyR	(&AVA_F18,	H2D,	0);
+		MapKeyR	(&AVA_F18,	H2U,	0);	
+		MapKeyR	(&AVA_F18,	H3R,	0);
+		MapKeyR	(&AVA_F18,	H3L,	0);		
+		MapKeyR	(&AVA_F18,	H3D,	0);
+		MapKeyR	(&AVA_F18,	H3U,	0);	
+		MapKeyR	(&AVA_F18,	H4R,	0);
+		MapKeyR	(&AVA_F18,	H4L,	0);		
+		MapKeyR	(&AVA_F18,	H4D,	0);
+		MapKeyR	(&AVA_F18,	H4U,	0);	
+		MapKeyR	(&AVA_F18,	H4P,	0);	
+	}
+	else
+	{
+		MapKey	(&AVA_F16,	H2L,	EXEC("DCS_Acft_Cycle(0,-1);	Acft_Sel_LBRT(0);"));	
+		MapKey	(&AVA_F16,	H2R,	EXEC("DCS_Acft_Cycle(0, 1);	Acft_Sel_LBRT(0);"));
+		MapKey	(&AVA_F16,	H2U,	EXEC("DCS_Acft_Cycle(1, 1);"));
+		MapKey	(&AVA_F16,	H2D,	EXEC("DCS_Acft_Cycle(1,-1);"));	
+		MapKey	(&AVA_F16,	H3R,	TEMPO(EXEC("TARSActive(1);"),	EXEC("TARS_PTT_Common_Active(1);"),DefTempo)	);	
+		MapKey	(&AVA_F16,	H3L,	TEMPO(EXEC("TARSActive(0);"),	EXEC("TARS_PTT_Common_Active(0);"),DefTempo)	);	
+		MapKey	(&AVA_F16,	H3U,	TEMPO(EXEC("VACActive(1);"), EXEC("VAC_AIRIOActive(1);"), DefTempo));
+		MapKey	(&AVA_F16,	H3D,	TEMPO(EXEC("VACActive(0);"), EXEC("VAC_AIRIOActive(0);"),	 DefTempo));
+		MapKey	(&AVA_F16,	H4U,	TEMPO(EXEC("CommStateActive(1);"),	EXEC("CommStateActive(2);"),	DefTempo)	);
+		MapKey	(&AVA_F16,	H4D,	TEMPO(EXEC("CommStateActive(0);"),	EXEC("H1_Set(4,ForceVRCycle);"),DefTempo)	);
+		MapKey	(&AVA_F16,	H4R,	EXEC("PTTState(1);"));		
+		MapKey	(&AVA_F16,	H4L,	EXEC("PTTState(0);"));	
+		MapKeyR	(&AVA_F16,	H2R,	0);
+		MapKeyR	(&AVA_F16,	H2L,	0);
+		MapKeyR	(&AVA_F16,	H2D,	0);
+		MapKeyR	(&AVA_F16,	H2U,	0);	
+		MapKeyR	(&AVA_F16,	H3R,	0);
+		MapKeyR	(&AVA_F16,	H3L,	0);		
+		MapKeyR	(&AVA_F16,	H3D,	0);
+		MapKeyR	(&AVA_F16,	H3U,	0);	
+		MapKeyR	(&AVA_F16,	H4R,	0);
+		MapKeyR	(&AVA_F16,	H4L,	0);		
+		MapKeyR	(&AVA_F16,	H4D,	0);
+		MapKeyR	(&AVA_F16,	H4U,	0);	
+	}
+}
 
-//define cycle buttons
-
-//if (hotas)
-//{
+// --- Warthog Hat Cycle Logic ---
 if (WarthogStick)
 	{
-	MapKey	(&Joystick,	H2L,	EXEC("DCS_Acft_Cycle(0,-1);	Acft_Sel_LBRT(0);"));	//Red Cycle
-	MapKey	(&Joystick,	H2R,	EXEC("DCS_Acft_Cycle(0, 1);	Acft_Sel_LBRT(0);"));	
-	//H2U/D in with LBRT/LCON
-	
-	MapKey	(&Joystick,	H3R,	TEMPO(EXEC("TARSActive(1);"),	EXEC("TARS_PTT_Common_Active(1);"),DefTempo)	);	//SRS Toggle; long toggles SRS PTT Common
+	MapKey	(&Joystick,	H2L,	EXEC("DCS_Acft_Cycle(0,-1);	Acft_Sel_LBRT(0);"));	
+	MapKey	(&Joystick,	H2R,	EXEC("DCS_Acft_Cycle(0, 1);	Acft_Sel_LBRT(0);"));
+	MapKey	(&Joystick,	H2U,	EXEC("DCS_Acft_Cycle(1, 1);"));
+	MapKey	(&Joystick,	H2D,	EXEC("DCS_Acft_Cycle(1,-1);"));	
+	MapKey	(&Joystick,	H3R,	TEMPO(EXEC("TARSActive(1);"),	EXEC("TARS_PTT_Common_Active(1);"),DefTempo)	);	
 	MapKey	(&Joystick,	H3L,	TEMPO(EXEC("TARSActive(0);"),	EXEC("TARS_PTT_Common_Active(0);"),DefTempo)	);	
 	MapKey	(&Joystick,	H3U,	TEMPO(EXEC("VACActive(1);"), EXEC("VAC_AIRIOActive(1);"), DefTempo));
 	MapKey	(&Joystick,	H3D,	TEMPO(EXEC("VACActive(0);"), EXEC("VAC_AIRIOActive(0);"),	 DefTempo));
-	
-	MapKey	(&Joystick,	H4U,	TEMPO(EXEC("CommStateActive(1);"),	EXEC("CommStateActive(2);"),	DefTempo)	);	//long forces commstate with VAC
-	MapKey	(&Joystick,	H4D,	TEMPO(EXEC("CommStateActive(0);"),	EXEC("H1_Set(4,ForceVRCycle);"),DefTempo)	);	//long cycles H1 between POV, TIR and VR (with VR = 0 and 1)
+	MapKey	(&Joystick,	H4U,	TEMPO(EXEC("CommStateActive(1);"),	EXEC("CommStateActive(2);"),	DefTempo)	);
+	MapKey	(&Joystick,	H4D,	TEMPO(EXEC("CommStateActive(0);"),	EXEC("H1_Set(4,ForceVRCycle);"),DefTempo)	);
 
 	if (HornetStick > 0)
 		{
-		MapKey	(&Joystick,	H4R,	TEMPO(EXEC("PTTState(1);"),	EXEC("HOTASGripSelect(1);"),	DefTempo)	);		//PTT DX (0 for keyboard), long grip select F-18
+		MapKey	(&Joystick,	H4R,	TEMPO(EXEC("PTTState(1);"),	EXEC("HOTASGripSelect(1);"),	DefTempo)	);
 		MapKey	(&Joystick,	H4L,	TEMPO(EXEC("PTTState(0);"),	EXEC("HOTASGripSelect(0);"),	DefTempo)	);
 		}
 	else
 		{
-		MapKey	(&Joystick,	H4R,	EXEC("PTTState(1);"));		//PTT DX (0 for keyboard)
+		MapKey	(&Joystick,	H4R,	EXEC("PTTState(1);"));		
 		MapKey	(&Joystick,	H4L,	EXEC("PTTState(0);"));	
 		}
-		
-	
 
-	MapKeyR	(&Joystick,	H2R,	0);	//Sanitize added in 2.40
-	MapKeyR	(&Joystick,	H2L,	0);		
+	MapKeyR	(&Joystick,	H2R,	0);	
+	MapKeyR	(&Joystick,	H2L,	0);
 	MapKeyR	(&Joystick,	H2D,	0);
 	MapKeyR	(&Joystick,	H2U,	0);	
-	
 	MapKeyR	(&Joystick,	H3R,	0);
 	MapKeyR	(&Joystick,	H3L,	0);		
 	MapKeyR	(&Joystick,	H3D,	0);
 	MapKeyR	(&Joystick,	H3U,	0);	
-
 	MapKeyR	(&Joystick,	H4R,	0);
 	MapKeyR	(&Joystick,	H4L,	0);		
 	MapKeyR	(&Joystick,	H4D,	0);
@@ -999,118 +1070,97 @@ if (WarthogStick)
 
 else
 	{
-	MapKey	(&HCougar,	H2L,	EXEC("DCS_Acft_Cycle(0,-1);	Acft_Sel_LBRT(0);"));	//Red Cycle
+	MapKey	(&HCougar,	H2L,	EXEC("DCS_Acft_Cycle(0,-1);	Acft_Sel_LBRT(0);"));	
 	MapKey	(&HCougar,	H2R,	EXEC("DCS_Acft_Cycle(0, 1);	Acft_Sel_LBRT(0);"));	
-	//H2U/D in with LBRT/LCON
-	
-	MapKey	(&HCougar,	H3R,	TEMPO(EXEC("TARSActive(1);"),	EXEC("TARS_PTT_Common_Active(1);"),DefTempo)	);	//SRS Toggle; long toggles SRS PTT Common
+	MapKey	(&HCougar,	H3R,	TEMPO(EXEC("TARSActive(1);"),	EXEC("TARS_PTT_Common_Active(1);"),DefTempo)	);
 	MapKey	(&HCougar,	H3L,	TEMPO(EXEC("TARSActive(0);"),	EXEC("TARS_PTT_Common_Active(0);"),DefTempo)	);	
 	MapKey	(&HCougar,	H3U,	TEMPO(EXEC("VACActive(1);"), EXEC("VAC_AIRIOActive(1);"), DefTempo));
 	MapKey	(&HCougar,	H3D,	TEMPO(EXEC("VACActive(0);"), EXEC("VAC_AIRIOActive(0);"),	 DefTempo));
-	
-	MapKey	(&HCougar,	H4U,	TEMPO(EXEC("CommStateActive(1);"),	EXEC("CommStateActive(2);"),	DefTempo)	);	//long forces commstate with VAC
-	MapKey	(&HCougar,	H4D,	TEMPO(EXEC("CommStateActive(0);"),	EXEC("H1_Set(4,ForceVRCycle);"),DefTempo)	);	//long cycles H1 between POV, TIR and VR (with VR = 0 and 1)
+	MapKey	(&HCougar,	H4U,	TEMPO(EXEC("CommStateActive(1);"),	EXEC("CommStateActive(2);"),	DefTempo)	);	
+	MapKey	(&HCougar,	H4D,	TEMPO(EXEC("CommStateActive(0);"),	EXEC("H1_Set(4,ForceVRCycle);"),DefTempo)	);
 
 	if (HornetStick > 0)
 		{
-		MapKey	(&HCougar,	H4R,	TEMPO(EXEC("PTTState(1);"),	EXEC("HOTASGripSelect(1);"),	DefTempo)	);		//PTT DX (0 for keyboard), long grip select F-18
+		MapKey	(&HCougar,	H4R,	TEMPO(EXEC("PTTState(1);"),	EXEC("HOTASGripSelect(1);"),	DefTempo)	);
 		MapKey	(&HCougar,	H4L,	TEMPO(EXEC("PTTState(0);"),	EXEC("HOTASGripSelect(0);"),	DefTempo)	);
 		}
 	else
 		{
-		MapKey	(&HCougar,	H4R,	EXEC("PTTState(1);"));		//PTT DX (0 for keyboard), /I grip select F-18
+		MapKey	(&HCougar,	H4R,	EXEC("PTTState(1);"));		
 		MapKey	(&HCougar,	H4L,	EXEC("PTTState(0);"));	
 		}
 	
-	MapKeyR	(&HCougar,	H2L,	0);	//Sanitize added in 2.40
+	MapKeyR	(&HCougar,	H2L,	0);
 	MapKeyR	(&HCougar,	H2D,	0);	
 	MapKeyR	(&HCougar,	H2R,	0);
 	MapKeyR	(&HCougar,	H2U,	0);	
-	
 	MapKeyR	(&HCougar,	H3L,	0);
 	MapKeyR	(&HCougar,	H3D,	0);	
 	MapKeyR	(&HCougar,	H3R,	0);
 	MapKeyR	(&HCougar,	H3U,	0);	
-
 	MapKeyR	(&HCougar,	H4L,	0);
 	MapKeyR	(&HCougar,	H4D,	0);	
 	MapKeyR	(&HCougar,	H4R,	0);
 	MapKeyR	(&HCougar,	H4U,	0);	
 	}
-//}
 
-//else
-//{
-MapKey	(&LMFD,	GAINU,	EXEC("DCS_Acft_Cycle(0,-1);	Acft_Sel_LBRT(0);"));	//Red Cycle
+MapKey	(&LMFD,	GAINU,	EXEC("DCS_Acft_Cycle(0,-1);	Acft_Sel_LBRT(0);"));	
 MapKey	(&LMFD,	GAIND,	EXEC("DCS_Acft_Cycle(0, 1);	Acft_Sel_LBRT(0);"));	
 MapKeyR	(&LMFD, GAINU,	0);
 MapKeyR	(&LMFD, GAIND,	0);
 
-//printf("%i non-DCS games enabled.",OtherGame_Enabled);
-//if (OtherGame_Enabled > 0)
-//	{
-//	printf("  Enabling selection.\xa");
-////	MapKey	(&LMFD,	BRTU,	TEMPO(EXEC("DCS_Acft_Cycle(0,-Acft_Sel_Skip_Mult);"),EXEC("DCS_Acft_Cycle(2, 1);"),DefTempo)	);
-////	MapKey	(&LMFD,	BRTD,	TEMPO(EXEC("DCS_Acft_Cycle(0, Acft_Sel_Skip_Mult);"),EXEC("DCS_Acft_Cycle(2,-1);"),DefTempo)	);
-//	MapKey	(&LMFD,	CONU,	EXEC("DCS_Acft_Cycle(2, 1);"));
-//	MapKey	(&LMFD,	COND,	EXEC("DCS_Acft_Cycle(2,-1);"));
-	
-//	if (WarthogStick > 0)
-//		{
-//		MapKey	(&Joystick,	H2U,	TEMPO(EXEC("DCS_Acft_Cycle(1, 1);	Acft_Sel_LBRT(1);"),EXEC("DCS_Acft_Cycle(2, 1);"),DefTempo)	);
-//		MapKey	(&Joystick,	H2D,	TEMPO(EXEC("DCS_Acft_Cycle(1,-1);	Acft_Sel_LBRT(1);"),EXEC("DCS_Acft_Cycle(2,-1);"),DefTempo)	);	//Blue Cycle
-//		SelMod_H4P_Map(ProfID);	//added in 2.43
-		//MapKey	(&Joystick,	H4P,	EXEC("DCS_Acft_Cycle(2, 1);"));				//Other cycle fwd without TEMPO.  commented out in 2.43
-//		}
-//	else
-//		{
-//		MapKey	(&HCougar,	H2U,	TEMPO(EXEC("DCS_Acft_Cycle(1, 1);	Acft_Sel_LBRT(1);"),EXEC("DCS_Acft_Cycle(2, 1);"),DefTempo)	);		
-//		MapKey	(&HCougar,	H2D,	TEMPO(EXEC("DCS_Acft_Cycle(1,-1);	Acft_Sel_LBRT(1);"),EXEC("DCS_Acft_Cycle(2,-1);"),DefTempo)	);
-//		}	
-//	}
-//else
-//	{
-	printf("\xa");
-	MapKey	(&LMFD,	CONU,	EXEC("DCS_Acft_Cycle(1,-Acft_Sel_Skip_Mult);"));
-	MapKey	(&LMFD,	COND,	EXEC("DCS_Acft_Cycle(1, Acft_Sel_Skip_Mult);"));
-	if (WarthogStick > 0)
-		{
-		MapKey	(&Joystick,	H2U,	EXEC("DCS_Acft_Cycle(1, 1);"));
-		MapKey	(&Joystick,	H2D,	EXEC("DCS_Acft_Cycle(1,-1);"));	//Blue Cycle
-		}
-	else
-		{
-		MapKey	(&HCougar,	H2U,	EXEC("DCS_Acft_Cycle(1, 1);"));		
-		MapKey	(&HCougar,	H2D,	EXEC("DCS_Acft_Cycle(1,-1);"));
-		}	
-//	}
+printf("\xa");
+MapKey	(&LMFD,	CONU,	EXEC("DCS_Acft_Cycle(1,-Acft_Sel_Skip_Mult);"));
+MapKey	(&LMFD,	COND,	EXEC("DCS_Acft_Cycle(1, Acft_Sel_Skip_Mult);"));
 
-MapKey	(&LMFD,	SYMU,	EXEC("DCS_Acft_Cycle(1,-1);	Acft_Sel_LBRT(1);"));	//Blue Cycle
+if (WarthogStick > 0)
+	{
+	MapKey	(&Joystick,	H2U,	EXEC("DCS_Acft_Cycle(1, 1);"));
+	MapKey	(&Joystick,	H2D,	EXEC("DCS_Acft_Cycle(1,-1);"));	
+	}
+else if (AVAStick)
+	{
+		if (HornetStick)
+		{
+			MapKey	(&AVA_F18,	H2U,	EXEC("DCS_Acft_Cycle(1, 1);"));
+			MapKey	(&AVA_F18,	H2D,	EXEC("DCS_Acft_Cycle(1,-1);"));
+		}
+		else
+		{
+			MapKey	(&AVA_F16,	H2U,	EXEC("DCS_Acft_Cycle(1, 1);"));
+			MapKey	(&AVA_F16,	H2D,	EXEC("DCS_Acft_Cycle(1,-1);"));
+		}
+	}
+else
+	{
+	MapKey	(&HCougar,	H2U,	EXEC("DCS_Acft_Cycle(1, 1);"));
+	MapKey	(&HCougar,	H2D,	EXEC("DCS_Acft_Cycle(1,-1);"));
+	}	
+
+MapKey	(&LMFD,	SYMU,	EXEC("DCS_Acft_Cycle(1,-1);	Acft_Sel_LBRT(1);"));	
 MapKey	(&LMFD,	SYMD,	EXEC("DCS_Acft_Cycle(1, 1);	Acft_Sel_LBRT(1);"));	
 
-MapKey	(&RMFD,	GAINU,	TEMPO(EXEC("TARSActive(1);"),	EXEC("TARS_PTT_Common_Active(1);"),DefTempo)	);	//SRS Toggle; long toggles SRS PTT Common
+MapKey	(&RMFD,	GAINU,	TEMPO(EXEC("TARSActive(1);"),	EXEC("TARS_PTT_Common_Active(1);"),DefTempo)	);	
 MapKey	(&RMFD,	GAIND,	TEMPO(EXEC("TARSActive(0);"),	EXEC("TARS_PTT_Common_Active(0);"),DefTempo)	);	
 
-MapKey	(&RMFD,	BRTU,	TEMPO(EXEC("VACActive(1);"), EXEC("VAC_AIRIOActive(1);"), DefTempo));		// /I CHAIN(VAICOM_Chatter,EXEC("MSPCheck = 1;")),	
-MapKey	(&RMFD,	BRTD,	TEMPO(EXEC("VACActive(0);"), EXEC("VAC_AIRIOActive(0);"),	 DefTempo));	// /I VAICOM_Toggle,	
+MapKey	(&RMFD,	BRTU,	TEMPO(EXEC("VACActive(1);"), EXEC("VAC_AIRIOActive(1);"), DefTempo));
+MapKey	(&RMFD,	BRTD,	TEMPO(EXEC("VACActive(0);"), EXEC("VAC_AIRIOActive(0);"),	 DefTempo));	
 
-MapKey	(&RMFD,	SYMU,	TEMPO(EXEC("CommStateActive(1);"),	EXEC("CommStateActive(2);"),DefTempo)	);	//long forces commstate with VAC
-MapKey	(&RMFD,	SYMD,	TEMPO(EXEC("CommStateActive(0);"),	EXEC("H1_Set(4,ForceVRCycle);"),DefTempo)	);	//long cycles H1 between POV, TIR and VR (with VR = 0 and 1)
+MapKey	(&RMFD,	SYMU,	TEMPO(EXEC("CommStateActive(1);"),	EXEC("CommStateActive(2);"),DefTempo)	);	
+MapKey	(&RMFD,	SYMD,	TEMPO(EXEC("CommStateActive(0);"),	EXEC("H1_Set(4,ForceVRCycle);"),DefTempo)	);
 
 
 if (HornetStick > 0)
 	{
-	MapKey	(&RMFD,	CONU,	TEMPO(EXEC("PTTState(1);"),	EXEC("HOTASGripSelect(1);"),	DefTempo)	);		//PTT DX (0 for keyboard), long grip select F-18
+	MapKey	(&RMFD,	CONU,	TEMPO(EXEC("PTTState(1);"),	EXEC("HOTASGripSelect(1);"),	DefTempo)	);
 	MapKey	(&RMFD,	COND,	TEMPO(EXEC("PTTState(0);"),	EXEC("HOTASGripSelect(0);"),	DefTempo)	);
 	}
 else
 	{
-	MapKey	(&RMFD,	CONU,	EXEC("PTTState(1);"));		//PTT DX (0 for keyboard)
+	MapKey	(&RMFD,	CONU,	EXEC("PTTState(1);"));		
 	MapKey	(&RMFD,	COND,	EXEC("PTTState(0);"));	
 	}
 
-	
-//define discrete buttons for DCS_UserSettings
 MapKey	(&LMFD,	OSB01,	Acft_L01);
 MapKey	(&LMFD,	OSB02,	Acft_L02);
 MapKey	(&LMFD,	OSB03,	Acft_L03);
@@ -1153,7 +1203,7 @@ MapKey	(&RMFD,	OSB18,	Acft_R18);
 MapKey	(&RMFD,	OSB19,	Acft_R19);
 MapKey	(&RMFD,	OSB20,	Acft_R20);
 
-MapKeyR	(&RMFD,	OSB01,	0);	//forced on in 2.40
+MapKeyR	(&RMFD,	OSB01,	0);
 MapKeyR	(&RMFD,	OSB02,	0);
 MapKeyR	(&RMFD,	OSB03,	0);
 MapKeyR	(&RMFD,	OSB04,	0);
@@ -1213,184 +1263,141 @@ MapKeyR	(&LMFD,	SYMD,	0);
 MapKeyR	(&LMFD,	CONU,	0);
 MapKeyR	(&LMFD,	COND,	0);
 
-
 if (WarthogThrottle > 0)
 	{
 	MapKey	(&Throttle,	FLAPU,	0);
 	MapKey	(&Throttle,	FLAPD,	0);
 	MapKey	(&Throttle,	FLAPM,	0);
-
 	MapKey	(&Throttle,	EFLNORM,	0);
 	MapKey	(&Throttle,	EFLOVER,	0);
 	MapKey	(&Throttle,	EFRNORM,	0);
 	MapKey	(&Throttle,	EFROVER,	0);
-	
 	MapKey	(&Throttle,	EOLIGN,		0);
 	MapKey	(&Throttle,	EOLNORM,	0);
 	MapKey	(&Throttle,	EOLMOTOR,	0);
 	MapKey	(&Throttle,	EORIGN,		0);
 	MapKey	(&Throttle,	EORNORM,	0);
 	MapKey	(&Throttle,	EORMOTOR,	0);
-		
 	MapKey	(&Throttle,	APUON,	0);
 	MapKey	(&Throttle,	APUOFF,	0);
-
 	MapKey	(&Throttle,	RDRNRM,	0);
 	MapKey	(&Throttle,	RDRDIS,	0);
-
 	MapKey	(&Throttle,	EACON,	0);
 	MapKey	(&Throttle,	EACOFF,	0);
-
-//	MapKey	(&Throttle,	LDGH,	0);
-	
 	MapKey	(&Throttle,	APPAT,	0);
 	MapKey	(&Throttle,	APALT,	0);
 	MapKey	(&Throttle,	APAH,	0);
-//	MapKey	(&Throttle,	APENG,	0);
-//	MapKey	(&Throttle,	LTB,	0);	
-	
 	MapKey	(&Throttle,	IDLERON,	0);
 	MapKey	(&Throttle,	IDLEROFF,	0);
 	MapKey	(&Throttle,	IDLELON,	0);
 	MapKey	(&Throttle,	IDLELOFF,	0);	
-	
-//	MapKey	(&Throttle,	CSU,	0);	
-//	MapKey	(&Throttle,	CSD,	0);	
-//	MapKey	(&Throttle,	CSL,	0);	
-//	MapKey	(&Throttle,	CSR,	0);	
-//	MapKey	(&Throttle,	SC,		0);	
-	
-//	MapKey	(&Throttle,	CHF,	0);	
-//	MapKey	(&Throttle,	CHB,	0);	
-	
-//	MapKey	(&Throttle,	SPDF,	0);	
-//	MapKey	(&Throttle,	SPDB,	0);		
-	
 	MapKey	(&Throttle,	PSF,	0);
 	MapKey	(&Throttle,	PSB,	0);
 	MapKey	(&Throttle,	PSM,	0);
 	
-	
 	MapKeyR	(&Throttle,	FLAPU,	0);
 	MapKeyR	(&Throttle,	FLAPD,	0);
 	MapKeyR	(&Throttle,	FLAPM,	0);
-
 	MapKeyR	(&Throttle,	EFLNORM,	0);
 	MapKeyR	(&Throttle,	EFLOVER,	0);
 	MapKeyR	(&Throttle,	EFRNORM,	0);
 	MapKeyR	(&Throttle,	EFROVER,	0);
-	
 	MapKeyR	(&Throttle,	EOLIGN,		0);
 	MapKeyR	(&Throttle,	EOLNORM,	0);
 	MapKeyR	(&Throttle,	EOLMOTOR,	0);
 	MapKeyR	(&Throttle,	EORIGN,		0);
 	MapKeyR	(&Throttle,	EORNORM,	0);
 	MapKeyR	(&Throttle,	EORMOTOR,	0);
-		
 	MapKeyR	(&Throttle,	APUON,	0);
 	MapKeyR	(&Throttle,	APUOFF,	0);
-
 	MapKeyR	(&Throttle,	RDRNRM,	0);
 	MapKeyR	(&Throttle,	RDRDIS,	0);
-
 	MapKeyR	(&Throttle,	EACON,	0);
 	MapKeyR	(&Throttle,	EACOFF,	0);
-
 	MapKeyR	(&Throttle,	LDGH,	0);
-	
 	MapKeyR	(&Throttle,	APPAT,	0);
 	MapKeyR	(&Throttle,	APALT,	0);
 	MapKeyR	(&Throttle,	APAH,	0);
 	MapKeyR	(&Throttle,	APENG,	0);
 	MapKeyR	(&Throttle,	LTB,	0);	
-	
 	MapKeyR	(&Throttle,	IDLERON,	0);
 	MapKeyR	(&Throttle,	IDLEROFF,	0);
 	MapKeyR	(&Throttle,	IDLELON,	0);
 	MapKeyR	(&Throttle,	IDLELOFF,	0);	
-	
 	MapKeyR	(&Throttle,	CSU,	0);	
 	MapKeyR	(&Throttle,	CSD,	0);	
 	MapKeyR	(&Throttle,	CSL,	0);	
 	MapKeyR	(&Throttle,	CSR,	0);	
 	MapKeyR	(&Throttle,	SC,		0);	
-	
 	MapKeyR	(&Throttle,	CHF,	0);	
-	MapKeyR	(&Throttle,	CHB,	0);	
-	
+	MapKeyR	(&Throttle,	CHB,	0);
 	MapKeyR	(&Throttle,	SPDF,	0);	
 	MapKeyR	(&Throttle,	SPDB,	0);		
-	
 	MapKeyR	(&Throttle,	PSF,	0);
 	MapKeyR	(&Throttle,	PSB,	0);
 	MapKeyR	(&Throttle,	PSM,	0);
-	
 	}
-if (WarthogThrottle != 1)	//TQS attached
+if (WarthogThrottle != 1)	
 	{
 	MapKeyR	(&HCougar,	T1,	0);
 	MapKeyR	(&HCougar,	T6,	0);
 	MapKeyR	(&HCougar,	T9,	0);
 	MapKeyR	(&HCougar,	T10,0);
 	}
-AnalogBrakePoll(0);		//added in 2.61 to make sure polling cancelled between modules
+AnalogBrakePoll(0);
 printf("Profile Selection:\xa Press and release S2 to accept profile\xa or quickly tap S3 to cancel.\xa\xa");
-
-
-//Set the default profile
-if 		(	(HCougar[T7]) | (Throttle[BSB])	)	//Back/Up for helos
+if 		(	(HCougar[T7]) | (Throttle[BSB])	)	
 	{
-	if (Script_Debug) printf("Helo Selected ");	//for test purposes
+	if (Script_Debug) printf("Helo Selected ");	
 	if (LastSel_Helo_Blue)
 		{
-		if (Script_Debug) printf("(Blue)\xa");	//for test purposes
+		if (Script_Debug) printf("(Blue)\xa");
 		if (LED_Enable_on_Cycle > 0)	DeferCall(250+ProfileSwapDelay,	&ActKey,	KEYON+PULSE+LastSel_Helo_Blue_Init);
 		else	ActKey(KEYON+PULSE+X(BlueHelo_Array,BlueHelo_Cur));
-		
 		}
 	else
 		{
-		if (Script_Debug) printf("(Red)\xa");		//for test purposes
+		if (Script_Debug) printf("(Red)\xa");		
 		if (LED_Enable_on_Cycle > 0)	DeferCall(250+ProfileSwapDelay,	&ActKey,	KEYON+PULSE+LastSel_Helo_Red_Init);
 		else	ActKey(KEYON+PULSE+X(RedHelo_Array,RedHelo_Cur));
 		}
 	Acft_Sel_LBRT(LastSel_Helo_Blue);
 	}
-else if (	(HCougar[T8]) | (Throttle[BSF])	)	//Fwd/Down for Warbirds
+else if (	(HCougar[T8]) | (Throttle[BSF])	)	
 	{
-	if (Script_Debug) printf("Prop Selected ");	//for test purposes
+	if (Script_Debug) printf("Prop Selected ");	
 	if (LastSel_Prop_Blue)
 		{
-		if (Script_Debug) printf("(Blue)\xa");	//for test purposes
+		if (Script_Debug) printf("(Blue)\xa");
 		if (LED_Enable_on_Cycle > 0)	DeferCall(250+ProfileSwapDelay,	&ActKey,	KEYON+PULSE+LastSel_Prop_Blue_Init);
 		else	ActKey(KEYON+PULSE+X(BlueProp_Array,BlueProp_Cur));
 		}
 	else
 		{
-		if (Script_Debug) printf("(Red)\xa");	//for test purposes
+		if (Script_Debug) printf("(Red)\xa");	
 		if (LED_Enable_on_Cycle > 0)	DeferCall(250+ProfileSwapDelay,	&ActKey,	KEYON+PULSE+LastSel_Prop_Red_Init);
 		else	ActKey(KEYON+PULSE+X(RedProp_Array,RedProp_Cur));
 		}
 	Acft_Sel_LBRT(LastSel_Prop_Blue);
 	}
-else											//Jets by default
+else											
 	{
-	if (Script_Debug) printf("Jet Selected ");	//for test purposes
+	if (Script_Debug) printf("Jet Selected ");	
 	if (LastSel_Jet_Blue)
 		{
-		if (Script_Debug) printf("(Blue)\xa");	//for test purposes
+		if (Script_Debug) printf("(Blue)\xa");	
 		if (LED_Enable_on_Cycle > 0)	DeferCall(250+ProfileSwapDelay,	&ActKey,	KEYON+PULSE+LastSel_Jet_Blue_Init);
 		else	ActKey(KEYON+PULSE+X(BlueJet_Array,BlueJet_Cur));
 		}
 	else
 		{
-		if (Script_Debug) printf("(Red)\xa");	//for test purposes
+		if (Script_Debug) printf("(Red)\xa");	
 		if (LED_Enable_on_Cycle > 0)	DeferCall(250+ProfileSwapDelay,	&ActKey,	KEYON+PULSE+LastSel_Jet_Red_Init);
 		else	ActKey(KEYON+PULSE+X(RedJet_Array,RedJet_Cur));
 		}
 	Acft_Sel_LBRT(LastSel_Jet_Blue);
 	}	
-if (Script_Debug) printf("Cougar:\xa T7: %i\xa T8: %i\xaWarthog:\xa BSB: %i\xa BSF: %i\xa",HCougar[T7],HCougar[T8],Throttle[BSB],Throttle[BSF]);	//for test purposes11
+if (Script_Debug) printf("Cougar:\xa T7: %i\xa T8: %i\xaWarthog:\xa BSB: %i\xa BSF: %i\xa",HCougar[T7],HCougar[T8],Throttle[BSB],Throttle[BSF]);	
 }
 
 int	Acft_Sel_LBRT(int blue)
@@ -1406,10 +1413,34 @@ int	Acft_Sel_LBRT(int blue)
 	MapKey	(&LMFD,	BRTD,	EXEC("DCS_Acft_Cycle(0, Acft_Sel_Skip_Mult);"));
 //	}
 }
+//
+// int Acft_Sel_S3_Init(int wh = 0)
+// {
+// if (wh > 0) MapKeyR	(&Joystick, S3,	EXEC("if (GraceFlag) Cancel_HOTAS_Init(ProfID,GearState); GraceFlag = 0;")	);	//Graceflag allows for long S3 without disabling
+// else		MapKeyR	(&HCougar,	S3,	EXEC("if (GraceFlag) Cancel_HOTAS_Init(ProfID,GearState); GraceFlag = 0;")	);
+// }
+
 int Acft_Sel_S3_Init(int wh = 0)
 {
-if (wh > 0) MapKeyR	(&Joystick, S3,	EXEC("if (GraceFlag) Cancel_HOTAS_Init(ProfID,GearState); GraceFlag = 0;")	);	//Graceflag allows for long S3 without disabling
-else		MapKeyR	(&HCougar,	S3,	EXEC("if (GraceFlag) Cancel_HOTAS_Init(ProfID,GearState); GraceFlag = 0;")	);
+    // 1. AVA Base Support
+    // We explicitly check the AVAStick flag and map the hardware handles directly
+    if (AVAStick) {
+        if (HornetStick) {
+            MapKeyR(&AVA_F18, S3, EXEC("if (GraceFlag) Cancel_HOTAS_Init(ProfID,GearState); GraceFlag = 0;"));
+        }
+        else {
+            MapKeyR(&AVA_F16, S3, EXEC("if (GraceFlag) Cancel_HOTAS_Init(ProfID,GearState); GraceFlag = 0;"));
+        }
+    }
+
+    // 2. Warthog and Cougar Support
+    // This maintains the original framework logic to ensure Warthog functionality is NOT broken
+    if (wh > 0) {
+        MapKeyR(&Joystick, S3, EXEC("if (GraceFlag) Cancel_HOTAS_Init(ProfID,GearState); GraceFlag = 0;")); 
+    }
+    else {
+        MapKeyR(&HCougar,  S3, EXEC("if (GraceFlag) Cancel_HOTAS_Init(ProfID,GearState); GraceFlag = 0;")); 
+    }
 }
 
 int DCS_Acft_Cycle(int blue = 0, int posit = 1)	//updated in 2.40 to add OtherGame
@@ -1582,20 +1613,112 @@ else						MapKeyR	(&HCougar,	S2,	0);	//all Cougar
 
 int Global_S3_Init(int prof = 0, int gear = 0)	//only need gear for NWS/BS2
 {
-if (Script_Debug) printf("Global_S3_Init: ");	//for test purposes
-if (	((prof == 2515) | (prof == 2029)) | (prof == 2586) | (prof == 2508) | (prof == 2518) | (prof == 2604) | (prof == 2615)	)	S3_NWS(gear,prof);	//F-15C/E, AV-8B F/A-18, A-4E_C or F-86 (not F-5 since NWS routine is comm-related)
-else if (prof == 1050) BS2_Map_S3(BS2_ForceCommStateOff,gear);	//Ka-50
+if (Script_Debug) printf("Global_S3_Init: ");
+
+if (	((prof == 2515) | (prof == 2029)) | (prof == 2586) | (prof == 2508) | (prof == 2518) | (prof == 2604) | (prof == 2615)	)	S3_NWS(gear,prof);
+//F-15C/E, AV-8B F/A-18, A-4E_C or F-86 (not F-5 since NWS routine is comm-related)
+else if (prof == 1050) BS2_Map_S3(BS2_ForceCommStateOff,gear);
+//Ka-50
+
+else if (prof == 2505) F5E_CommState_Init();
+
+else if (prof == 1008) 	//Mi-8
+	{
+	if (WarthogStick > 0)	MapKeyIO(&Joystick,	S2, TEMPO(DX2, ESBR_Power_DX, LongTempo),	DX2);
+	else					MapKeyIO(&HCougar,	S2, TEMPO(DX2, ESBR_Power_DX, LongTempo),	DX2);
+	
+	if (AVAStick) {
+		if (HornetStick)	MapKeyIO(&AVA_F18,	S2, TEMPO(DX2, ESBR_Power_DX, LongTempo),	DX2);
+		else				MapKeyIO(&AVA_F16,	S2, TEMPO(DX2, ESBR_Power_DX, LongTempo),	DX2);
+	}
+	}
+else if (prof == 1024)	//Mi-24P
+	{
+	if (WarthogStick > 0)	MapKeyIO(&Joystick,	S2, TEMPO(DX2, USB_3, DefTempo),	DX2);
+	else					MapKeyIO(&HCougar,	S2, TEMPO(DX2, USB_3, DefTempo),	DX2);
+	
+	if (AVAStick) {
+		if (HornetStick)	MapKeyIO(&AVA_F18,	S2, TEMPO(DX2, USB_3, DefTempo),	DX2);
+		else				MapKeyIO(&AVA_F16,	S2, TEMPO(DX2, USB_3, DefTempo),	DX2);
+	}
+	}
+else if (prof == 2019)	//MiG-19
+	{
+	if (WarthogStick > 0)	MapKeyIO(&Joystick,	S2, TEMPO(DX2, MiG19_Sight_Uncage, DefTempo),	DX2);
+	else					MapKeyIO(&HCougar,	S2, TEMPO(DX2, MiG19_Sight_Uncage, DefTempo),	DX2);
+	
+	if (AVAStick) {
+		if (HornetStick)	MapKeyIO(&AVA_F18,	S2, TEMPO(DX2, MiG19_Sight_Uncage, DefTempo),	DX2);
+		else				MapKeyIO(&AVA_F16,	S2, TEMPO(DX2, MiG19_Sight_Uncage, DefTempo),	DX2);
+	}
+	}
+else if (prof == 2021)	//MiG-21
+	{
+	if (WarthogStick > 0)	MapKeyIO(&Joystick,	S2, TEMPO(DX2, MiG21_Wpn_Rel_Cover_Open, DefTempo),	DX2);
+	else					MapKeyIO(&HCougar,	S2, TEMPO(DX2, MiG21_Wpn_Rel_Cover_Open, DefTempo),	DX2);
+	
+	if (AVAStick) {
+		if (HornetStick)	MapKeyIO(&AVA_F18,	S2, TEMPO(DX2, MiG21_Wpn_Rel_Cover_Open, DefTempo),	DX2);
+		else				MapKeyIO(&AVA_F16,	S2, TEMPO(DX2, MiG21_Wpn_Rel_Cover_Open, DefTempo),	DX2);
+	}
+	}
+else if (prof == 3009)		//Bf-109
+	{
+	if (WarthogStick > 0)	MapKeyIO(&Joystick,	S2,	DX2, DX5);
+	else					MapKeyIO(&HCougar,	S2,	DX2, DX5);
+	
+	if (AVAStick) {
+		if (HornetStick)	MapKeyIO(&AVA_F18,	S2,	DX2, DX5);
+		else				MapKeyIO(&AVA_F16,	S2,	DX2, DX5);
+	}
+	}
+else if (prof == 3502)	//any 2-seat aircraft J
+	{
+	if (WarthogStick > 0)	MapKeyIO(&Joystick,	S2, RequestAcftCtl, DX2);
+	else					MapKeyIO(&HCougar,	S2, RequestAcftCtl, DX2);
+	
+	if (AVAStick) {
+		if (HornetStick)	MapKeyIO(&AVA_F18,	S2, RequestAcftCtl, DX2);
+		else				MapKeyIO(&AVA_F16,	S2, RequestAcftCtl, DX2);
+	}
+	}
+else if ((prof == 1501) | (prof == 1024))	//any 2-seat aircraft C
+	{
+	if (WarthogStick > 0)	MapKeyIO(&Joystick,	S2, UH1_RequestControl, DX2);
+	else					MapKeyIO(&HCougar,	S2, UH1_RequestControl, DX2);
+	
+	if (AVAStick) {
+		if (HornetStick)	MapKeyIO(&AVA_F18,	S2, UH1_RequestControl, DX2);
+		else				MapKeyIO(&AVA_F16,	S2, UH1_RequestControl, DX2);
+	}
+	}
+	
+//all others	
 else if (WarthogStick > 0)	//all others WH
 	{
 	MapKey	(&Joystick,	S3,	BTN_S3P);
 	MapKeyR	(&Joystick,	S3,	BTN_S3R);
 	}
-else						//all others Cougar
+
+if (AVAStick)	//all others AVA
+	{
+	if (HornetStick) {
+		MapKey(&AVA_F18, S3, BTN_S3P);
+		MapKeyR(&AVA_F18, S3, BTN_S3R);
+	}
+	else {
+		MapKey(&AVA_F16, S3, BTN_S3P);
+		MapKeyR(&AVA_F16, S3, BTN_S3R);
+	}
+	}
+
+if (WarthogStick == 0 & !AVAStick)	//all others Cougar
 	{
 	MapKey	(&HCougar,	S3,	BTN_S3P);
 	MapKeyR	(&HCougar,	S3,	BTN_S3R);
 	}
-if (Script_Debug) printf("%i\xa",prof);	//for test purposes
+
+if (Script_Debug) printf("%i\xa",prof);
 }
 
 int Global_DF_Init(int wh, int prof = 0, int tqs = 0)	//works for both WH and cougar.  tqs added in 2.43 for F-16C/JF-17

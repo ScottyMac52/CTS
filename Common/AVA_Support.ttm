@@ -1,0 +1,47 @@
+// Common/AVA_Support.ttm
+// CTS Extension: Thrustmaster AVA Base Support
+// This file maps the AVA Stick (Viper/F-16 Grip) axes and buttons
+// Corrected Syntax for TARGET C
+// Updated with correct hardware handles
+// Strict TARGET C Syntax
+// Strict TARGET C - Using alias to resolve 'Type required' error
+// Using GetIndex to avoid "Index missing" pointer errors
+// Strict TARGET C - No GetIndex, no aliases.
+// Verified against user's target.tmh (PID 0430 = AVA_F16)
+// Verified against user target.tmh 
+
+int InitAVA()
+{
+	int i;
+	// No local alias to prevent "Bad alias" runtime errors.
+
+	if (AVAStick) {
+		if (HornetStick) {
+			MapAxis(&AVA_F18, JOYX, DX_X_AXIS, AXIS_NORMAL, 0); 
+			MapAxis(&AVA_F18, JOYY, DX_Y_AXIS, AXIS_NORMAL, 0);
+			
+			i = 0;
+			while(i < 32) {
+				if(i != 2) MapKey(&AVA_F18, i, DX1+i); 
+				i = i + 1;
+			}
+			
+			// CHAIN: Fires DX3 for the game AND sets the GraceFlag for the profile swap
+			MapKey(&AVA_F18, S3, CHAIN(DX3, EXEC("GraceFlag = 1; DeferCall(ModTempo, &Grace_Flag, 0);")), 
+								 EXEC("Acft_Sel_S3_Init(1);"));
+		}
+		else {
+			MapAxis(&AVA_F16, JOYX, DX_X_AXIS, AXIS_NORMAL, 0);
+			MapAxis(&AVA_F16, JOYY, DX_Y_AXIS, AXIS_NORMAL, 0);
+			
+			i = 0;
+			while(i < 32) {
+				if(i != 2) MapKey(&AVA_F16, i, DX1+i); 
+				i = i + 1;
+			}
+			// Passing '1' to Acft_Sel_S3_Init forces the Warthog-style logic required for this base
+			MapKey(&AVA_F16, S3, CHAIN(DX3, EXEC("GraceFlag = 1; DeferCall(ModTempo, &Grace_Flag, 0);")), 
+								 EXEC("Acft_Sel_S3_Init(1);"));
+		}
+	}
+}
